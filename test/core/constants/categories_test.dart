@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dytty/core/constants/categories.dart';
 
@@ -7,12 +8,18 @@ void main() {
       expect(JournalCategory.values.length, 5);
     });
 
-    test('each category has displayName, prompt, and icon', () {
+    test('each category has displayName, prompt, icon, and color', () {
       for (final category in JournalCategory.values) {
         expect(category.displayName, isNotEmpty);
         expect(category.prompt, isNotEmpty);
         expect(category.icon, isNotEmpty);
+        expect(category.color, isA<Color>());
       }
+    });
+
+    test('each category has a unique color', () {
+      final colors = JournalCategory.values.map((c) => c.color).toSet();
+      expect(colors.length, JournalCategory.values.length);
     });
 
     test('categories are in expected order', () {
