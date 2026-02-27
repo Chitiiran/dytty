@@ -41,6 +41,21 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> signInAnonymously() async {
+    if (!kDebugMode) return;
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authService.signInAnonymously();
+    } catch (e) {
+      _error = e.toString();
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> signOut() async {
     await _authService.signOut();
   }

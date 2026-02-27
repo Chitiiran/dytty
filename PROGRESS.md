@@ -1,33 +1,39 @@
 # Dytty Progress
 
 ## Current Status
-First live run complete. App loads in Chrome, connects to Firebase emulators (Auth :9099, Firestore :8080). Emulator warning banner visible, login screen renders. JDK 21 installed (required by Firebase CLI). 34 tests pass, analysis clean. All commits pushed to origin/main.
+Anonymous sign-in working with Firebase emulators. Full flow tested manually: login via emulator -> home screen -> journal entries (add/edit across categories). Functionality is solid. UI is scaffoldy — needs a polish pass. 34 unit tests pass, analysis clean. Playwright E2E scaffolding exists but not yet wired to use anonymous sign-in; `npm install` still needed.
 
 ## Blockers
-- Google Sign-In popup flow not yet tested end-to-end (emulator auth may need manual user creation in emulator UI)
-
-## Manual Steps Remaining
-1. `npm install` for Playwright
+- None — emulator auth flow works
 
 ## What's Built
-- Firebase Auth (Google Sign-In) + Firestore CRUD
+- Firebase Auth (Google Sign-In + anonymous debug sign-in) + Firestore CRUD
+- Anonymous sign-in (debug-only) for emulator testing — no OAuth popup needed
+- Lazy GoogleSignIn init (fixes web crash when client ID meta tag missing)
 - Emulator connection in debug mode (`kDebugMode` guard in `main.dart`)
 - `.firebaserc` with default project `dytty-4b83d`
 - Home screen with calendar (table_calendar), day markers, today's progress card
 - Daily journal screen: 5 category cards with color accents, empty states, delete confirmation, snackbar feedback, relative timestamps
 - Settings screen, auth-reactive routing
 - Login screen with scroll support (overflow fix)
-- Playwright E2E scaffolding (skipped until emulators ready)
+- Playwright E2E scaffolding (tests exist but skipped, need wiring)
 - 34 unit tests (models, repository, provider, categories)
 
 ## Next Steps
-- [ ] Test sign-in flow end-to-end (create test user in emulator UI or try Google popup)
-- [ ] Flesh out Playwright E2E tests (`npm install` first)
-- [ ] UX polish pass
+- [ ] Wire Playwright E2E tests to use anonymous sign-in (unskip journal tests)
+- [ ] `npm install` + `npx playwright install` to get Playwright browsers
+- [ ] UX polish pass — UI is functional but scaffoldy
 
 ---
 
 ## Log
+
+### 2026-02-27 (session 5)
+- Added anonymous sign-in for emulator testing (debug-only, `kDebugMode` guard)
+- Fixed eager `GoogleSignIn()` crash on web — made initialization lazy in `AuthService`
+- `signOut()` now safe for anonymous users (skips Google sign-out if never initialized)
+- Manual E2E test: anonymous login -> home screen -> journal entry CRUD — all working
+- UI noted as scaffoldy — needs polish pass
 
 ### 2026-02-27 (session 4)
 - Added emulator connection logic to `main.dart` (kDebugMode guard: Auth :9099, Firestore :8080)

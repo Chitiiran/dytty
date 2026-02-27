@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dytty/features/auth/auth_provider.dart';
@@ -66,6 +67,16 @@ class LoginScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: authProvider.loading
+                      ? null
+                      : authProvider.signInAnonymously,
+                  icon: const Icon(Icons.developer_mode),
+                  label: const Text('Sign in anonymously (emulator)'),
+                ),
+              ],
             ],
           ),
         ),
