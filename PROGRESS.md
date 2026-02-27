@@ -1,29 +1,42 @@
 # Dytty Progress
 
 ## Current Status
-Firebase setup complete. Project `dytty-4b83d` created, Google Sign-In enabled, Firestore in test mode, `firebase_options.dart` has real web config. Firebase CLI v15.8.0 + FlutterFire CLI v1.3.1 installed. 34 tests pass, analysis clean.
+First live run complete. App loads in Chrome, connects to Firebase emulators (Auth :9099, Firestore :8080). Emulator warning banner visible, login screen renders. JDK 21 installed (required by Firebase CLI). 34 tests pass, analysis clean. All commits pushed to origin/main.
 
 ## Blockers
-- None — ready to run app end-to-end
+- Google Sign-In popup flow not yet tested end-to-end (emulator auth may need manual user creation in emulator UI)
 
 ## Manual Steps Remaining
 1. `npm install` for Playwright
 
 ## What's Built
 - Firebase Auth (Google Sign-In) + Firestore CRUD
+- Emulator connection in debug mode (`kDebugMode` guard in `main.dart`)
+- `.firebaserc` with default project `dytty-4b83d`
 - Home screen with calendar (table_calendar), day markers, today's progress card
 - Daily journal screen: 5 category cards with color accents, empty states, delete confirmation, snackbar feedback, relative timestamps
 - Settings screen, auth-reactive routing
+- Login screen with scroll support (overflow fix)
 - Playwright E2E scaffolding (skipped until emulators ready)
 - 34 unit tests (models, repository, provider, categories)
 
 ## Next Steps
-- [ ] Run app end-to-end with real Firebase (`firebase emulators:start` + `flutter run -d chrome`)
+- [ ] Test sign-in flow end-to-end (create test user in emulator UI or try Google popup)
 - [ ] Flesh out Playwright E2E tests (`npm install` first)
+- [ ] UX polish pass
 
 ---
 
 ## Log
+
+### 2026-02-27 (session 4)
+- Added emulator connection logic to `main.dart` (kDebugMode guard: Auth :9099, Firestore :8080)
+- Created `.firebaserc` with default project `dytty-4b83d`
+- Fixed login screen bottom overflow — wrapped in `SingleChildScrollView`
+- Installed JDK 21 via winget (Firebase emulators require Java 21+)
+- First live run: `firebase emulators:start` + `flutter run -d chrome` — app loads, emulator banner confirms connection
+- Committed Firebase project config (`firebase_options.dart`, `firebase.json`, `PROGRESS.md`)
+- 2 commits pushed to origin/main
 
 ### 2026-02-27 (session 3)
 - Created Firebase project `dytty-4b83d` in Firebase Console
