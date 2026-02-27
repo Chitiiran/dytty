@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum JournalCategory {
   positive,
   negative,
@@ -47,6 +49,21 @@ enum JournalCategory {
         return '\u273F';
       case JournalCategory.identity:
         return '\u25C9';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case JournalCategory.positive:
+        return Colors.amber;
+      case JournalCategory.negative:
+        return Colors.indigo;
+      case JournalCategory.gratitude:
+        return Colors.green;
+      case JournalCategory.beauty:
+        return Colors.pink;
+      case JournalCategory.identity:
+        return Colors.cyan;
     }
   }
 }
