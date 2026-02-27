@@ -27,14 +27,16 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // TODO: Replace with your actual Firebase config from `flutterfire configure`
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY',
-    appId: 'YOUR_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    authDomain: 'YOUR_AUTH_DOMAIN',
+    apiKey: 'AIzaSyDAD_KjyGm2yuY7I3qg8ODfodvRwVakwyQ',
+    appId: '1:828440302945:web:e4627d230ff362a3392120',
+    messagingSenderId: '828440302945',
+    projectId: 'dytty-4b83d',
+    authDomain: 'dytty-4b83d.firebaseapp.com',
+    storageBucket: 'dytty-4b83d.firebasestorage.app',
   );
+
+  // TODO: Replace with your actual Firebase config from `flutterfire configure`
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'YOUR_API_KEY',
