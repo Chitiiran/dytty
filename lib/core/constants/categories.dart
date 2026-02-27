@@ -38,15 +38,15 @@ enum JournalCategory {
   String get icon {
     switch (this) {
       case JournalCategory.positive:
-        return '☀';
+        return '\u2600';
       case JournalCategory.negative:
-        return '☁';
+        return '\u2601';
       case JournalCategory.gratitude:
-        return '🙏';
+        return '\uD83D\uDE4F';
       case JournalCategory.beauty:
-        return '✿';
+        return '\u273F';
       case JournalCategory.identity:
-        return '◉';
+        return '\u25C9';
     }
   }
 }

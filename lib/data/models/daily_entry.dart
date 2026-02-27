@@ -1,45 +1,29 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class DailyEntry {
-  final String id;
-  final DateTime date;
+  final String date;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   DailyEntry({
-    required this.id,
     required this.date,
     required this.createdAt,
     required this.updatedAt,
   });
 
-  Map<String, dynamic> toMap() {
+  factory DailyEntry.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return DailyEntry(
+      date: doc.id,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
     return {
-      'id': id,
-      'date': date.toIso8601String().substring(0, 10),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(updatedAt),
     };
-  }
-
-  factory DailyEntry.fromMap(Map<String, dynamic> map) {
-    return DailyEntry(
-      id: map['id'] as String,
-      date: DateTime.parse(map['date'] as String),
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
-    );
-  }
-
-  DailyEntry copyWith({
-    String? id,
-    DateTime? date,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return DailyEntry(
-      id: id ?? this.id,
-      date: date ?? this.date,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
   }
 }

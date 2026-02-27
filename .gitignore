@@ -1,6 +1,11 @@
 # Claude Code
 .claude/
 
+# Node.js (Playwright E2E tests)
+node_modules/
+test-results/
+playwright-report/
+
 # Miscellaneous
 *.class
 *.log

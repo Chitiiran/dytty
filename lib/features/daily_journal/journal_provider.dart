@@ -1,106 +1,132 @@
 import 'package:flutter/foundation.dart';
-
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
-import 'package:dytty/data/models/daily_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
+import 'package:intl/intl.dart';
 
 class JournalProvider extends ChangeNotifier {
-  final JournalRepository _repository;
+  JournalRepository? _repository;
+  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
-  JournalProvider(this._repository);
-
-  DailyEntry? _currentEntry;
-  List<CategoryEntry> _categoryEntries = [];
+  DateTime _selectedDate = DateTime.now();
+  List<CategoryEntry> _entries = [];
+  Set<String> _daysWithEntries = {};
   bool _loading = false;
+  String? _error;
 
-  DailyEntry? get currentEntry => _currentEntry;
-  List<CategoryEntry> get categoryEntries => _categoryEntries;
+  DateTime get selectedDate => _selectedDate;
+  List<CategoryEntry> get entries => _entries;
+  Set<String> get daysWithEntries => _daysWithEntries;
   bool get loading => _loading;
+  String? get error => _error;
 
-  List<CategoryEntry> entriesFor(JournalCategory category) {
-    return _categoryEntries
-        .where((e) => e.category == category)
-        .toList();
+  String get selectedDateString => _dateFormat.format(_selectedDate);
+
+  /// Sets the repository (called when user authenticates).
+  void setRepository(JournalRepository repository) {
+    _repository = repository;
+    notifyListeners();
   }
 
-  bool get hasAnyEntries => _categoryEntries.isNotEmpty;
+  /// Clears state (called on sign-out).
+  void clear() {
+    _repository = null;
+    _entries = [];
+    _daysWithEntries = {};
+    _error = null;
+    notifyListeners();
+  }
 
-  Future<void> loadDay(DateTime date) async {
+  /// Selects a date and loads its entries.
+  Future<void> selectDate(DateTime date) async {
+    _selectedDate = date;
+    notifyListeners();
+    await loadEntries();
+  }
+
+  /// Loads entries for the currently selected date.
+  Future<void> loadEntries() async {
+    if (_repository == null) return;
+
     _loading = true;
+    _error = null;
     notifyListeners();
 
-    _currentEntry = await _repository.getDailyEntry(date);
-    if (_currentEntry != null) {
-      _categoryEntries = await _repository.getCategoryEntries(
-        _currentEntry!.id,
-      );
-    } else {
-      _categoryEntries = [];
-    }
-
-    _loading = false;
-    notifyListeners();
-  }
-
-  Future<void> addEntry({
-    required JournalCategory category,
-    required String text,
-    EntrySource source = EntrySource.manual,
-    String? languageHint,
-  }) async {
-    _currentEntry ??= await _repository.getOrCreateDailyEntry(
-      _currentEntry?.date ?? DateTime.now(),
-    );
-
-    final entry = await _repository.addCategoryEntry(
-      dailyEntryId: _currentEntry!.id,
-      category: category,
-      text: text,
-      source: source,
-      languageHint: languageHint,
-    );
-    _categoryEntries.add(entry);
-    notifyListeners();
-  }
-
-  Future<void> addEntryForDate({
-    required DateTime date,
-    required JournalCategory category,
-    required String text,
-    EntrySource source = EntrySource.manual,
-  }) async {
-    final dailyEntry = await _repository.getOrCreateDailyEntry(date);
-    _currentEntry = dailyEntry;
-
-    final entry = await _repository.addCategoryEntry(
-      dailyEntryId: dailyEntry.id,
-      category: category,
-      text: text,
-      source: source,
-    );
-    _categoryEntries.add(entry);
-    notifyListeners();
-  }
-
-  Future<void> updateEntry(String entryId, String newText) async {
-    await _repository.updateCategoryEntry(entryId, newText);
-    final index = _categoryEntries.indexWhere((e) => e.id == entryId);
-    if (index != -1) {
-      _categoryEntries[index] = _categoryEntries[index].copyWith(
-        text: newText,
-      );
+    try {
+      _entries = await _repository!.getCategoryEntries(selectedDateString);
+      _loading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _loading = false;
       notifyListeners();
     }
   }
 
-  Future<void> deleteEntry(String entryId) async {
-    await _repository.deleteCategoryEntry(entryId);
-    _categoryEntries.removeWhere((e) => e.id == entryId);
-    notifyListeners();
+  /// Loads calendar markers for a given month.
+  Future<void> loadMonthMarkers(int year, int month) async {
+    if (_repository == null) return;
+
+    try {
+      _daysWithEntries = await _repository!.getDaysWithEntries(year, month);
+      notifyListeners();
+    } catch (e) {
+      // Silently fail for markers — non-critical
+    }
   }
 
-  Future<Set<DateTime>> getDaysWithEntries(int year, int month) {
-    return _repository.getDaysWithEntries(year, month);
+  /// Gets entries filtered by category.
+  List<CategoryEntry> entriesForCategory(JournalCategory category) {
+    return _entries.where((e) => e.category == category).toList();
+  }
+
+  /// Adds a new entry.
+  Future<void> addEntry(JournalCategory category, String text) async {
+    if (_repository == null) return;
+
+    try {
+      await _repository!.addCategoryEntry(
+        selectedDateString,
+        category,
+        text,
+      );
+      await loadEntries();
+      // Refresh markers for the current month
+      await loadMonthMarkers(_selectedDate.year, _selectedDate.month);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Updates an existing entry.
+  Future<void> updateEntry(String entryId, String text) async {
+    if (_repository == null) return;
+
+    try {
+      await _repository!.updateCategoryEntry(
+        selectedDateString,
+        entryId,
+        text,
+      );
+      await loadEntries();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Deletes an entry.
+  Future<void> deleteEntry(String entryId) async {
+    if (_repository == null) return;
+
+    try {
+      await _repository!.deleteCategoryEntry(selectedDateString, entryId);
+      await loadEntries();
+      await loadMonthMarkers(_selectedDate.year, _selectedDate.month);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
   }
 }

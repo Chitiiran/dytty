@@ -1,213 +1,144 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:uuid/uuid.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dytty/core/constants/categories.dart';
-import 'package:dytty/data/datasources/database_helper.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/daily_entry.dart';
-import 'package:dytty/data/models/voice_session.dart';
 
 class JournalRepository {
-  static const _uuid = Uuid();
+  final FirebaseFirestore _firestore;
+  final String _uid;
 
-  // -- Daily Entries --
+  JournalRepository({
+    required String uid,
+    FirebaseFirestore? firestore,
+  })  : _uid = uid,
+        _firestore = firestore ?? FirebaseFirestore.instance;
 
-  Future<DailyEntry> getOrCreateDailyEntry(DateTime date) async {
-    final db = await DatabaseHelper.database;
-    final dateStr = _dateToString(date);
-    final results = await db.query(
-      'daily_entries',
-      where: 'date = ?',
-      whereArgs: [dateStr],
-    );
+  CollectionReference get _dailyEntriesCollection =>
+      _firestore.collection('users').doc(_uid).collection('dailyEntries');
 
-    if (results.isNotEmpty) {
-      return DailyEntry.fromMap(results.first);
+  DocumentReference _dailyEntryDoc(String date) => _dailyEntriesCollection.doc(date);
+
+  CollectionReference _categoryEntries(String date) =>
+      _dailyEntryDoc(date).collection('categoryEntries');
+
+  /// Creates the daily entry doc if it doesn't exist, returns it.
+  Future<DailyEntry> getOrCreateDailyEntry(String date) async {
+    final doc = _dailyEntryDoc(date);
+    final snapshot = await doc.get();
+
+    if (snapshot.exists) {
+      return DailyEntry.fromFirestore(snapshot);
     }
 
     final now = DateTime.now();
     final entry = DailyEntry(
-      id: _uuid.v4(),
       date: date,
       createdAt: now,
       updatedAt: now,
     );
-    await db.insert('daily_entries', entry.toMap());
+    await doc.set(entry.toFirestore());
     return entry;
   }
 
-  Future<DailyEntry?> getDailyEntry(DateTime date) async {
-    final db = await DatabaseHelper.database;
-    final dateStr = _dateToString(date);
-    final results = await db.query(
-      'daily_entries',
-      where: 'date = ?',
-      whereArgs: [dateStr],
-    );
-    if (results.isEmpty) return null;
-    return DailyEntry.fromMap(results.first);
+  /// Gets all category entries for a given date.
+  Future<List<CategoryEntry>> getCategoryEntries(String date) async {
+    final snapshot = await _categoryEntries(date)
+        .orderBy('createdAt', descending: false)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CategoryEntry.fromFirestore(doc))
+        .toList();
   }
 
-  Future<List<DailyEntry>> getDailyEntriesInRange(
-    DateTime start,
-    DateTime end,
-  ) async {
-    final db = await DatabaseHelper.database;
-    final results = await db.query(
-      'daily_entries',
-      where: 'date >= ? AND date <= ?',
-      whereArgs: [_dateToString(start), _dateToString(end)],
-      orderBy: 'date DESC',
-    );
-    return results.map((m) => DailyEntry.fromMap(m)).toList();
-  }
-
-  /// Returns dates that have entries in the given month
-  Future<Set<DateTime>> getDaysWithEntries(int year, int month) async {
-    final db = await DatabaseHelper.database;
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0);
-    final results = await db.query(
-      'daily_entries',
-      columns: ['date'],
-      where: 'date >= ? AND date <= ?',
-      whereArgs: [_dateToString(start), _dateToString(end)],
-    );
-    return results
-        .map((m) => DateTime.parse(m['date'] as String))
-        .toSet();
-  }
-
-  // -- Category Entries --
-
-  Future<List<CategoryEntry>> getCategoryEntries(String dailyEntryId) async {
-    final db = await DatabaseHelper.database;
-    final results = await db.query(
-      'category_entries',
-      where: 'daily_entry_id = ?',
-      whereArgs: [dailyEntryId],
-      orderBy: 'created_at ASC',
-    );
-    return results.map((m) => CategoryEntry.fromMap(m)).toList();
-  }
-
-  Future<List<CategoryEntry>> getCategoryEntriesByType(
-    String dailyEntryId,
+  /// Adds a new category entry.
+  Future<CategoryEntry> addCategoryEntry(
+    String date,
     JournalCategory category,
+    String text,
   ) async {
-    final db = await DatabaseHelper.database;
-    final results = await db.query(
-      'category_entries',
-      where: 'daily_entry_id = ? AND category = ?',
-      whereArgs: [dailyEntryId, category.name],
-      orderBy: 'created_at ASC',
-    );
-    return results.map((m) => CategoryEntry.fromMap(m)).toList();
-  }
+    await getOrCreateDailyEntry(date);
 
-  Future<CategoryEntry> addCategoryEntry({
-    required String dailyEntryId,
-    required JournalCategory category,
-    required String text,
-    String? languageHint,
-    EntrySource source = EntrySource.manual,
-  }) async {
-    final db = await DatabaseHelper.database;
+    final now = DateTime.now();
     final entry = CategoryEntry(
-      id: _uuid.v4(),
-      dailyEntryId: dailyEntryId,
+      id: '',
       category: category,
       text: text,
-      languageHint: languageHint,
-      source: source,
-      createdAt: DateTime.now(),
+      createdAt: now,
     );
-    await db.insert('category_entries', entry.toMap());
-    await _touchDailyEntry(dailyEntryId);
-    return entry;
-  }
 
-  Future<void> updateCategoryEntry(String id, String newText) async {
-    final db = await DatabaseHelper.database;
-    await db.update(
-      'category_entries',
-      {'text': newText},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
+    final docRef = await _categoryEntries(date).add(entry.toFirestore());
 
-  Future<void> deleteCategoryEntry(String id) async {
-    final db = await DatabaseHelper.database;
-    await db.delete('category_entries', where: 'id = ?', whereArgs: [id]);
-  }
+    // Update the daily entry's updatedAt
+    await _dailyEntryDoc(date).update({
+      'updatedAt': Timestamp.fromDate(now),
+    });
 
-  // -- Voice Sessions --
-
-  Future<VoiceSession> saveVoiceSession({
-    required String dailyEntryId,
-    required String transcript,
-    required int durationSeconds,
-    required DateTime startedAt,
-  }) async {
-    final db = await DatabaseHelper.database;
-    final session = VoiceSession(
-      id: _uuid.v4(),
-      dailyEntryId: dailyEntryId,
-      transcript: transcript,
-      durationSeconds: durationSeconds,
-      startedAt: startedAt,
-    );
-    await db.insert('voice_sessions', session.toMap());
-    return session;
-  }
-
-  Future<List<VoiceSession>> getVoiceSessions(String dailyEntryId) async {
-    final db = await DatabaseHelper.database;
-    final results = await db.query(
-      'voice_sessions',
-      where: 'daily_entry_id = ?',
-      whereArgs: [dailyEntryId],
-      orderBy: 'started_at DESC',
-    );
-    return results.map((m) => VoiceSession.fromMap(m)).toList();
-  }
-
-  // -- Settings --
-
-  Future<String?> getSetting(String key) async {
-    final db = await DatabaseHelper.database;
-    final results = await db.query(
-      'user_settings',
-      where: 'key = ?',
-      whereArgs: [key],
-    );
-    if (results.isEmpty) return null;
-    return results.first['value'] as String;
-  }
-
-  Future<void> setSetting(String key, String value) async {
-    final db = await DatabaseHelper.database;
-    await db.insert(
-      'user_settings',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    return CategoryEntry(
+      id: docRef.id,
+      category: category,
+      text: text,
+      createdAt: now,
     );
   }
 
-  // -- Helpers --
-
-  Future<void> _touchDailyEntry(String dailyEntryId) async {
-    final db = await DatabaseHelper.database;
-    await db.update(
-      'daily_entries',
-      {'updated_at': DateTime.now().toIso8601String()},
-      where: 'id = ?',
-      whereArgs: [dailyEntryId],
-    );
+  /// Updates an existing category entry's text.
+  Future<void> updateCategoryEntry(
+    String date,
+    String entryId,
+    String text,
+  ) async {
+    final now = DateTime.now();
+    await _categoryEntries(date).doc(entryId).update({
+      'text': text,
+    });
+    await _dailyEntryDoc(date).update({
+      'updatedAt': Timestamp.fromDate(now),
+    });
   }
 
-  String _dateToString(DateTime date) {
-    return date.toIso8601String().substring(0, 10);
+  /// Deletes a category entry.
+  Future<void> deleteCategoryEntry(String date, String entryId) async {
+    await _categoryEntries(date).doc(entryId).delete();
+
+    final remaining = await _categoryEntries(date).limit(1).get();
+    if (remaining.docs.isEmpty) {
+      await _dailyEntryDoc(date).delete();
+    } else {
+      await _dailyEntryDoc(date).update({
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+      });
+    }
+  }
+
+  /// Gets dates that have entries for a given year/month.
+  Future<Set<String>> getDaysWithEntries(int year, int month) async {
+    final startDate =
+        '${year.toString()}-${month.toString().padLeft(2, '0')}-01';
+    final endMonth = month == 12 ? 1 : month + 1;
+    final endYear = month == 12 ? year + 1 : year;
+    final endDate =
+        '${endYear.toString()}-${endMonth.toString().padLeft(2, '0')}-01';
+
+    final snapshot = await _dailyEntriesCollection
+        .where(FieldPath.documentId, isGreaterThanOrEqualTo: startDate)
+        .where(FieldPath.documentId, isLessThan: endDate)
+        .get();
+
+    return snapshot.docs.map((doc) => doc.id).toSet();
+  }
+
+  /// Ensures user profile exists in Firestore.
+  Future<void> ensureUserProfile(String displayName, String email) async {
+    final profileDoc = _firestore.collection('users').doc(_uid);
+    final snapshot = await profileDoc.get();
+
+    if (!snapshot.exists) {
+      await profileDoc.set({
+        'displayName': displayName,
+        'email': email,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+      });
+    }
   }
 }
