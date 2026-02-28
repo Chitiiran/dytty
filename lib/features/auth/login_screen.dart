@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dytty/features/auth/auth_provider.dart';
+import 'package:dytty/main.dart' show useEmulators;
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -67,7 +67,7 @@ class LoginScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              if (kDebugMode) ...[
+              if (useEmulators) ...[
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: authProvider.loading

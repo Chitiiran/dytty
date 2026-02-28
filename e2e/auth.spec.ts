@@ -1,32 +1,48 @@
 import { test, expect } from '@playwright/test';
-import { waitForFlutterReady, expectTextVisible } from './helpers';
+import { waitForFlutterReady, expectTextVisible, signInAnonymously, clearEmulatorAuth } from './helpers';
 
 test.describe('Auth Flow', () => {
-  test('shows login screen with Google Sign-In button', async ({ page }) => {
+  test.beforeEach(async () => {
+    await clearEmulatorAuth();
+  });
+
+  test('shows login screen with sign-in buttons', async ({ page }) => {
     await page.goto('/');
     await waitForFlutterReady(page);
 
-    // The app should show the login screen with the sign-in button
     await expectTextVisible(page, 'Dytty');
     await expectTextVisible(page, 'Your daily journal');
 
-    const signInButton = page.getByLabel('Sign in with Google');
-    await expect(signInButton).toBeVisible({ timeout: 10_000 });
+    const googleButton = page.getByLabel('Sign in with Google');
+    await expect(googleButton).toBeVisible({ timeout: 10_000 });
+
+    // Debug-mode anonymous button should also be visible
+    const anonButton = page.getByText('Sign in anonymously (emulator)');
+    await expect(anonButton).toBeVisible({ timeout: 10_000 });
   });
 
-  test('shows loading state when sign-in is clicked', async ({ page }) => {
+  test('anonymous sign-in navigates to home screen', async ({ page }) => {
     await page.goto('/');
     await waitForFlutterReady(page);
 
-    const signInButton = page.getByLabel('Sign in with Google');
-    await expect(signInButton).toBeVisible({ timeout: 10_000 });
+    await signInAnonymously(page);
 
-    // Click sign in — it will fail in test env but should show loading state
-    await signInButton.click();
+    // Should be on the home screen
+    await expectTextVisible(page, "Today's Journal");
+  });
 
-    // After click, the button should be in some state (loading or error)
-    // Since Google Sign-In popup won't work in headless, we just verify
-    // the button was clickable and the app didn't crash
-    await page.waitForTimeout(1000);
+  test('sign out returns to login screen', async ({ page }) => {
+    await page.goto('/');
+    await waitForFlutterReady(page);
+    await signInAnonymously(page);
+
+    // Click sign out
+    const signOutButton = page.getByLabel('Sign out');
+    await expect(signOutButton).toBeVisible({ timeout: 10_000 });
+    await signOutButton.click();
+
+    // Should be back on login screen
+    await expectTextVisible(page, 'Dytty');
+    await expectTextVisible(page, 'Your daily journal');
   });
 });

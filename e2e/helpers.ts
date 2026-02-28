@@ -1,31 +1,8 @@
 import { Page, expect } from '@playwright/test';
 
 const FIREBASE_AUTH_EMULATOR = 'http://localhost:9099';
-const FIREBASE_PROJECT_ID = 'demo-dytty';
-
-/**
- * Creates a test user in the Firebase Auth emulator and signs them in
- * by directly calling the emulator REST API, then injecting the token.
- */
-export async function createEmulatorUser(page: Page) {
-  // Create a user in the Auth emulator
-  const response = await fetch(
-    `${FIREBASE_AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'test@example.com',
-        password: 'testpassword123',
-        displayName: 'Test User',
-        returnSecureToken: true,
-      }),
-    }
-  );
-
-  const data = await response.json();
-  return data;
-}
+const FIREBASE_FIRESTORE_EMULATOR = 'http://localhost:8080';
+const FIREBASE_PROJECT_ID = 'dytty-4b83d';
 
 /**
  * Clears all Auth emulator accounts.
@@ -42,33 +19,39 @@ export async function clearEmulatorAuth() {
  */
 export async function clearEmulatorFirestore() {
   await fetch(
-    `http://localhost:8081/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`,
+    `${FIREBASE_FIRESTORE_EMULATOR}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`,
     { method: 'DELETE' }
   );
 }
 
 /**
  * Waits for Flutter web app to be fully loaded.
- * Flutter renders on a canvas, so we wait for the canvas element and
- * for Flutter engine to signal readiness.
+ * Looks for the Flutter view element and waits for the semantics tree.
  */
 export async function waitForFlutterReady(page: Page) {
-  // Wait for the Flutter engine to load
-  await page.waitForSelector('flt-glass-pane, canvas, flutter-view', {
-    timeout: 30_000,
+  // Wait for Flutter's custom element to appear in the DOM
+  await page.waitForSelector('flutter-view, flt-glass-pane', {
+    timeout: 60_000,
   });
 
-  // Give Flutter time to render the first frame
-  await page.waitForTimeout(2000);
+  // Wait for at least one semantic element (proves rendering is complete)
+  await page.waitForSelector('flt-semantics', { timeout: 30_000 });
+
+  // Brief extra wait for rendering to settle
+  await page.waitForTimeout(1000);
 }
 
 /**
- * Finds a Flutter element by its semantic label.
- * Flutter web with semantics enabled creates an accessibility tree
- * that Playwright can query via ARIA roles and labels.
+ * Signs in anonymously by clicking the emulator sign-in button.
+ * Waits for the home screen to appear after sign-in.
  */
-export async function findByLabel(page: Page, label: string) {
-  return page.getByLabel(label);
+export async function signInAnonymously(page: Page) {
+  const anonButton = page.getByRole('button', { name: 'Sign in anonymously (emulator)' });
+  await expect(anonButton).toBeVisible({ timeout: 10_000 });
+  await anonButton.click();
+
+  // Wait for navigation to home screen — look for "Today's Journal" button
+  await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 15_000 });
 }
 
 /**

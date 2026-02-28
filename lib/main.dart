@@ -7,6 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dytty/app.dart';
 import 'firebase_options.dart';
 
+/// Set via --dart-define=USE_EMULATORS=true for E2E testing builds
+const useEmulators = bool.fromEnvironment('USE_EMULATORS') || kDebugMode;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -14,7 +17,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  if (kDebugMode) {
+  if (useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
   }

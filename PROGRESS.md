@@ -1,12 +1,27 @@
 # Dytty Progress
 
 ## Current Status
-Anonymous sign-in working with Firebase emulators. Full flow tested manually: login via emulator -> home screen -> journal entries (add/edit across categories). Functionality is solid. UI is scaffoldy — needs a polish pass. 34 unit tests pass, analysis clean. Playwright E2E scaffolding exists but not yet wired to use anonymous sign-in; `npm install` still needed.
+On branch `e2e-playwright-setup` (off main). E2E testing work isolated here — uncommitted changes ready to stage. GenUI playground work remains on `genui-playground` branch (committed). Core app on `main` is stable.
+
+**This branch (`e2e-playwright-setup`):** Playwright E2E tests wired with anonymous sign-in, `useEmulators` flag via `--dart-define`, semantic labels added to Flutter widgets. Tests cover auth flow (3 tests) and journal CRUD (7 tests). npm/Playwright installed.
 
 ## Blockers
-- None — emulator auth flow works
+- None
 
-## What's Built
+## Active Branches
+| Branch | Purpose | Status |
+|--------|---------|--------|
+| `main` | Stable core app | Firebase + Auth + Firestore CRUD working |
+| `e2e-playwright-setup` | Playwright E2E testing | Uncommitted — ready to commit |
+| `genui-playground` | GenUI design playground | Committed, separate experiment |
+
+## Branch Naming Convention
+- `feature/<name>` — new features
+- `fix/<name>` — bug fixes
+- `e2e-<name>` — E2E testing work
+- `experiment/<name>` — exploratory/prototype work (e.g., genui-playground)
+
+## What's Built (main)
 - Firebase Auth (Google Sign-In + anonymous debug sign-in) + Firestore CRUD
 - Anonymous sign-in (debug-only) for emulator testing — no OAuth popup needed
 - Lazy GoogleSignIn init (fixes web crash when client ID meta tag missing)
@@ -16,12 +31,12 @@ Anonymous sign-in working with Firebase emulators. Full flow tested manually: lo
 - Daily journal screen: 5 category cards with color accents, empty states, delete confirmation, snackbar feedback, relative timestamps
 - Settings screen, auth-reactive routing
 - Login screen with scroll support (overflow fix)
-- Playwright E2E scaffolding (tests exist but skipped, need wiring)
 - 34 unit tests (models, repository, provider, categories)
 
 ## Next Steps
-- [ ] Wire Playwright E2E tests to use anonymous sign-in (unskip journal tests)
-- [ ] `npm install` + `npx playwright install` to get Playwright browsers
+- [ ] Commit E2E testing changes on `e2e-playwright-setup`
+- [ ] Run Playwright tests to verify setup
+- [ ] Merge `e2e-playwright-setup` to main when tests pass
 - [ ] UX polish pass — UI is functional but scaffoldy
 
 ---

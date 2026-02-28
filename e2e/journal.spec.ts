@@ -1,26 +1,26 @@
 import { test, expect } from '@playwright/test';
-import { waitForFlutterReady, expectTextVisible, clickByLabel } from './helpers';
-
-// These tests require the Firebase Auth + Firestore emulators running,
-// and a signed-in user. They will be skipped until emulator auth
-// integration is configured.
-//
-// To run these tests:
-// 1. Start Firebase emulators: firebase emulators:start
-// 2. Ensure the Flutter app is configured to use emulators
-// 3. Sign in via the emulator auth (or implement email/password for test)
+import {
+  waitForFlutterReady,
+  expectTextVisible,
+  clickByLabel,
+  signInAnonymously,
+  clearEmulatorAuth,
+  clearEmulatorFirestore,
+} from './helpers';
 
 test.describe('Journal CRUD', () => {
-  test.skip(true, 'Requires Firebase emulators + auth setup');
-
-  test('navigates from home to daily journal screen', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
+    await clearEmulatorAuth();
+    await clearEmulatorFirestore();
     await page.goto('/');
     await waitForFlutterReady(page);
+    await signInAnonymously(page);
+  });
 
-    // Click today's journal button
+  test('navigates from home to daily journal screen', async ({ page }) => {
     await clickByLabel(page, 'Today button');
 
-    // Should show the daily journal screen with category cards
+    // Should show category cards
     await expectTextVisible(page, 'Positive Things');
     await expectTextVisible(page, 'Negative Things');
     await expectTextVisible(page, 'Gratitude');
@@ -29,19 +29,15 @@ test.describe('Journal CRUD', () => {
   });
 
   test('adds an entry to positive category', async ({ page }) => {
-    await page.goto('/');
-    await waitForFlutterReady(page);
     await clickByLabel(page, 'Today button');
 
-    // Click add button for positive category
     await clickByLabel(page, 'Add Positive Things entry');
 
     // Type in the dialog
     const textField = page.getByLabel('Entry text');
-    await expect(textField).toBeVisible();
+    await expect(textField).toBeVisible({ timeout: 10_000 });
     await textField.fill('Had a great morning walk');
 
-    // Save
     await clickByLabel(page, 'Save entry');
 
     // Verify entry appears
@@ -49,8 +45,6 @@ test.describe('Journal CRUD', () => {
   });
 
   test('edits an existing entry', async ({ page }) => {
-    await page.goto('/');
-    await waitForFlutterReady(page);
     await clickByLabel(page, 'Today button');
 
     // Add an entry first
@@ -65,6 +59,7 @@ test.describe('Journal CRUD', () => {
 
     // Update text
     const editField = page.getByLabel('Entry text');
+    await expect(editField).toBeVisible({ timeout: 10_000 });
     await editField.clear();
     await editField.fill('Updated text');
     await clickByLabel(page, 'Save changes');
@@ -74,8 +69,6 @@ test.describe('Journal CRUD', () => {
   });
 
   test('deletes an entry', async ({ page }) => {
-    await page.goto('/');
-    await waitForFlutterReady(page);
     await clickByLabel(page, 'Today button');
 
     // Add an entry first
@@ -88,13 +81,17 @@ test.describe('Journal CRUD', () => {
     // Delete it
     await clickByLabel(page, 'Delete entry');
 
-    // Verify gone
+    // Confirm deletion in the dialog
+    const deleteConfirm = page.getByText('Delete', { exact: true }).last();
+    await expect(deleteConfirm).toBeVisible({ timeout: 10_000 });
+    await deleteConfirm.click();
+
+    // Wait for deletion and verify gone
+    await page.waitForTimeout(1000);
     await expect(page.getByText('Entry to delete')).not.toBeVisible();
   });
 
   test('adds entries across multiple categories', async ({ page }) => {
-    await page.goto('/');
-    await waitForFlutterReady(page);
     await clickByLabel(page, 'Today button');
 
     const categories = [
@@ -108,6 +105,7 @@ test.describe('Journal CRUD', () => {
     for (const { name, text } of categories) {
       await clickByLabel(page, `Add ${name} entry`);
       const textField = page.getByLabel('Entry text');
+      await expect(textField).toBeVisible({ timeout: 10_000 });
       await textField.fill(text);
       await clickByLabel(page, 'Save entry');
       await expectTextVisible(page, text);
@@ -116,24 +114,21 @@ test.describe('Journal CRUD', () => {
 });
 
 test.describe('Calendar Navigation', () => {
-  test.skip(true, 'Requires Firebase emulators + auth setup');
-
-  test('shows calendar on home screen', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
+    await clearEmulatorAuth();
+    await clearEmulatorFirestore();
     await page.goto('/');
     await waitForFlutterReady(page);
-
-    const calendar = page.getByLabel('Calendar');
-    await expect(calendar).toBeVisible();
+    await signInAnonymously(page);
   });
 
-  test('navigates to daily journal by tapping a date', async ({ page }) => {
-    await page.goto('/');
-    await waitForFlutterReady(page);
+  test('shows calendar on home screen', async ({ page }) => {
+    const calendar = page.getByLabel('Calendar');
+    await expect(calendar).toBeVisible({ timeout: 10_000 });
+  });
 
-    // Click on today in the calendar
+  test('navigates to daily journal by clicking Today button', async ({ page }) => {
     await clickByLabel(page, 'Today button');
-
-    // Should show journal screen
     await expectTextVisible(page, 'Positive Things');
   });
 });

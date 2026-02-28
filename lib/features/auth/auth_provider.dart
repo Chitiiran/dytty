@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:dytty/main.dart' show useEmulators;
 import 'package:dytty/services/auth/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -42,7 +43,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signInAnonymously() async {
-    if (!kDebugMode) return;
+    if (!useEmulators) return;
     _loading = true;
     _error = null;
     notifyListeners();
