@@ -1,0 +1,5 @@
+# Flutter build output (may contain baked-in API key)
+build/
+.dart_tool/
+.packages
+pubspec.lock

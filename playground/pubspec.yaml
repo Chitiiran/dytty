@@ -1,0 +1,27 @@
+name: dytty_genui_playground
+description: "GenUI design playground for Dytty"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # GenUI SDK
+  genui: ^0.7.0
+  genui_google_generative_ai: ^0.7.0
+  json_schema_builder: ^0.1.3
+  logging: ^1.3.0
+
+  # Dytty shared code (theme, categories)
+  dytty:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
