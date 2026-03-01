@@ -3,19 +3,16 @@
 ## Current Status
 On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 
-**This branch (`e2e-playwright-setup`):** Playwright E2E tests wired with anonymous sign-in. 10 real tests (3 auth, 7 journal/calendar) + 1 debug diagnostic. npm/Playwright installed. Flutter web server on :5555 connects to Firebase emulators automatically via `kDebugMode`.
-
-**Key finding this session:** Stale `flutter run -d web-server` causes Flutter to silently fail to render (CanvasKit loads, DDC loads 607 scripts, but `flutter-view` never appears, zero errors). Restarting the dev server fixes it. Tests not yet run against fresh server.
+**This branch (`e2e-playwright-setup`):** All 10 Playwright E2E tests passing (3 auth, 5 journal CRUD, 2 calendar nav). 34 unit tests passing. Uses release build (`flutter build web --dart-define=USE_EMULATORS=true`) served via `npx serve` — debug mode DDC was unreliable with Playwright's Chromium.
 
 ## Blockers
-- None currently — Java 21 found at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`, emulators run fine with `JAVA_HOME` override
-- Stale Flutter dev server can cause silent failures — always restart before test runs
+- None
 
 ## Active Branches
 | Branch | Purpose | Status |
 |--------|---------|--------|
 | `main` | Stable core app | Firebase + Auth + Firestore CRUD working |
-| `e2e-playwright-setup` | Playwright E2E testing | **Committed** (e4e5e15) — fresh server works, tests pending |
+| `e2e-playwright-setup` | Playwright E2E testing | **All 10 E2E tests passing** — ready to merge |
 | `genui-playground` | GenUI design playground | Committed, separate experiment |
 
 ## Branch Naming Convention
@@ -37,10 +34,10 @@ On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 - 34 unit tests (models, repository, provider, categories)
 
 ## Next Steps
-- [x] Fix Java 21 PATH — found at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`, use `JAVA_HOME` override
-- [ ] Run Playwright tests against fresh Flutter server
-- [ ] Fix any test failures (semantic labels, selectors)
-- [ ] Merge `e2e-playwright-setup` to main when tests pass
+- [x] Fix Java 21 PATH — found at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`
+- [x] Run Playwright tests — all 10 passing
+- [x] Fix test failures — semantic selectors aligned with Flutter web accessibility tree
+- [ ] Merge `e2e-playwright-setup` to main
 - [ ] UX polish pass — UI is functional but scaffoldy
 
 ---
@@ -48,14 +45,19 @@ On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 ## Log
 
 ### 2026-02-28 (session 7)
-- Resolved Java 21 PATH blocker: JDK 21 at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`, emulators start with `JAVA_HOME` override
-- Found Firebase emulators already running (ports 9099, 8080) from prior session
-- Diagnosed Flutter silent render failure: stale `flutter run -d web-server` serves DDC scripts + CanvasKit but never creates `flutter-view` — zero errors in browser
-- Created `e2e/diagnose.mjs` diagnostic script (CDP runtime monitoring, network tracing)
-- Confirmed fix: killing stale server (PID 37576) and restarting `flutter run -d web-server` resolves rendering
-- Fresh server: Firebase init logs appear, Auth emulator connects, semantics tree renders with `flt-semantics` nodes
-- `useEmulators` flag works automatically via `kDebugMode` in debug builds — no `--dart-define` needed
-- Next: run actual Playwright tests, fix failures, commit
+- Resolved Java 21 PATH blocker: JDK 21 at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`
+- Discovered `flutter run -d web-server` (DDC/debug mode) is unreliable with Playwright's headless Chromium — Flutter loads scripts but never renders, zero errors
+- **Solution:** switched to release build strategy: `flutter build web --dart-define=USE_EMULATORS=true` + `npx serve build/web` — renders in <2s, fully reliable
+- Updated `playwright.config.ts` webServer command to build+serve instead of `flutter run`
+- Fixed Flutter semantics for E2E testing:
+  - Removed double `Semantics` wrappers on `IconButton`s (outer wrapper intercepted clicks without forwarding to inner button)
+  - Used `tooltip` directly on `IconButton` for semantic labels (renders as text content, not aria-label)
+  - Used `InputDecoration.labelText` instead of outer `Semantics` on `TextField`
+  - Used `getByRole('button', { name })` in tests instead of `getByLabel()` for tooltip-based labels
+  - Used `getByLabel()` only for elements with explicit `Semantics(label:)` wrappers (category cards, calendar, today button)
+- Inspected Flutter web accessibility tree to map exact DOM structure to Playwright selectors
+- All 10 E2E tests passing, 34 unit tests passing
+- Cleaned up diagnostic scripts (diagnose.mjs, inspect-a11y.mjs, global-setup.ts)
 
 ### 2026-02-28 (session 6)
 - Isolated E2E testing work from genui-playground branch

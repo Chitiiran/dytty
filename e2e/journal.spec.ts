@@ -20,79 +20,85 @@ test.describe('Journal CRUD', () => {
   test('navigates from home to daily journal screen', async ({ page }) => {
     await clickByLabel(page, 'Today button');
 
-    // Should show category cards
-    await expectTextVisible(page, 'Positive Things');
-    await expectTextVisible(page, 'Negative Things');
-    await expectTextVisible(page, 'Gratitude');
-    await expectTextVisible(page, 'Beauty');
-    await expectTextVisible(page, 'Identity');
+    // Should show category cards (check via semantic labels)
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel('Negative Things category')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel('Gratitude category')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel('Beauty category')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel('Identity category')).toBeVisible({ timeout: 10_000 });
   });
 
   test('adds an entry to positive category', async ({ page }) => {
     await clickByLabel(page, 'Today button');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
 
-    await clickByLabel(page, 'Add Positive Things entry');
+    await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
 
-    // Type in the dialog
-    const textField = page.getByLabel('Entry text');
+    // Type in the dialog — use role since Semantics label may not map to aria-label
+    const textField = page.getByRole('textbox');
     await expect(textField).toBeVisible({ timeout: 10_000 });
     await textField.fill('Had a great morning walk');
 
-    await clickByLabel(page, 'Save entry');
+    await page.getByRole('button', { name: 'Save' }).click();
 
-    // Verify entry appears
-    await expectTextVisible(page, 'Had a great morning walk');
+    // Verify entry appears in semantic tree
+    await expect(page.getByLabel('Journal entry: Had a great morning walk')).toBeVisible({ timeout: 10_000 });
   });
 
   test('edits an existing entry', async ({ page }) => {
     await clickByLabel(page, 'Today button');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
 
     // Add an entry first
-    await clickByLabel(page, 'Add Positive Things entry');
-    const textField = page.getByLabel('Entry text');
+    await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
+    const textField = page.getByRole('textbox');
+    await expect(textField).toBeVisible({ timeout: 10_000 });
     await textField.fill('Original text');
-    await clickByLabel(page, 'Save entry');
-    await expectTextVisible(page, 'Original text');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Journal entry: Original text')).toBeVisible({ timeout: 10_000 });
 
     // Click edit on the entry
-    await clickByLabel(page, 'Edit entry');
+    await page.getByRole('button', { name: 'Edit entry' }).click();
 
     // Update text
-    const editField = page.getByLabel('Entry text');
+    const editField = page.getByRole('textbox');
     await expect(editField).toBeVisible({ timeout: 10_000 });
     await editField.clear();
     await editField.fill('Updated text');
-    await clickByLabel(page, 'Save changes');
+    await page.getByRole('button', { name: 'Save' }).click();
 
     // Verify updated
-    await expectTextVisible(page, 'Updated text');
+    await expect(page.getByLabel('Journal entry: Updated text')).toBeVisible({ timeout: 10_000 });
   });
 
   test('deletes an entry', async ({ page }) => {
     await clickByLabel(page, 'Today button');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
 
     // Add an entry first
-    await clickByLabel(page, 'Add Positive Things entry');
-    const textField = page.getByLabel('Entry text');
+    await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
+    const textField = page.getByRole('textbox');
+    await expect(textField).toBeVisible({ timeout: 10_000 });
     await textField.fill('Entry to delete');
-    await clickByLabel(page, 'Save entry');
-    await expectTextVisible(page, 'Entry to delete');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Journal entry: Entry to delete')).toBeVisible({ timeout: 10_000 });
 
     // Delete it
-    await clickByLabel(page, 'Delete entry');
+    await page.getByRole('button', { name: 'Delete entry' }).click();
 
-    // Confirm deletion in the dialog
-    const deleteConfirm = page.getByText('Delete', { exact: true }).last();
+    // Confirm deletion in the dialog — use role button with name
+    const deleteConfirm = page.getByRole('button', { name: 'Delete' });
     await expect(deleteConfirm).toBeVisible({ timeout: 10_000 });
     await deleteConfirm.click();
 
     // Wait for deletion and verify gone
-    await page.waitForTimeout(1000);
-    await expect(page.getByText('Entry to delete')).not.toBeVisible();
+    await page.waitForTimeout(2000);
+    await expect(page.getByLabel('Journal entry: Entry to delete')).not.toBeVisible();
   });
 
   test('adds entries across multiple categories', async ({ page }) => {
     await clickByLabel(page, 'Today button');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
 
     const categories = [
       { name: 'Positive Things', text: 'Sunny day' },
@@ -103,12 +109,12 @@ test.describe('Journal CRUD', () => {
     ];
 
     for (const { name, text } of categories) {
-      await clickByLabel(page, `Add ${name} entry`);
-      const textField = page.getByLabel('Entry text');
+      await page.getByRole('button', { name: `Add ${name} entry` }).click();
+      const textField = page.getByRole('textbox');
       await expect(textField).toBeVisible({ timeout: 10_000 });
       await textField.fill(text);
-      await clickByLabel(page, 'Save entry');
-      await expectTextVisible(page, text);
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByLabel(`Journal entry: ${text}`)).toBeVisible({ timeout: 10_000 });
     }
   });
 });
@@ -129,6 +135,6 @@ test.describe('Calendar Navigation', () => {
 
   test('navigates to daily journal by clicking Today button', async ({ page }) => {
     await clickByLabel(page, 'Today button');
-    await expectTextVisible(page, 'Positive Things');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
   });
 });

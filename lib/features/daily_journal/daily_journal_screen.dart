@@ -232,14 +232,10 @@ class _CategoryCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Semantics(
-                      label: 'Add ${category.displayName} entry',
-                      button: true,
-                      child: IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () => _showAddDialog(context),
-                        tooltip: 'Add entry',
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => _showAddDialog(context),
+                      tooltip: 'Add ${category.displayName} entry',
                     ),
                   ],
                 ),
@@ -282,36 +278,29 @@ class _CategoryCard extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Add ${category.displayName}'),
-        content: Semantics(
-          label: 'Entry text',
-          textField: true,
-          child: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: category.prompt,
-            ),
-            maxLines: 3,
-            autofocus: true,
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: 'Entry text',
+            hintText: category.prompt,
           ),
+          maxLines: 3,
+          autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
-          Semantics(
-            label: 'Save entry',
-            button: true,
-            child: FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                if (text.isNotEmpty) {
-                  onAdd(text);
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Save'),
-            ),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                onAdd(text);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -361,25 +350,17 @@ class _EntryTile extends StatelessWidget {
                 ],
               ),
             ),
-            Semantics(
-              label: 'Edit entry',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.edit, size: 18),
-                onPressed: () => _showEditDialog(context),
-                tooltip: 'Edit',
-                visualDensity: VisualDensity.compact,
-              ),
+            IconButton(
+              icon: const Icon(Icons.edit, size: 18),
+              onPressed: () => _showEditDialog(context),
+              tooltip: 'Edit entry',
+              visualDensity: VisualDensity.compact,
             ),
-            Semantics(
-              label: 'Delete entry',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                onPressed: onDelete,
-                tooltip: 'Delete',
-                visualDensity: VisualDensity.compact,
-              ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 18),
+              onPressed: onDelete,
+              tooltip: 'Delete entry',
+              visualDensity: VisualDensity.compact,
             ),
           ],
         ),
@@ -393,33 +374,28 @@ class _EntryTile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Edit Entry'),
-        content: Semantics(
-          label: 'Entry text',
-          textField: true,
-          child: TextField(
-            controller: controller,
-            maxLines: 3,
-            autofocus: true,
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Entry text',
           ),
+          maxLines: 3,
+          autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
-          Semantics(
-            label: 'Save changes',
-            button: true,
-            child: FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                if (text.isNotEmpty) {
-                  onEdit(text);
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Save'),
-            ),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                onEdit(text);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

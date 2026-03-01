@@ -32,9 +32,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'flutter run -d web-server --web-port=5555 --web-hostname=localhost',
+    command:
+      'flutter build web --dart-define=USE_EMULATORS=true && npx serve build/web -l 5555 --no-clipboard',
     url: 'http://localhost:5555',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });

@@ -36,8 +36,8 @@ test.describe('Auth Flow', () => {
     await waitForFlutterReady(page);
     await signInAnonymously(page);
 
-    // Click sign out
-    const signOutButton = page.getByLabel('Sign out');
+    // Click sign out (tooltip renders as text, not aria-label)
+    const signOutButton = page.getByRole('button', { name: 'Sign out' });
     await expect(signOutButton).toBeVisible({ timeout: 10_000 });
     await signOutButton.click();
 
