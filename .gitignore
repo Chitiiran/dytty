@@ -4,6 +4,9 @@
 # Environment secrets
 .env
 
+# Firebase
+.firebase/
+
 # Node.js (Playwright E2E tests)
 node_modules/
 test-results/
