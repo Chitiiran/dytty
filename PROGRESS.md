@@ -1,7 +1,7 @@
 # Dytty Progress
 
 ## Current Status
-On `main`. UX redesign merged. Production deploy prepped (needs real OAuth client ID).
+On `main`. UX redesign merged. GenUI playground integrated with voice input.
 
 **What's on main now:**
 - Full UX redesign: gradient login, calendar-focused home, redesigned journal cards, polished settings
@@ -11,6 +11,7 @@ On `main`. UX redesign merged. Production deploy prepped (needs real OAuth clien
 - Responsive: 600px max-width constraints for tablet/desktop
 - Shimmer loading, reusable empty state widget
 - Production deploy prep: OAuth client ID placeholder in `web/index.html`
+- **GenUI playground** (`playground/`): GenUI SDK + Gemini 2.5 Flash, catalog widgets match UX redesign, speech_to_text voice input
 - 35 unit tests passing, 0 analysis issues
 
 ## Blockers
@@ -19,8 +20,8 @@ On `main`. UX redesign merged. Production deploy prepped (needs real OAuth clien
 ## Active Branches
 | Branch | Purpose | Status |
 |--------|---------|--------|
-| `main` | Stable app with UX redesign | All merged, ready for deploy |
-| `genui-playground` | GenUI design playground | **Needs integration onto main** |
+| `main` | Stable app with UX redesign + GenUI playground | All merged |
+| `genui-playground` | GenUI design playground (original) | Superseded by main |
 
 ## Branch Naming Convention
 - `feature/<name>` — new features
@@ -52,7 +53,7 @@ On `main`. UX redesign merged. Production deploy prepped (needs real OAuth clien
 ## Next Steps
 - [x] Merge `feature/ux-redesign` to main
 - [x] Run E2E tests against redesigned build to verify selectors
-- [ ] **GenUI integration** — bring playground/ onto main, update catalog + system prompt for new UX, add voice input via `speech_to_text` (see `~/.claude/projects/C--dojo-dytty/memory/genui-research.md`)
+- [x] **GenUI integration** — playground/ on main, catalog widgets match UX redesign, voice input via `speech_to_text`
 - [ ] Add real Google OAuth client ID to `web/index.html`
 - [ ] Deploy to production: `flutter build web` + `firebase deploy`
 - [ ] Verify production Google Sign-In works end-to-end
@@ -69,6 +70,20 @@ On `main`. UX redesign merged. Production deploy prepped (needs real OAuth clien
 ---
 
 ## Log
+
+### 2026-03-01 (session 9)
+- Integrated GenUI playground onto main (cherry-picked from `genui-playground` branch)
+- Redesigned all 4 catalog widgets to match UX redesign:
+  - **CategoryCard**: removed hardcoded maps, uses `JournalCategory` enum + `AppColors`, tinted header strip, 34px icon circles, entry count badge, rounded entry tiles
+  - **ProgressCard**: added `filledCategories` list prop, row of 5 category icon circles (filled/unfilled), rounded progress bar, motivational message
+  - **EntryTile**: removed `categoryColor` prop, rounded container (radius 12, surface 70% alpha), edit/delete icons
+  - **EmptyBanner**: `title` + `subtitle` props (replaces `message`), gradient container, 44px lightbulb circle
+- Updated system prompt with new Material icons, AppColors hex values, and redesigned widget descriptions
+- Added `speech_to_text: ^7.0.0` for voice input
+- Polished main.dart: mic button with visual feedback (red when listening), "Dytty" + "GenUI" badge AppBar, icon circle empty state
+- Added `AppColors` re-export to playground theme
+- 3 commits: cherry-pick, catalog+prompt redesign, voice input
+- 0 analysis issues (playground + main app), 35/35 unit tests passing
 
 ### 2026-03-01 (session 8)
 - Full UX redesign on `feature/ux-redesign` branch
