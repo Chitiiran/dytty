@@ -34,8 +34,10 @@ void main() {
           .collection('test')
           .doc('2026-02-27')
           .set(original.toFirestore());
-      final snapshot =
-          await firestore.collection('test').doc('2026-02-27').get();
+      final snapshot = await firestore
+          .collection('test')
+          .doc('2026-02-27')
+          .get();
       final restored = DailyEntry.fromFirestore(snapshot);
 
       expect(restored.date, '2026-02-27');
@@ -47,8 +49,7 @@ void main() {
       final firestore = FakeFirebaseFirestore();
       await firestore.collection('test').doc('no-ts').set({});
 
-      final snapshot =
-          await firestore.collection('test').doc('no-ts').get();
+      final snapshot = await firestore.collection('test').doc('no-ts').get();
       final entry = DailyEntry.fromFirestore(snapshot);
 
       expect(entry.date, 'no-ts');

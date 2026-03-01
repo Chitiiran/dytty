@@ -12,7 +12,7 @@ void main() {
       for (final category in JournalCategory.values) {
         expect(category.displayName, isNotEmpty);
         expect(category.prompt, isNotEmpty);
-        expect(category.icon, isNotEmpty);
+        expect(category.icon, isA<IconData>());
         expect(category.color, isA<Color>());
       }
     });
@@ -28,6 +28,11 @@ void main() {
       expect(JournalCategory.values[2], JournalCategory.gratitude);
       expect(JournalCategory.values[3], JournalCategory.beauty);
       expect(JournalCategory.values[4], JournalCategory.identity);
+    });
+
+    test('each category has a unique icon', () {
+      final icons = JournalCategory.values.map((c) => c.icon).toSet();
+      expect(icons.length, JournalCategory.values.length);
     });
   });
 }

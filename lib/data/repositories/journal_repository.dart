@@ -7,16 +7,15 @@ class JournalRepository {
   final FirebaseFirestore _firestore;
   final String _uid;
 
-  JournalRepository({
-    required String uid,
-    FirebaseFirestore? firestore,
-  })  : _uid = uid,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  JournalRepository({required String uid, FirebaseFirestore? firestore})
+    : _uid = uid,
+      _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference get _dailyEntriesCollection =>
       _firestore.collection('users').doc(_uid).collection('dailyEntries');
 
-  DocumentReference _dailyEntryDoc(String date) => _dailyEntriesCollection.doc(date);
+  DocumentReference _dailyEntryDoc(String date) =>
+      _dailyEntriesCollection.doc(date);
 
   CollectionReference _categoryEntries(String date) =>
       _dailyEntryDoc(date).collection('categoryEntries');
@@ -31,20 +30,16 @@ class JournalRepository {
     }
 
     final now = DateTime.now();
-    final entry = DailyEntry(
-      date: date,
-      createdAt: now,
-      updatedAt: now,
-    );
+    final entry = DailyEntry(date: date, createdAt: now, updatedAt: now);
     await doc.set(entry.toFirestore());
     return entry;
   }
 
   /// Gets all category entries for a given date.
   Future<List<CategoryEntry>> getCategoryEntries(String date) async {
-    final snapshot = await _categoryEntries(date)
-        .orderBy('createdAt', descending: false)
-        .get();
+    final snapshot = await _categoryEntries(
+      date,
+    ).orderBy('createdAt', descending: false).get();
 
     return snapshot.docs
         .map((doc) => CategoryEntry.fromFirestore(doc))
@@ -70,9 +65,7 @@ class JournalRepository {
     final docRef = await _categoryEntries(date).add(entry.toFirestore());
 
     // Update the daily entry's updatedAt
-    await _dailyEntryDoc(date).update({
-      'updatedAt': Timestamp.fromDate(now),
-    });
+    await _dailyEntryDoc(date).update({'updatedAt': Timestamp.fromDate(now)});
 
     return CategoryEntry(
       id: docRef.id,
@@ -89,12 +82,8 @@ class JournalRepository {
     String text,
   ) async {
     final now = DateTime.now();
-    await _categoryEntries(date).doc(entryId).update({
-      'text': text,
-    });
-    await _dailyEntryDoc(date).update({
-      'updatedAt': Timestamp.fromDate(now),
-    });
+    await _categoryEntries(date).doc(entryId).update({'text': text});
+    await _dailyEntryDoc(date).update({'updatedAt': Timestamp.fromDate(now)});
   }
 
   /// Deletes a category entry.
@@ -105,9 +94,9 @@ class JournalRepository {
     if (remaining.docs.isEmpty) {
       await _dailyEntryDoc(date).delete();
     } else {
-      await _dailyEntryDoc(date).update({
-        'updatedAt': Timestamp.fromDate(DateTime.now()),
-      });
+      await _dailyEntryDoc(
+        date,
+      ).update({'updatedAt': Timestamp.fromDate(DateTime.now())});
     }
   }
 

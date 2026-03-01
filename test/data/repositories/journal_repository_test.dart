@@ -72,8 +72,10 @@ void main() {
 
         final entries = await repository.getCategoryEntries('2026-02-27');
         expect(entries.length, 2);
-        expect(entries.map((e) => e.text).toList(),
-            containsAll(['Good thing', 'Beautiful thing']));
+        expect(
+          entries.map((e) => e.text).toList(),
+          containsAll(['Good thing', 'Beautiful thing']),
+        );
       });
     });
 

@@ -72,12 +72,11 @@ void main() {
         );
         await provider.loadEntries();
 
-        final positive =
-            provider.entriesForCategory(JournalCategory.positive);
-        final negative =
-            provider.entriesForCategory(JournalCategory.negative);
-        final gratitude =
-            provider.entriesForCategory(JournalCategory.gratitude);
+        final positive = provider.entriesForCategory(JournalCategory.positive);
+        final negative = provider.entriesForCategory(JournalCategory.negative);
+        final gratitude = provider.entriesForCategory(
+          JournalCategory.gratitude,
+        );
 
         expect(positive.length, 1);
         expect(positive.first.text, 'Positive thing');

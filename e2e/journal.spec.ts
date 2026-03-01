@@ -34,7 +34,7 @@ test.describe('Journal CRUD', () => {
 
     await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
 
-    // Type in the dialog — use role since Semantics label may not map to aria-label
+    // Type in the bottom sheet
     const textField = page.getByRole('textbox');
     await expect(textField).toBeVisible({ timeout: 10_000 });
     await textField.fill('Had a great morning walk');
@@ -57,15 +57,15 @@ test.describe('Journal CRUD', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByLabel('Journal entry: Original text')).toBeVisible({ timeout: 10_000 });
 
-    // Click edit on the entry
+    // Click edit button on the entry
     await page.getByRole('button', { name: 'Edit entry' }).click();
 
-    // Update text
+    // Update text in the bottom sheet
     const editField = page.getByRole('textbox');
     await expect(editField).toBeVisible({ timeout: 10_000 });
     await editField.clear();
     await editField.fill('Updated text');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Update' }).click();
 
     // Verify updated
     await expect(page.getByLabel('Journal entry: Updated text')).toBeVisible({ timeout: 10_000 });
@@ -83,13 +83,8 @@ test.describe('Journal CRUD', () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByLabel('Journal entry: Entry to delete')).toBeVisible({ timeout: 10_000 });
 
-    // Delete it
+    // Delete it — now uses optimistic delete (no confirmation dialog)
     await page.getByRole('button', { name: 'Delete entry' }).click();
-
-    // Confirm deletion in the dialog — use role button with name
-    const deleteConfirm = page.getByRole('button', { name: 'Delete' });
-    await expect(deleteConfirm).toBeVisible({ timeout: 10_000 });
-    await deleteConfirm.click();
 
     // Wait for deletion and verify gone
     await page.waitForTimeout(2000);

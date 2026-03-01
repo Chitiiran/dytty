@@ -6,11 +6,9 @@ class AuthService {
   final FirebaseAuth _auth;
   GoogleSignIn? _googleSignIn;
 
-  AuthService({
-    FirebaseAuth? auth,
-    GoogleSignIn? googleSignIn,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn;
+  AuthService({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _googleSignIn = googleSignIn;
 
   // Lazy — avoids eager clientId assertion crash on web when no meta tag is set
   GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn();

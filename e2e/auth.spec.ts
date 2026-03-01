@@ -11,7 +11,7 @@ test.describe('Auth Flow', () => {
     await waitForFlutterReady(page);
 
     await expectTextVisible(page, 'Dytty');
-    await expectTextVisible(page, 'Your daily journal');
+    await expectTextVisible(page, 'Your daily reflection journal');
 
     const googleButton = page.getByLabel('Sign in with Google');
     await expect(googleButton).toBeVisible({ timeout: 10_000 });
@@ -27,8 +27,8 @@ test.describe('Auth Flow', () => {
 
     await signInAnonymously(page);
 
-    // Should be on the home screen
-    await expectTextVisible(page, "Today's Journal");
+    // Should be on the home screen — button text changed in redesign
+    await expectTextVisible(page, "Write Today's Journal");
   });
 
   test('sign out returns to login screen', async ({ page }) => {
@@ -36,13 +36,17 @@ test.describe('Auth Flow', () => {
     await waitForFlutterReady(page);
     await signInAnonymously(page);
 
-    // Click sign out (tooltip renders as text, not aria-label)
-    const signOutButton = page.getByRole('button', { name: 'Sign out' });
-    await expect(signOutButton).toBeVisible({ timeout: 10_000 });
-    await signOutButton.click();
+    // Sign out is now in Settings — navigate there first
+    const settingsButton = page.getByLabel('Settings');
+    await expect(settingsButton).toBeVisible({ timeout: 10_000 });
+    await settingsButton.click();
+
+    // Click Sign Out in settings
+    await expectTextVisible(page, 'Sign Out');
+    await page.getByText('Sign Out').click();
 
     // Should be back on login screen
     await expectTextVisible(page, 'Dytty');
-    await expectTextVisible(page, 'Your daily journal');
+    await expectTextVisible(page, 'Your daily reflection journal');
   });
 });

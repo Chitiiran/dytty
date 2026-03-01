@@ -1,19 +1,34 @@
 # Dytty Progress
 
 ## Current Status
-On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
+On branch `feature/ux-redesign` (off main). Full UX redesign implemented. E2E branch merged to main.
 
-**This branch (`e2e-playwright-setup`):** All 10 Playwright E2E tests passing (3 auth, 5 journal CRUD, 2 calendar nav). 34 unit tests passing. Uses release build (`flutter build web --dart-define=USE_EMULATORS=true`) served via `npx serve` — debug mode DDC was unreliable with Playwright's Chromium.
+**This branch (`feature/ux-redesign`):**
+- Complete UI overhaul: gradient login, calendar-focused home, redesigned journal cards, polished settings
+- New theme system: Google Fonts (Inter), Material 3 component themes, extended color palette
+- Animations: flutter_animate entrance effects, staggered list animations, slide page transitions
+- UX improvements: bottom sheet for add/edit, swipe-to-delete with undo, day navigation arrows, progress card with category icons, theme switcher (System/Light/Dark)
+- Responsive: 600px max-width constraints for tablet/desktop
+- Shimmer loading skeletons, reusable empty state widget
+- E2E tests updated for new UX (sign-out moved to Settings, bottom sheet selectors, optimistic delete)
+- 35 unit tests passing, 0 analysis issues
+
+**Production deployment prep (on main):**
+- Google OAuth client ID meta tag added to `web/index.html` (placeholder — needs real client ID from Firebase Console)
+- Firestore security rules verified secure
+- Emulator guards safe in release builds
 
 ## Blockers
-- None
+- Production deploy: needs real Google OAuth client ID in `web/index.html`
+- E2E tests not yet run against redesigned build (need emulators + `flutter build web`)
 
 ## Active Branches
 | Branch | Purpose | Status |
 |--------|---------|--------|
-| `main` | Stable core app | Firebase + Auth + Firestore CRUD working |
-| `e2e-playwright-setup` | Playwright E2E testing | **All 10 E2E tests passing** — ready to merge |
-| `genui-playground` | GenUI design playground | Committed, separate experiment |
+| `main` | Stable core app + E2E tests | Firebase + Auth + Firestore + 10 E2E tests |
+| `feature/ux-redesign` | Full UX redesign | **Complete — ready to merge** |
+| `e2e-playwright-setup` | Playwright E2E testing | Merged to main |
+| `genui-playground` | GenUI design playground | Separate experiment |
 
 ## Branch Naming Convention
 - `feature/<name>` — new features
@@ -21,30 +36,33 @@ On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 - `e2e-<name>` — E2E testing work
 - `experiment/<name>` — exploratory/prototype work (e.g., genui-playground)
 
-## What's Built (main)
+## What's Built (feature/ux-redesign)
+### Core (from main)
 - Firebase Auth (Google Sign-In + anonymous debug sign-in) + Firestore CRUD
-- Anonymous sign-in (debug-only) for emulator testing — no OAuth popup needed
+- Anonymous sign-in (debug-only) for emulator testing
 - Lazy GoogleSignIn init (fixes web crash when client ID meta tag missing)
 - Emulator connection in debug mode (`kDebugMode` guard in `main.dart`)
-- `.firebaserc` with default project `dytty-4b83d`
-- Home screen with calendar (table_calendar), day markers, today's progress card
-- Daily journal screen: 5 category cards with color accents, empty states, delete confirmation, snackbar feedback, relative timestamps
+- Home screen with calendar, day markers, progress card
+- Daily journal: 5 category cards, entries, CRUD operations
 - Settings screen, auth-reactive routing
-- Login screen with scroll support (overflow fix)
-- 34 unit tests (models, repository, provider, categories)
+- 35 unit tests, 10 E2E tests
+
+### UX Redesign (this branch)
+- **Theme**: Google Fonts Inter, M3 component themes, warm surfaces, extended color palette (`app_colors.dart`)
+- **Login**: gradient background, staggered fade+slide animations, branded Google button with spinner
+- **Home**: greeting text, avatar → Settings, enhanced calendar styling, progress card with category icons + motivational messages, full-width "Write Today's Journal" CTA
+- **Daily Journal**: tinted category card headers, Material icons in colored circles, entry count badges, rounded entry tiles, bottom sheet for add/edit, swipe-to-delete with undo SnackBar, day nav arrows, shimmer loading
+- **Settings**: large profile header with bordered avatar, grouped card sections (Appearance/Account/About), System/Light/Dark theme toggle, licenses page
+- **App**: ThemeProvider for theme mode, slide-from-right page transitions
+- **Responsive**: 600px max-width constraints on home + journal screens
+- **New files**: `app_colors.dart`, `shimmer_loading.dart`, `empty_state.dart`, `entry_bottom_sheet.dart`, `theme_provider.dart`
 
 ## Next Steps
-- [x] Fix Java 21 PATH — found at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`
-- [x] Run Playwright tests — all 10 passing
-- [x] Fix test failures — semantic selectors aligned with Flutter web accessibility tree
-- [ ] Merge `e2e-playwright-setup` to main
-- [ ] UX polish pass — UI is functional but scaffoldy
-
-### Production deployment (to make available for real users)
-1. [ ] Add Google OAuth client ID meta tag to `web/index.html` (from Firebase Console > Authentication > Google > Web SDK config)
-2. [ ] Write Firestore security rules — lock down `users/{uid}/**` so users can only access their own data (current rules are test-mode open access)
-3. [ ] Deploy to Firebase Hosting — `flutter build web` + `firebase deploy` (project `dytty-4b83d` already exists)
-4. [ ] Verify production Google Sign-In works end-to-end
+- [ ] Run E2E tests against redesigned build to verify selectors
+- [ ] Merge `feature/ux-redesign` to main
+- [ ] Add real Google OAuth client ID to `web/index.html`
+- [ ] Deploy to production: `flutter build web` + `firebase deploy`
+- [ ] Verify production Google Sign-In works end-to-end
 
 ### Current data context
 - **Local emulator only** — all data lives in Firebase emulators (Auth :9099, Firestore :8080), ephemeral, lost when emulators stop
@@ -54,6 +72,31 @@ On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 ---
 
 ## Log
+
+### 2026-03-01 (session 8)
+- Full UX redesign on `feature/ux-redesign` branch
+- **Phase 1 — Foundation:**
+  - Added 4 dependencies: `flutter_animate`, `shimmer`, `flutter_staggered_animations`, `google_fonts`
+  - Created `app_colors.dart` with extended palette (category colors, surface tints for light/dark)
+  - Overhauled `app_theme.dart`: Google Fonts Inter, full M3 component themes (inputs, buttons, snackbar, dialog, bottom sheet, divider)
+  - Replaced emoji icons with Material Icons in `JournalCategory` (sunny, cloud, favorite, florist, fingerprint)
+  - Updated categories test for `IconData` type + unique icon test (35 tests)
+- **Phase 2 — Screen Redesigns:**
+  - Login: gradient background, staggered entrance animations (fade+slide+scale), branded Google Sign-In button with spinner, styled error container with shake animation
+  - Home: greeting text ("Good morning, Name"), user avatar → Settings, enhanced TableCalendar (custom header, pill selection, better today indicator), progress card with 5 category icons (filled/unfilled), motivational message, full-width "Write Today's Journal" CTA
+  - Daily Journal: date header with day-of-week + nav arrows, tinted category card headers with Material icon in colored circle + entry count badge, rounded entry tiles with edit/delete buttons, swipe-to-delete with Dismissible, long-press context menu for fallback, bottom sheet for add/edit (replaces AlertDialog), optimistic delete with undo SnackBar, shimmer loading skeleton
+  - Settings: 76px avatar with colored ring, grouped card sections (Appearance with System/Light/Dark toggle, Account with sign out, About with version + licenses)
+- **Phase 3 — Polish:**
+  - Created `ThemeProvider` for theme mode state (System/Light/Dark)
+  - Added slide-from-right page transitions via `onGenerateRoute` in app.dart
+  - Created `shimmer_loading.dart` with `ShimmerCategoryCard`, `ShimmerJournalLoading`, `ShimmerProgressCard`
+  - Created `empty_state.dart` reusable widget
+  - Added 600px max-width `ConstrainedBox` to home + journal screens for responsive layout
+- **E2E test updates:**
+  - Auth: updated subtitle text, sign-out flow (now via Settings screen)
+  - Journal: edit uses "Edit entry" button + "Update" in bottom sheet, delete is optimistic (no confirmation dialog)
+- Production deployment meta tag placeholder added to `web/index.html`
+- 0 analysis issues, 35/35 unit tests passing, `dart format` clean
 
 ### 2026-02-28 (session 7)
 - Resolved Java 21 PATH blocker: JDK 21 at `C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot`

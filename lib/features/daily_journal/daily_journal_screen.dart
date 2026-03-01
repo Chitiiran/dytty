@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/core/theme/app_colors.dart';
 import 'package:dytty/data/models/category_entry.dart';
+import 'package:dytty/core/widgets/shimmer_loading.dart';
 import 'package:dytty/features/daily_journal/journal_provider.dart';
+import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 
 String formatRelativeTime(DateTime dateTime) {
   final now = DateTime.now();
@@ -27,7 +33,6 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   @override
   void initState() {
     super.initState();
-    // Load entries if not already loaded by selectDate() from HomeScreen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<JournalProvider>();
       if (provider.entries.isEmpty && !provider.loading) {
@@ -43,9 +48,9 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   ) async {
     await provider.addEntry(category, text);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry added')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Entry added')));
     }
   }
 
@@ -56,50 +61,45 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   ) async {
     await provider.updateEntry(entryId, text);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Entry updated')));
     }
   }
 
-  Future<void> _deleteEntry(
-    JournalProvider provider,
-    String entryId,
-  ) async {
-    await provider.deleteEntry(entryId);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry deleted')),
-      );
-    }
-  }
+  void _deleteEntryOptimistic(JournalProvider provider, CategoryEntry entry) {
+    // Optimistic delete: remove immediately, offer undo
+    provider.deleteEntry(entry.id);
 
-  Future<bool> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Entry'),
-        content: const Text('Are you sure you want to delete this entry?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Entry deleted'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            // Re-add the entry
+            provider.addEntry(entry.category, entry.text);
+          },
+        ),
+        duration: const Duration(seconds: 4),
       ),
     );
-    return confirmed ?? false;
+  }
+
+  void _navigateDay(JournalProvider provider, int delta) {
+    final newDate = provider.selectedDate.add(Duration(days: delta));
+    provider.selectDate(newDate);
   }
 
   @override
   Widget build(BuildContext context) {
     final journalProvider = context.watch<JournalProvider>();
-    final dateStr =
-        DateFormat('EEEE, MMMM d').format(journalProvider.selectedDate);
+    final theme = Theme.of(context);
+    final selectedDate = journalProvider.selectedDate;
+    final dayOfWeek = DateFormat('EEEE').format(selectedDate);
+    final dateStr = DateFormat('MMMM d, yyyy').format(selectedDate);
+    final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
     final allEmpty = JournalCategory.values.every(
       (c) => journalProvider.entriesForCategory(c).isEmpty,
     );
@@ -108,32 +108,92 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
       appBar: AppBar(
         title: Semantics(
           label: 'Journal date',
-          child: Text(dateStr),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isToday ? 'Today' : dayOfWeek,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                dateStr,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            onPressed: () => _navigateDay(journalProvider, -1),
+            tooltip: 'Previous day',
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            onPressed: () => _navigateDay(journalProvider, 1),
+            tooltip: 'Next day',
+          ),
+        ],
       ),
       body: journalProvider.loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (allEmpty && !journalProvider.loading)
-                  _EmptyDayBanner(),
-                ...JournalCategory.values.map((category) => _CategoryCard(
-                      category: category,
-                      entries:
-                          journalProvider.entriesForCategory(category),
-                      onAdd: (text) =>
-                          _addEntry(journalProvider, category, text),
-                      onEdit: (entryId, text) =>
-                          _updateEntry(journalProvider, entryId, text),
-                      onDelete: (entryId) async {
-                        final confirmed = await _confirmDelete(context);
-                        if (confirmed) {
-                          await _deleteEntry(journalProvider, entryId);
-                        }
-                      },
-                    )),
-              ],
+          ? const ShimmerJournalLoading()
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: AnimationLimiter(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (allEmpty && !journalProvider.loading)
+                        _EmptyDayBanner()
+                            .animate()
+                            .fadeIn(duration: 400.ms)
+                            .slideY(begin: 0.1, end: 0, duration: 400.ms),
+                      ...JournalCategory.values.asMap().entries.map((mapEntry) {
+                        final index = mapEntry.key;
+                        final category = mapEntry.value;
+                        return AnimationConfiguration.staggeredList(
+                          position: index,
+                          duration: const Duration(milliseconds: 375),
+                          child: SlideAnimation(
+                            verticalOffset: 30,
+                            child: FadeInAnimation(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _CategoryCard(
+                                  category: category,
+                                  entries: journalProvider.entriesForCategory(
+                                    category,
+                                  ),
+                                  onAdd: (text) => _addEntry(
+                                    journalProvider,
+                                    category,
+                                    text,
+                                  ),
+                                  onEdit: (entryId, text) => _updateEntry(
+                                    journalProvider,
+                                    entryId,
+                                    text,
+                                  ),
+                                  onDelete: (entry) => _deleteEntryOptimistic(
+                                    journalProvider,
+                                    entry,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
             ),
     );
   }
@@ -144,29 +204,54 @@ class _EmptyDayBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      color: theme.colorScheme.primaryContainer,
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.lightbulb_outline,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Start your day by reflecting on each category below. '
-                'Tap + to add your first entry.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+            theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
           ],
         ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.lightbulb_outline_rounded,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Time to reflect',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Tap + on any category to start writing.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -177,7 +262,7 @@ class _CategoryCard extends StatelessWidget {
   final List<CategoryEntry> entries;
   final ValueChanged<String> onAdd;
   final Future<void> Function(String entryId, String text) onEdit;
-  final Future<void> Function(String entryId) onDelete;
+  final void Function(CategoryEntry entry) onDelete;
 
   const _CategoryCard({
     required this.category,
@@ -190,131 +275,138 @@ class _CategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final brightness = theme.brightness;
+    final surfaceColor = AppColors.categorySurface(category.name, brightness);
 
     return Semantics(
       label: '${category.displayName} category',
       child: Card(
-        margin: const EdgeInsets.only(bottom: 12),
+        color: surfaceColor,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: category.color.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: category.color.withValues(alpha: 0.2)),
         ),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: category.color,
-                width: 4,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Tinted header
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+              decoration: BoxDecoration(
+                color: category.color.withValues(alpha: 0.06),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      category.icon,
-                      style: const TextStyle(fontSize: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: category.color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
+                    child: Icon(category.icon, size: 18, color: category.color),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          category.displayName,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (entries.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: category.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: Text(
-                        category.displayName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
+                        '${entries.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                           color: category.color,
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: () => _showAddDialog(context),
-                      tooltip: 'Add ${category.displayName} entry',
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    onPressed: () => _showAddSheet(context),
+                    tooltip: 'Add ${category.displayName} entry',
+                    color: category.color,
+                  ),
+                ],
+              ),
+            ),
+            // Body
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (entries.isEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        category.prompt,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
-                ),
-                Text(
-                  category.prompt,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (entries.isEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Tap + to add your first entry',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.6),
+                  ...entries.map(
+                    (entry) => _EntryTile(
+                      entry: entry,
+                      category: category,
+                      onEdit: (text) => onEdit(entry.id, text),
+                      onDelete: () => onDelete(entry),
                     ),
                   ),
                 ],
-                if (entries.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...entries.map((entry) => _EntryTile(
-                        entry: entry,
-                        onEdit: (text) => onEdit(entry.id, text),
-                        onDelete: () => onDelete(entry.id),
-                      )),
-                ],
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  void _showAddDialog(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Add ${category.displayName}'),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: 'Entry text',
-            hintText: category.prompt,
-          ),
-          maxLines: 3,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) {
-                onAdd(text);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    ).then((_) => controller.dispose());
+  void _showAddSheet(BuildContext context) async {
+    final text = await showEntryBottomSheet(context, category: category);
+    if (text != null) {
+      onAdd(text);
+    }
   }
 }
 
 class _EntryTile extends StatelessWidget {
   final CategoryEntry entry;
+  final JournalCategory category;
   final ValueChanged<String> onEdit;
   final VoidCallback onDelete;
 
   const _EntryTile({
     required this.entry,
+    required this.category,
     required this.onEdit,
     required this.onDelete,
   });
@@ -325,42 +417,110 @@ class _EntryTile extends StatelessWidget {
 
     return Semantics(
       label: 'Journal entry: ${entry.text}',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 6, right: 8),
-              child: Icon(Icons.circle, size: 6),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(entry.text),
-                  const SizedBox(height: 2),
-                  Text(
-                    formatRelativeTime(entry.createdAt),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
+      child: Dismissible(
+        key: ValueKey(entry.id),
+        direction: DismissDirection.endToStart,
+        onDismissed: (_) => onDelete(),
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.error.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Icons.delete_outline_rounded,
+            color: theme.colorScheme.error,
+          ),
+        ),
+        child: GestureDetector(
+          onLongPress: () => _showContextMenu(context),
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.edit, size: 18),
-              onPressed: () => _showEditDialog(context),
-              tooltip: 'Edit entry',
-              visualDensity: VisualDensity.compact,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.text, style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        formatRelativeTime(entry.createdAt),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  onPressed: () => _showEditSheet(context),
+                  tooltip: 'Edit entry',
+                  visualDensity: VisualDensity.compact,
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  onPressed: onDelete,
+                  tooltip: 'Delete entry',
+                  visualDensity: VisualDensity.compact,
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: onDelete,
-              tooltip: 'Delete entry',
-              visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showContextMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showEditSheet(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
             ),
           ],
         ),
@@ -368,37 +528,14 @@ class _EntryTile extends StatelessWidget {
     );
   }
 
-  void _showEditDialog(BuildContext context) {
-    final controller = TextEditingController(text: entry.text);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Entry'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Entry text',
-          ),
-          maxLines: 3,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isNotEmpty) {
-                onEdit(text);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    ).then((_) => controller.dispose());
+  void _showEditSheet(BuildContext context) async {
+    final text = await showEntryBottomSheet(
+      context,
+      category: category,
+      initialText: entry.text,
+    );
+    if (text != null) {
+      onEdit(text);
+    }
   }
 }

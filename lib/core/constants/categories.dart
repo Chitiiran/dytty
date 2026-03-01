@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dytty/core/theme/app_colors.dart';
 
 enum JournalCategory {
   positive,
@@ -37,33 +38,33 @@ enum JournalCategory {
     }
   }
 
-  String get icon {
+  IconData get icon {
     switch (this) {
       case JournalCategory.positive:
-        return '\u2600';
+        return Icons.wb_sunny_rounded;
       case JournalCategory.negative:
-        return '\u2601';
+        return Icons.cloud_rounded;
       case JournalCategory.gratitude:
-        return '\uD83D\uDE4F';
+        return Icons.favorite_rounded;
       case JournalCategory.beauty:
-        return '\u273F';
+        return Icons.local_florist_rounded;
       case JournalCategory.identity:
-        return '\u25C9';
+        return Icons.fingerprint_rounded;
     }
   }
 
   Color get color {
     switch (this) {
       case JournalCategory.positive:
-        return Colors.amber;
+        return AppColors.positive;
       case JournalCategory.negative:
-        return Colors.indigo;
+        return AppColors.negative;
       case JournalCategory.gratitude:
-        return Colors.green;
+        return AppColors.gratitude;
       case JournalCategory.beauty:
-        return Colors.pink;
+        return AppColors.beauty;
       case JournalCategory.identity:
-        return Colors.cyan;
+        return AppColors.identity;
     }
   }
 }

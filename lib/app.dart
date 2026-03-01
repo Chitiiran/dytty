@@ -8,6 +8,7 @@ import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/daily_journal/journal_provider.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/features/settings/theme_provider.dart';
 import 'package:dytty/services/auth/auth_service.dart';
 
 class DyttyApp extends StatelessWidget {
@@ -21,6 +22,7 @@ class DyttyApp extends StatelessWidget {
           create: (_) => AuthProvider(authService: AuthService()),
         ),
         ChangeNotifierProvider(create: (_) => JournalProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const _AppWithAuth(),
     );
@@ -55,8 +57,8 @@ class _AppWithAuthState extends State<_AppWithAuth> {
               authProvider.user!.email ?? '',
             )
             .catchError((e) {
-          debugPrint('Failed to ensure user profile: $e');
-        });
+              debugPrint('Failed to ensure user profile: $e');
+            });
       });
     } else if (uid == null && _previousUid != null) {
       _previousUid = null;
@@ -69,23 +71,51 @@ class _AppWithAuthState extends State<_AppWithAuth> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
       title: 'Dytty',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: themeProvider.themeMode,
       home: authProvider.loading
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            )
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : authProvider.isAuthenticated
-              ? const HomeScreen()
-              : const LoginScreen(),
-      routes: {
-        '/daily-journal': (_) => const DailyJournalScreen(),
-        '/settings': (_) => const SettingsScreen(),
+          ? const HomeScreen()
+          : const LoginScreen(),
+      onGenerateRoute: (settings) {
+        final routes = <String, WidgetBuilder>{
+          '/daily-journal': (_) => const DailyJournalScreen(),
+          '/settings': (_) => const SettingsScreen(),
+        };
+
+        final builder = routes[settings.name];
+        if (builder != null) {
+          return PageRouteBuilder(
+            settings: settings,
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                builder(context),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(1, 0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                    child: child,
+                  );
+                },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        }
+        return null;
       },
     );
   }

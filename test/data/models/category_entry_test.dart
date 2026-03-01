@@ -35,8 +35,9 @@ void main() {
         createdAt: now,
       );
 
-      final docRef =
-          await firestore.collection('test').add(original.toFirestore());
+      final docRef = await firestore
+          .collection('test')
+          .add(original.toFirestore());
       final snapshot = await docRef.get();
       final restored = CategoryEntry.fromFirestore(snapshot);
 
@@ -54,8 +55,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
       });
 
-      final snapshot =
-          await firestore.collection('test').doc('missing').get();
+      final snapshot = await firestore.collection('test').doc('missing').get();
       final entry = CategoryEntry.fromFirestore(snapshot);
 
       expect(entry.text, '');
@@ -70,8 +70,7 @@ void main() {
         'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
       });
 
-      final snapshot =
-          await firestore.collection('test').doc('unknown').get();
+      final snapshot = await firestore.collection('test').doc('unknown').get();
       final entry = CategoryEntry.fromFirestore(snapshot);
 
       // Falls back to positive

@@ -13,9 +13,7 @@ const useEmulators = bool.fromEnvironment('USE_EMULATORS') || kDebugMode;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   if (useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);

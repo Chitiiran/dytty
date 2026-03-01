@@ -85,11 +85,7 @@ class JournalProvider extends ChangeNotifier {
     if (_repository == null) return;
 
     try {
-      await _repository!.addCategoryEntry(
-        selectedDateString,
-        category,
-        text,
-      );
+      await _repository!.addCategoryEntry(selectedDateString, category, text);
       await loadEntries();
       // Refresh markers for the current month
       await loadMonthMarkers(_selectedDate.year, _selectedDate.month);
@@ -104,11 +100,7 @@ class JournalProvider extends ChangeNotifier {
     if (_repository == null) return;
 
     try {
-      await _repository!.updateCategoryEntry(
-        selectedDateString,
-        entryId,
-        text,
-      );
+      await _repository!.updateCategoryEntry(selectedDateString, entryId, text);
       await loadEntries();
     } catch (e) {
       _error = e.toString();

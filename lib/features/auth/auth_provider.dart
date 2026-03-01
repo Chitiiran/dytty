@@ -12,7 +12,7 @@ class AuthProvider extends ChangeNotifier {
   StreamSubscription<User?>? _authSub;
 
   AuthProvider({required AuthService authService})
-      : _authService = authService {
+    : _authService = authService {
     _authSub = _authService.authStateChanges.listen(_onAuthStateChanged);
   }
 
