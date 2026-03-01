@@ -37,7 +37,7 @@ test.describe('Auth Flow', () => {
     await signInAnonymously(page);
 
     // Sign out is now in Settings — navigate there first
-    const settingsButton = page.getByLabel('Settings');
+    const settingsButton = page.getByRole('button', { name: 'Settings' });
     await expect(settingsButton).toBeVisible({ timeout: 10_000 });
     await settingsButton.click();
 

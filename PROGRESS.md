@@ -1,34 +1,26 @@
 # Dytty Progress
 
 ## Current Status
-On branch `feature/ux-redesign` (off main). Full UX redesign implemented. E2E branch merged to main.
+On `main`. UX redesign merged. Production deploy prepped (needs real OAuth client ID).
 
-**This branch (`feature/ux-redesign`):**
-- Complete UI overhaul: gradient login, calendar-focused home, redesigned journal cards, polished settings
-- New theme system: Google Fonts (Inter), Material 3 component themes, extended color palette
-- Animations: flutter_animate entrance effects, staggered list animations, slide page transitions
-- UX improvements: bottom sheet for add/edit, swipe-to-delete with undo, day navigation arrows, progress card with category icons, theme switcher (System/Light/Dark)
+**What's on main now:**
+- Full UX redesign: gradient login, calendar-focused home, redesigned journal cards, polished settings
+- Theme: Google Fonts Inter, M3 component themes, extended color palette (AppColors)
+- Animations: flutter_animate, staggered list animations, slide page transitions
+- UX: bottom sheet for add/edit, swipe-to-delete with undo, day nav arrows, progress card, theme switcher
 - Responsive: 600px max-width constraints for tablet/desktop
-- Shimmer loading skeletons, reusable empty state widget
-- E2E tests updated for new UX (sign-out moved to Settings, bottom sheet selectors, optimistic delete)
+- Shimmer loading, reusable empty state widget
+- Production deploy prep: OAuth client ID placeholder in `web/index.html`
 - 35 unit tests passing, 0 analysis issues
-
-**Production deployment prep (on main):**
-- Google OAuth client ID meta tag added to `web/index.html` (placeholder — needs real client ID from Firebase Console)
-- Firestore security rules verified secure
-- Emulator guards safe in release builds
 
 ## Blockers
 - Production deploy: needs real Google OAuth client ID in `web/index.html`
-- E2E tests not yet run against redesigned build (need emulators + `flutter build web`)
 
 ## Active Branches
 | Branch | Purpose | Status |
 |--------|---------|--------|
-| `main` | Stable core app + E2E tests | Firebase + Auth + Firestore + 10 E2E tests |
-| `feature/ux-redesign` | Full UX redesign | **Complete — ready to merge** |
-| `e2e-playwright-setup` | Playwright E2E testing | Merged to main |
-| `genui-playground` | GenUI design playground | Separate experiment |
+| `main` | Stable app with UX redesign | All merged, ready for deploy |
+| `genui-playground` | GenUI design playground | **Needs integration onto main** |
 
 ## Branch Naming Convention
 - `feature/<name>` — new features
@@ -58,11 +50,16 @@ On branch `feature/ux-redesign` (off main). Full UX redesign implemented. E2E br
 - **New files**: `app_colors.dart`, `shimmer_loading.dart`, `empty_state.dart`, `entry_bottom_sheet.dart`, `theme_provider.dart`
 
 ## Next Steps
-- [ ] Run E2E tests against redesigned build to verify selectors
-- [ ] Merge `feature/ux-redesign` to main
+- [x] Merge `feature/ux-redesign` to main
+- [x] Run E2E tests against redesigned build to verify selectors
+- [ ] **GenUI integration** — bring playground/ onto main, update catalog + system prompt for new UX, add voice input via `speech_to_text` (see `~/.claude/projects/C--dojo-dytty/memory/genui-research.md`)
 - [ ] Add real Google OAuth client ID to `web/index.html`
 - [ ] Deploy to production: `flutter build web` + `firebase deploy`
 - [ ] Verify production Google Sign-In works end-to-end
+
+## Backlog
+- [ ] Clicking a progress card emoji/icon should navigate to that category's journal page
+- [ ] Upgrade dependencies to latest major versions (23 packages outdated)
 
 ### Current data context
 - **Local emulator only** — all data lives in Firebase emulators (Auth :9099, Firestore :8080), ephemeral, lost when emulators stop

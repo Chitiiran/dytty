@@ -51,13 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () => Navigator.pushNamed(context, '/settings'),
-              child: Semantics(
-                label: 'Settings',
-                button: true,
-                child: _UserAvatar(user: user, size: 34),
-              ),
+            child: IconButton(
+              tooltip: 'Settings',
+              onPressed: () => Navigator.pushNamed(context, '/settings'),
+              icon: _UserAvatar(user: user, size: 34),
             ),
           ),
         ],
