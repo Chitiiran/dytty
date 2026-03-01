@@ -40,6 +40,17 @@ On branch `e2e-playwright-setup` (off main). Core app on `main` is stable.
 - [ ] Merge `e2e-playwright-setup` to main
 - [ ] UX polish pass — UI is functional but scaffoldy
 
+### Production deployment (to make available for real users)
+1. [ ] Add Google OAuth client ID meta tag to `web/index.html` (from Firebase Console > Authentication > Google > Web SDK config)
+2. [ ] Write Firestore security rules — lock down `users/{uid}/**` so users can only access their own data (current rules are test-mode open access)
+3. [ ] Deploy to Firebase Hosting — `flutter build web` + `firebase deploy` (project `dytty-4b83d` already exists)
+4. [ ] Verify production Google Sign-In works end-to-end
+
+### Current data context
+- **Local emulator only** — all data lives in Firebase emulators (Auth :9099, Firestore :8080), ephemeral, lost when emulators stop
+- **Emulator UI** at http://localhost:4000 to inspect data
+- **No cloud data yet** — nothing has been written to the real Firebase project
+
 ---
 
 ## Log
