@@ -1,30 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:genui/genui.dart';
 import 'package:json_schema_builder/json_schema_builder.dart';
-
-const _categoryColors = {
-  'positive': Color(0xFFFFC107),
-  'negative': Color(0xFF3F51B5),
-  'gratitude': Color(0xFF4CAF50),
-  'beauty': Color(0xFFE91E63),
-  'identity': Color(0xFF00BCD4),
-};
-
-const _categoryIcons = {
-  'positive': '\u2600',
-  'negative': '\u2601',
-  'gratitude': '\uD83D\uDE4F',
-  'beauty': '\u273F',
-  'identity': '\u25C9',
-};
-
-const _categoryLabels = {
-  'positive': 'Positive Things',
-  'negative': 'Negative Things',
-  'gratitude': 'Gratitude',
-  'beauty': 'Beauty',
-  'identity': 'Identity',
-};
+import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/core/theme/app_colors.dart';
 
 final _schema = S.object(
   properties: {
@@ -51,99 +29,173 @@ final categoryCardItem = CatalogItem(
   dataSchema: _schema,
   widgetBuilder: (CatalogItemContext ctx) {
     final json = ctx.data as Map<String, Object?>;
-    final category = json['category'] as String? ?? 'positive';
+    final categoryName = json['category'] as String? ?? 'positive';
     final entries =
         (json['entries'] as List?)?.cast<Map<String, Object?>>() ?? [];
-    final color = _categoryColors[category] ?? Colors.grey;
-    final icon = _categoryIcons[category] ?? '?';
-    final label = _categoryLabels[category] ?? category;
+
+    final category = JournalCategory.values.firstWhere(
+      (c) => c.name == categoryName,
+      orElse: () => JournalCategory.positive,
+    );
+
     final theme = Theme.of(ctx.buildContext);
+    final brightness = theme.brightness;
+    final surfaceColor = AppColors.categorySurface(category.name, brightness);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      color: surfaceColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withValues(alpha: 0.3), width: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: category.color.withValues(alpha: 0.2)),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: color, width: 4)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(icon, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tinted header strip
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+            decoration: BoxDecoration(
+              color: category.color.withValues(alpha: 0.06),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                // Icon circle
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: category.color.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () {},
-                    tooltip: 'Add entry',
-                  ),
-                ],
-              ),
-              if (entries.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  child:
+                      Icon(category.icon, size: 18, color: category.color),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
                   child: Text(
-                    'Tap + to add your first entry',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.6),
+                    category.displayName,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              if (entries.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                // Entry count badge
+                if (entries.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: category.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${entries.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: category.color,
+                      ),
+                    ),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  onPressed: () {},
+                  tooltip: 'Add entry',
+                  color: category.color,
+                ),
+              ],
+            ),
+          ),
+          // Body
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (entries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      category.prompt,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
                 ...entries.map((entry) {
                   final text = entry['text'] as String? ?? '';
                   final timestamp = entry['timestamp'] as String? ?? '';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color:
+                          theme.colorScheme.surface.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.2),
+                      ),
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6, right: 8),
-                          child: Icon(Icons.circle, size: 6),
-                        ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(text),
-                              if (timestamp.isNotEmpty)
+                              Text(text,
+                                  style: theme.textTheme.bodyMedium),
+                              if (timestamp.isNotEmpty) ...[
+                                const SizedBox(height: 4),
                                 Text(
                                   timestamp,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.6),
+                                  style:
+                                      theme.textTheme.labelSmall?.copyWith(
+                                    color: theme
+                                        .colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.5),
                                   ),
                                 ),
+                              ],
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon:
+                              const Icon(Icons.edit_outlined, size: 16),
+                          onPressed: () {},
+                          tooltip: 'Edit',
+                          visualDensity: VisualDensity.compact,
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.5),
+                        ),
+                        IconButton(
+                          icon:
+                              const Icon(Icons.close_rounded, size: 16),
+                          onPressed: () {},
+                          tooltip: 'Delete',
+                          visualDensity: VisualDensity.compact,
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.5),
                         ),
                       ],
                     ),
                   );
                 }),
               ],
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   },

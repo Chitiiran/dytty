@@ -4,11 +4,12 @@ import 'package:json_schema_builder/json_schema_builder.dart';
 
 final _schema = S.object(
   properties: {
-    'message': S.string(
-      description: 'Motivational message for empty state',
+    'title': S.string(description: 'Bold heading text (e.g. "Time to reflect")'),
+    'subtitle': S.string(
+      description: 'Supporting text (e.g. "Tap + on any category to start writing.")',
     ),
   },
-  required: ['message'],
+  required: ['title', 'subtitle'],
 );
 
 final emptyBannerItem = CatalogItem(
@@ -16,33 +17,59 @@ final emptyBannerItem = CatalogItem(
   dataSchema: _schema,
   widgetBuilder: (CatalogItemContext ctx) {
     final json = ctx.data as Map<String, Object?>;
-    final message = json['message'] as String? ??
-        'Start your day by reflecting on each category. '
-            'Tap + to add your first entry.';
+    final title = json['title'] as String? ?? 'Time to reflect';
+    final subtitle = json['subtitle'] as String? ??
+        'Tap + on any category to start writing.';
     final theme = Theme.of(ctx.buildContext);
 
-    return Card(
-      color: theme.colorScheme.primaryContainer,
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.lightbulb_outline,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+            theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
           ],
         ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.lightbulb_outline_rounded,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   },
