@@ -76,5 +76,78 @@ void main() {
       // Falls back to positive
       expect(entry.category, JournalCategory.positive);
     });
+
+    test('toFirestore omits audioUrl/transcript/tags when null or empty', () {
+      final entry = CategoryEntry(
+        id: 'id',
+        category: JournalCategory.positive,
+        text: 'hello',
+        createdAt: DateTime(2026, 3, 1),
+      );
+
+      final map = entry.toFirestore();
+
+      expect(map.containsKey('audioUrl'), false);
+      expect(map.containsKey('transcript'), false);
+      expect(map.containsKey('tags'), false);
+    });
+
+    test('toFirestore includes audioUrl/transcript/tags when present', () {
+      final entry = CategoryEntry(
+        id: 'id',
+        category: JournalCategory.gratitude,
+        text: 'voice note',
+        createdAt: DateTime(2026, 3, 1),
+        audioUrl: 'gs://bucket/audio.wav',
+        transcript: 'I am grateful for...',
+        tags: ['gratitude', 'morning'],
+      );
+
+      final map = entry.toFirestore();
+
+      expect(map['audioUrl'], 'gs://bucket/audio.wav');
+      expect(map['transcript'], 'I am grateful for...');
+      expect(map['tags'], ['gratitude', 'morning']);
+    });
+
+    test('fromFirestore round-trip preserves new fields', () async {
+      final firestore = FakeFirebaseFirestore();
+      final entry = CategoryEntry(
+        id: '',
+        category: JournalCategory.beauty,
+        text: 'voice entry',
+        createdAt: DateTime(2026, 3, 1),
+        audioUrl: 'gs://bucket/file.mp3',
+        transcript: 'A beautiful day',
+        tags: ['beauty', 'nature'],
+      );
+
+      final docRef = await firestore
+          .collection('test')
+          .add(entry.toFirestore());
+      final snapshot = await docRef.get();
+      final restored = CategoryEntry.fromFirestore(snapshot);
+
+      expect(restored.audioUrl, 'gs://bucket/file.mp3');
+      expect(restored.transcript, 'A beautiful day');
+      expect(restored.tags, ['beauty', 'nature']);
+    });
+
+    test('fromFirestore handles legacy data without new fields', () async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('test').doc('legacy').set({
+        'category': 'positive',
+        'text': 'old entry',
+        'source': 'manual',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+
+      final snapshot = await firestore.collection('test').doc('legacy').get();
+      final entry = CategoryEntry.fromFirestore(snapshot);
+
+      expect(entry.audioUrl, isNull);
+      expect(entry.transcript, isNull);
+      expect(entry.tags, isEmpty);
+    });
   });
 }

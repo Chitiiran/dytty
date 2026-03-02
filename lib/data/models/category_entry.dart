@@ -7,6 +7,9 @@ class CategoryEntry {
   final String text;
   final String source;
   final DateTime createdAt;
+  final String? audioUrl;
+  final String? transcript;
+  final List<String> tags;
 
   CategoryEntry({
     required this.id,
@@ -14,6 +17,9 @@ class CategoryEntry {
     required this.text,
     this.source = 'manual',
     required this.createdAt,
+    this.audioUrl,
+    this.transcript,
+    this.tags = const [],
   });
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
@@ -27,6 +33,9 @@ class CategoryEntry {
       text: (data['text'] as String?) ?? '',
       source: data['source'] as String? ?? 'manual',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      audioUrl: data['audioUrl'] as String?,
+      transcript: data['transcript'] as String?,
+      tags: (data['tags'] as List<dynamic>?)?.cast<String>() ?? [],
     );
   }
 
@@ -36,6 +45,9 @@ class CategoryEntry {
       'text': text,
       'source': source,
       'createdAt': Timestamp.fromDate(createdAt),
+      if (audioUrl != null) 'audioUrl': audioUrl,
+      if (transcript != null) 'transcript': transcript,
+      if (tags.isNotEmpty) 'tags': tags,
     };
   }
 }
