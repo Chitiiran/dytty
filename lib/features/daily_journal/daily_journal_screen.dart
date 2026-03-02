@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/theme/app_colors.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/core/widgets/shimmer_loading.dart';
-import 'package:dytty/features/daily_journal/journal_provider.dart';
+import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 
 String formatRelativeTime(DateTime dateTime) {
@@ -34,42 +34,32 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<JournalProvider>();
-      if (provider.entries.isEmpty && !provider.loading) {
-        provider.loadEntries();
+      final bloc = context.read<JournalBloc>();
+      if (bloc.state.entries.isEmpty &&
+          bloc.state.status != JournalStatus.loading) {
+        bloc.add(const LoadEntries());
       }
     });
   }
 
-  Future<void> _addEntry(
-    JournalProvider provider,
-    JournalCategory category,
-    String text,
-  ) async {
-    await provider.addEntry(category, text);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Entry added')));
-    }
+  void _addEntry(JournalCategory category, String text) {
+    context
+        .read<JournalBloc>()
+        .add(AddEntry(category: category, text: text));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Entry added')));
   }
 
-  Future<void> _updateEntry(
-    JournalProvider provider,
-    String entryId,
-    String text,
-  ) async {
-    await provider.updateEntry(entryId, text);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Entry updated')));
-    }
+  void _updateEntry(String entryId, String text) {
+    context
+        .read<JournalBloc>()
+        .add(UpdateEntry(entryId: entryId, text: text));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Entry updated')));
   }
 
-  void _deleteEntryOptimistic(JournalProvider provider, CategoryEntry entry) {
-    // Optimistic delete: remove immediately, offer undo
-    provider.deleteEntry(entry.id);
+  void _deleteEntryOptimistic(CategoryEntry entry) {
+    context.read<JournalBloc>().add(DeleteEntry(entry.id));
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -78,8 +68,9 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
-            // Re-add the entry
-            provider.addEntry(entry.category, entry.text);
+            context.read<JournalBloc>().add(
+                  AddEntry(category: entry.category, text: entry.text),
+                );
           },
         ),
         duration: const Duration(seconds: 4),
@@ -87,21 +78,22 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
     );
   }
 
-  void _navigateDay(JournalProvider provider, int delta) {
-    final newDate = provider.selectedDate.add(Duration(days: delta));
-    provider.selectDate(newDate);
+  void _navigateDay(int delta) {
+    final bloc = context.read<JournalBloc>();
+    final newDate = bloc.state.selectedDate.add(Duration(days: delta));
+    bloc.add(SelectDate(newDate));
   }
 
   @override
   Widget build(BuildContext context) {
-    final journalProvider = context.watch<JournalProvider>();
+    final journalState = context.watch<JournalBloc>().state;
     final theme = Theme.of(context);
-    final selectedDate = journalProvider.selectedDate;
+    final selectedDate = journalState.selectedDate;
     final dayOfWeek = DateFormat('EEEE').format(selectedDate);
     final dateStr = DateFormat('MMMM d, yyyy').format(selectedDate);
     final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
     final allEmpty = JournalCategory.values.every(
-      (c) => journalProvider.entriesForCategory(c).isEmpty,
+      (c) => journalState.entriesForCategory(c).isEmpty,
     );
 
     return Scaffold(
@@ -130,17 +122,17 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.chevron_left_rounded),
-            onPressed: () => _navigateDay(journalProvider, -1),
+            onPressed: () => _navigateDay(-1),
             tooltip: 'Previous day',
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right_rounded),
-            onPressed: () => _navigateDay(journalProvider, 1),
+            onPressed: () => _navigateDay(1),
             tooltip: 'Next day',
           ),
         ],
       ),
-      body: journalProvider.loading
+      body: journalState.status == JournalStatus.loading
           ? const ShimmerJournalLoading()
           : Center(
               child: ConstrainedBox(
@@ -149,12 +141,16 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      if (allEmpty && !journalProvider.loading)
+                      if (allEmpty &&
+                          journalState.status != JournalStatus.loading)
                         _EmptyDayBanner()
                             .animate()
                             .fadeIn(duration: 400.ms)
                             .slideY(begin: 0.1, end: 0, duration: 400.ms),
-                      ...JournalCategory.values.asMap().entries.map((mapEntry) {
+                      ...JournalCategory.values
+                          .asMap()
+                          .entries
+                          .map((mapEntry) {
                         final index = mapEntry.key;
                         final category = mapEntry.value;
                         return AnimationConfiguration.staggeredList(
@@ -167,23 +163,16 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _CategoryCard(
                                   category: category,
-                                  entries: journalProvider.entriesForCategory(
+                                  entries:
+                                      journalState.entriesForCategory(
                                     category,
                                   ),
-                                  onAdd: (text) => _addEntry(
-                                    journalProvider,
-                                    category,
-                                    text,
-                                  ),
-                                  onEdit: (entryId, text) => _updateEntry(
-                                    journalProvider,
-                                    entryId,
-                                    text,
-                                  ),
-                                  onDelete: (entry) => _deleteEntryOptimistic(
-                                    journalProvider,
-                                    entry,
-                                  ),
+                                  onAdd: (text) =>
+                                      _addEntry(category, text),
+                                  onEdit: (entryId, text) =>
+                                      _updateEntry(entryId, text),
+                                  onDelete: (entry) =>
+                                      _deleteEntryOptimistic(entry),
                                 ),
                               ),
                             ),
@@ -261,7 +250,7 @@ class _CategoryCard extends StatelessWidget {
   final JournalCategory category;
   final List<CategoryEntry> entries;
   final ValueChanged<String> onAdd;
-  final Future<void> Function(String entryId, String text) onEdit;
+  final void Function(String entryId, String text) onEdit;
   final void Function(CategoryEntry entry) onDelete;
 
   const _CategoryCard({
@@ -307,7 +296,8 @@ class _CategoryCard extends StatelessWidget {
                       color: category.color.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(category.icon, size: 18, color: category.color),
+                    child:
+                        Icon(category.icon, size: 18, color: category.color),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -366,7 +356,8 @@ class _CategoryCard extends StatelessWidget {
                         category.prompt,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontStyle: FontStyle.italic,
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                          color:
+                              theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.6,
                           ),
                         ),
@@ -444,7 +435,8 @@ class _EntryTile extends StatelessWidget {
               color: theme.colorScheme.surface.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+                color:
+                    theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -459,7 +451,8 @@ class _EntryTile extends StatelessWidget {
                       Text(
                         formatRelativeTime(entry.createdAt),
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                          color:
+                              theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.5,
                           ),
                         ),
@@ -515,7 +508,8 @@ class _EntryTile extends StatelessWidget {
               ),
               title: Text(
                 'Delete',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style:
+                    TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onTap: () {
                 Navigator.pop(ctx);

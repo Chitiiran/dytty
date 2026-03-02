@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:dytty/core/constants/categories.dart';
-import 'package:dytty/features/auth/auth_provider.dart';
-import 'package:dytty/features/daily_journal/journal_provider.dart';
+import 'package:dytty/features/auth/bloc/auth_bloc.dart';
+import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,9 +24,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final journal = context.read<JournalProvider>();
-      journal.loadMonthMarkers(_focusedDay.year, _focusedDay.month);
-      journal.selectDate(DateTime.now());
+      final bloc = context.read<JournalBloc>();
+      bloc.add(LoadMonthMarkers(
+        year: _focusedDay.year,
+        month: _focusedDay.month,
+      ));
+      bloc.add(SelectDate(DateTime.now()));
     });
   }
 
@@ -39,11 +42,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final journalProvider = context.watch<JournalProvider>();
+    final authState = context.watch<AuthBloc>().state;
+    final journalState = context.watch<JournalBloc>().state;
     final theme = Theme.of(context);
-    final user = authProvider.user;
-    final displayName = user?.displayName?.split(' ').first ?? 'there';
+
+    final displayName = authState is Authenticated
+        ? authState.displayName?.split(' ').first ?? 'there'
+        : 'there';
+    final photoUrl =
+        authState is Authenticated ? authState.photoUrl : null;
+    final userName =
+        authState is Authenticated ? authState.displayName : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -54,7 +63,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IconButton(
               tooltip: 'Settings',
               onPressed: () => Navigator.pushNamed(context, '/settings'),
-              icon: _UserAvatar(user: user, size: 34),
+              icon: _UserAvatar(
+                photoUrl: photoUrl,
+                displayName: userName,
+                size: 34,
+              ),
             ),
           ),
         ],
@@ -94,12 +107,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       focusedDay: _focusedDay,
                       calendarFormat: _calendarFormat,
                       selectedDayPredicate: (day) =>
-                          isSameDay(journalProvider.selectedDate, day),
+                          isSameDay(journalState.selectedDate, day),
                       onDaySelected: (selectedDay, focusedDay) {
                         setState(() {
                           _focusedDay = focusedDay;
                         });
-                        journalProvider.selectDate(selectedDay);
+                        context
+                            .read<JournalBloc>()
+                            .add(SelectDate(selectedDay));
                         Navigator.pushNamed(context, '/daily-journal');
                       },
                       onFormatChanged: (format) {
@@ -109,14 +124,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                       onPageChanged: (focusedDay) {
                         _focusedDay = focusedDay;
-                        journalProvider.loadMonthMarkers(
-                          focusedDay.year,
-                          focusedDay.month,
-                        );
+                        context.read<JournalBloc>().add(LoadMonthMarkers(
+                              year: focusedDay.year,
+                              month: focusedDay.month,
+                            ));
                       },
                       eventLoader: (day) {
                         final dateStr = _dateFormat.format(day);
-                        return journalProvider.daysWithEntries.contains(dateStr)
+                        return journalState.daysWithEntries.contains(dateStr)
                             ? ['entry']
                             : [];
                       },
@@ -181,7 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                         weekendStyle: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                          color:
+                              theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.6,
                           ),
                           fontSize: 12,
@@ -197,7 +213,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Progress card
                 Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _ProgressCard(entries: journalProvider.entries),
+                      child:
+                          _ProgressCard(entries: journalState.entries),
                     )
                     .animate()
                     .fadeIn(delay: 200.ms, duration: 400.ms)
@@ -220,7 +237,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               setState(() {
                                 _focusedDay = today;
                               });
-                              journalProvider.selectDate(today);
+                              context
+                                  .read<JournalBloc>()
+                                  .add(SelectDate(today));
                               Navigator.pushNamed(context, '/daily-journal');
                             },
                             icon: const Icon(Icons.edit_note_rounded),
@@ -244,16 +263,20 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _UserAvatar extends StatelessWidget {
-  final dynamic user;
+  final String? photoUrl;
+  final String? displayName;
   final double size;
 
-  const _UserAvatar({required this.user, required this.size});
+  const _UserAvatar({
+    required this.photoUrl,
+    required this.displayName,
+    required this.size,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final photoUrl = user?.photoURL;
-    final name = user?.displayName ?? '';
+    final name = displayName ?? '';
     final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Container(
@@ -269,7 +292,7 @@ class _UserAvatar extends StatelessWidget {
       child: ClipOval(
         child: photoUrl != null
             ? Image.network(
-                photoUrl,
+                photoUrl!,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) =>
                     _InitialsAvatar(initials: initials, theme: theme),

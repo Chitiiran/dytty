@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import 'package:dytty/features/auth/auth_provider.dart';
-import 'package:dytty/features/settings/theme_provider.dart';
+import 'package:dytty/features/auth/bloc/auth_bloc.dart';
+import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final user = authProvider.user;
+    final authState = context.watch<AuthBloc>().state;
+    final themeMode = context.watch<ThemeCubit>().state;
     final theme = Theme.of(context);
+
+    final displayName = authState is Authenticated
+        ? authState.displayName
+        : null;
+    final email = authState is Authenticated ? authState.email : null;
+    final photoUrl = authState is Authenticated ? authState.photoUrl : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -21,7 +26,7 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // Profile header
-          if (user != null)
+          if (authState is Authenticated)
             Center(
                   child: Column(
                     children: [
@@ -38,28 +43,28 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                         child: ClipOval(
-                          child: user.photoURL != null
+                          child: photoUrl != null
                               ? Image.network(
-                                  user.photoURL!,
+                                  photoUrl,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) =>
-                                      _buildInitials(user.displayName, theme),
+                                      _buildInitials(displayName, theme),
                                 )
-                              : _buildInitials(user.displayName, theme),
+                              : _buildInitials(displayName, theme),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        user.displayName ?? 'User',
+                        displayName ?? 'User',
                         style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (user.email != null && user.email!.isNotEmpty) ...[
+                      if (email != null && email.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          user.email!,
+                          email,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -89,8 +94,10 @@ class SettingsScreen extends StatelessWidget {
                   _ThemeTile(
                     icon: Icons.brightness_auto_rounded,
                     label: 'System',
-                    selected: themeProvider.themeMode == ThemeMode.system,
-                    onTap: () => themeProvider.setThemeMode(ThemeMode.system),
+                    selected: themeMode == ThemeMode.system,
+                    onTap: () => context
+                        .read<ThemeCubit>()
+                        .setThemeMode(ThemeMode.system),
                   ),
                   Divider(
                     height: 1,
@@ -102,8 +109,10 @@ class SettingsScreen extends StatelessWidget {
                   _ThemeTile(
                     icon: Icons.light_mode_rounded,
                     label: 'Light',
-                    selected: themeProvider.themeMode == ThemeMode.light,
-                    onTap: () => themeProvider.setThemeMode(ThemeMode.light),
+                    selected: themeMode == ThemeMode.light,
+                    onTap: () => context
+                        .read<ThemeCubit>()
+                        .setThemeMode(ThemeMode.light),
                   ),
                   Divider(
                     height: 1,
@@ -115,8 +124,10 @@ class SettingsScreen extends StatelessWidget {
                   _ThemeTile(
                     icon: Icons.dark_mode_rounded,
                     label: 'Dark',
-                    selected: themeProvider.themeMode == ThemeMode.dark,
-                    onTap: () => themeProvider.setThemeMode(ThemeMode.dark),
+                    selected: themeMode == ThemeMode.dark,
+                    onTap: () => context
+                        .read<ThemeCubit>()
+                        .setThemeMode(ThemeMode.dark),
                   ),
                 ],
               ),
@@ -142,7 +153,7 @@ class SettingsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               onTap: () async {
-                await authProvider.signOut();
+                context.read<AuthBloc>().add(const SignOut());
                 if (context.mounted) {
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 }
@@ -204,9 +215,8 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildInitials(String? name, ThemeData theme) {
-    final initial = (name != null && name.isNotEmpty)
-        ? name[0].toUpperCase()
-        : '?';
+    final initial =
+        (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
     return Container(
       color: theme.colorScheme.primaryContainer,
       alignment: Alignment.center,

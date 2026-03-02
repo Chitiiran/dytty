@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/core/theme/app_theme.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
-import 'package:dytty/features/auth/auth_provider.dart';
+import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/auth/login_screen.dart';
+import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
-import 'package:dytty/features/daily_journal/journal_provider.dart';
+import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
-import 'package:dytty/features/settings/theme_provider.dart';
 import 'package:dytty/services/auth/auth_service.dart';
 
 class DyttyApp extends StatelessWidget {
@@ -16,107 +16,143 @@ class DyttyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
+    return MultiBlocProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => AuthProvider(authService: AuthService()),
-        ),
-        ChangeNotifierProvider(create: (_) => JournalProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        BlocProvider(create: (_) => AuthBloc(authService: AuthService())),
+        BlocProvider(create: (_) => ThemeCubit()),
       ],
-      child: const _AppWithAuth(),
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, authState) {
+          if (authState is AuthLoading || authState is AuthInitial) {
+            return _themedApp(
+              context,
+              home: const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              ),
+            );
+          }
+
+          if (authState is Authenticated) {
+            return _AuthenticatedApp(authState: authState);
+          }
+
+          // Unauthenticated or AuthError
+          return _themedApp(
+            context,
+            home: const LoginScreen(),
+          );
+        },
+      ),
     );
   }
 }
 
-class _AppWithAuth extends StatefulWidget {
-  const _AppWithAuth();
+class _AuthenticatedApp extends StatefulWidget {
+  final Authenticated authState;
+
+  const _AuthenticatedApp({required this.authState});
 
   @override
-  State<_AppWithAuth> createState() => _AppWithAuthState();
+  State<_AuthenticatedApp> createState() => _AuthenticatedAppState();
 }
 
-class _AppWithAuthState extends State<_AppWithAuth> {
-  String? _previousUid;
+class _AuthenticatedAppState extends State<_AuthenticatedApp> {
+  late JournalRepository _repository;
+  bool _profileEnsured = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final authProvider = context.read<AuthProvider>();
-    final journalProvider = context.read<JournalProvider>();
+  void initState() {
+    super.initState();
+    _repository = JournalRepository(uid: widget.authState.uid);
+    _ensureProfile();
+  }
 
-    final uid = authProvider.user?.uid;
-    if (uid != null && uid != _previousUid) {
-      _previousUid = uid;
-      final repo = JournalRepository(uid: uid);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        journalProvider.setRepository(repo);
-        repo
-            .ensureUserProfile(
-              authProvider.user!.displayName ?? '',
-              authProvider.user!.email ?? '',
-            )
-            .catchError((e) {
-              debugPrint('Failed to ensure user profile: $e');
-            });
-      });
-    } else if (uid == null && _previousUid != null) {
-      _previousUid = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        journalProvider.clear();
+  @override
+  void didUpdateWidget(covariant _AuthenticatedApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authState.uid != widget.authState.uid) {
+      _repository = JournalRepository(uid: widget.authState.uid);
+      _profileEnsured = false;
+      _ensureProfile();
+    }
+  }
+
+  void _ensureProfile() {
+    if (!_profileEnsured) {
+      _profileEnsured = true;
+      _repository
+          .ensureUserProfile(
+            widget.authState.displayName ?? '',
+            widget.authState.email ?? '',
+          )
+          .catchError((e) {
+        debugPrint('Failed to ensure user profile: $e');
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-
-    return MaterialApp(
-      title: 'Dytty',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: themeProvider.themeMode,
-      home: authProvider.loading
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : authProvider.isAuthenticated
-          ? const HomeScreen()
-          : const LoginScreen(),
-      onGenerateRoute: (settings) {
-        final routes = <String, WidgetBuilder>{
-          '/daily-journal': (_) => const DailyJournalScreen(),
-          '/settings': (_) => const SettingsScreen(),
-        };
-
-        final builder = routes[settings.name];
-        if (builder != null) {
-          return PageRouteBuilder(
-            settings: settings,
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                builder(context),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position:
-                        Tween<Offset>(
-                          begin: const Offset(1, 0),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
-                    child: child,
-                  );
-                },
-            transitionDuration: const Duration(milliseconds: 300),
-          );
-        }
-        return null;
-      },
+    return BlocProvider(
+      key: ValueKey(widget.authState.uid),
+      create: (_) => JournalBloc(repository: _repository),
+      child: _themedApp(
+        context,
+        home: const HomeScreen(),
+        routes: true,
+      ),
     );
   }
+}
+
+Widget _themedApp(
+  BuildContext context, {
+  required Widget home,
+  bool routes = false,
+}) {
+  return BlocBuilder<ThemeCubit, ThemeMode>(
+    builder: (context, themeMode) {
+      return MaterialApp(
+        title: 'Dytty',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: themeMode,
+        home: home,
+        onGenerateRoute: routes ? _generateRoute : null,
+      );
+    },
+  );
+}
+
+Route<dynamic>? _generateRoute(RouteSettings settings) {
+  final routes = <String, WidgetBuilder>{
+    '/daily-journal': (_) => const DailyJournalScreen(),
+    '/settings': (_) => const SettingsScreen(),
+  };
+
+  final builder = routes[settings.name];
+  if (builder != null) {
+    return PageRouteBuilder(
+      settings: settings,
+      pageBuilder: (context, animation, secondaryAnimation) =>
+          builder(context),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ),
+          ),
+          child: child,
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+  }
+  return null;
 }
