@@ -9,7 +9,12 @@ import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/main.dart' show geminiApiKey;
 import 'package:dytty/services/auth/auth_service.dart';
+import 'package:dytty/services/llm/gemini_llm_service.dart';
+import 'package:dytty/services/llm/llm_service.dart';
+import 'package:dytty/services/llm/no_op_llm_service.dart';
+import 'package:dytty/services/speech/speech_service.dart';
 
 class DyttyApp extends StatelessWidget {
   const DyttyApp({super.key});
@@ -93,13 +98,25 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      key: ValueKey(widget.authState.uid),
-      create: (_) => JournalBloc(repository: _repository),
-      child: _themedApp(
-        context,
-        home: const HomeScreen(),
-        routes: true,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<LlmService>(
+          create: (_) => geminiApiKey.isNotEmpty
+              ? GeminiLlmService(apiKey: geminiApiKey) as LlmService
+              : NoOpLlmService(),
+        ),
+        RepositoryProvider<SpeechService>(
+          create: (_) => SpeechService(),
+        ),
+      ],
+      child: BlocProvider(
+        key: ValueKey(widget.authState.uid),
+        create: (_) => JournalBloc(repository: _repository),
+        child: _themedApp(
+          context,
+          home: const HomeScreen(),
+          routes: true,
+        ),
       ),
     );
   }

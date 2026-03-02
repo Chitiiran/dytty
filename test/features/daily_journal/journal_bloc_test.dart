@@ -89,6 +89,40 @@ void main() {
     );
 
     blocTest<JournalBloc, JournalState>(
+      'AddVoiceEntry saves entry with voice source and transcript',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) => bloc.add(
+        const AddVoiceEntry(
+          category: JournalCategory.gratitude,
+          text: 'Grateful for sunshine',
+          transcript: 'I am really grateful for the sunshine today',
+          tags: ['sunshine', 'gratitude'],
+        ),
+      ),
+      expect: () => [
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.loaded)
+            .having((s) => s.entries.length, 'entries.length', 1)
+            .having(
+              (s) => s.entries.first.source,
+              'entries.first.source',
+              'voice',
+            )
+            .having(
+              (s) => s.entries.first.transcript,
+              'entries.first.transcript',
+              'I am really grateful for the sunshine today',
+            )
+            .having(
+              (s) => s.entries.first.tags,
+              'entries.first.tags',
+              ['sunshine', 'gratitude'],
+            ),
+      ],
+    );
+
+    blocTest<JournalBloc, JournalState>(
       'UpdateEntry updates entry text',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),

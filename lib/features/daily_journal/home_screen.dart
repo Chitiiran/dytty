@@ -7,6 +7,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -55,6 +56,12 @@ class _HomeScreenState extends State<HomeScreen> {
         authState is Authenticated ? authState.displayName : null;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.large(
+        onPressed: () => _openVoiceNote(context),
+        tooltip: 'Record voice note',
+        child: const Icon(Icons.mic_rounded, size: 32),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       appBar: AppBar(
         title: Text('Dytty'),
         actions: [
@@ -253,12 +260,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     .slideY(begin: 0.1, end: 0, duration: 400.ms),
 
                 const SizedBox(height: 24),
+
+                // Extra space so FAB doesn't overlap content
+                const SizedBox(height: 80),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _openVoiceNote(BuildContext context) async {
+    final result = await showVoiceRecordingSheet(context);
+    if (result == null || !context.mounted) return;
+
+    final bloc = context.read<JournalBloc>();
+    final today = DateTime.now();
+    bloc.add(SelectDate(today));
+    bloc.add(AddVoiceEntry(
+      category: result.category,
+      text: result.text,
+      transcript: result.transcript,
+      tags: result.tags,
+    ));
+
+    if (context.mounted) {
+      Navigator.pushNamed(context, '/daily-journal');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Voice note saved')),
+      );
+    }
   }
 }
 

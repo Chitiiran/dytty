@@ -35,6 +35,39 @@ void main() {
         expect(dailyDoc.exists, true);
       });
 
+      test('with voice fields saves transcript, source, tags', () async {
+        final entry = await repository.addCategoryEntry(
+          '2026-02-27',
+          JournalCategory.gratitude,
+          'AI summary of speech',
+          source: 'voice',
+          transcript: 'I am really grateful for my health today',
+          tags: ['health', 'gratitude'],
+        );
+
+        expect(entry.source, 'voice');
+        expect(entry.transcript, 'I am really grateful for my health today');
+        expect(entry.tags, ['health', 'gratitude']);
+
+        // Verify persisted in Firestore
+        final entries = await repository.getCategoryEntries('2026-02-27');
+        expect(entries.first.source, 'voice');
+        expect(entries.first.transcript, 'I am really grateful for my health today');
+        expect(entries.first.tags, ['health', 'gratitude']);
+      });
+
+      test('defaults to manual source with no optional params', () async {
+        final entry = await repository.addCategoryEntry(
+          '2026-02-27',
+          JournalCategory.positive,
+          'A good thing',
+        );
+
+        expect(entry.source, 'manual');
+        expect(entry.transcript, isNull);
+        expect(entry.tags, isEmpty);
+      });
+
       test('reuses existing daily entry', () async {
         await repository.addCategoryEntry(
           '2026-02-27',

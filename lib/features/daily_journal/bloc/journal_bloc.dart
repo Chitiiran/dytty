@@ -56,6 +56,23 @@ class DeleteEntry extends JournalEvent {
   List<Object?> get props => [entryId];
 }
 
+class AddVoiceEntry extends JournalEvent {
+  final JournalCategory category;
+  final String text;
+  final String transcript;
+  final List<String> tags;
+
+  const AddVoiceEntry({
+    required this.category,
+    required this.text,
+    required this.transcript,
+    this.tags = const [],
+  });
+
+  @override
+  List<Object?> get props => [category, text, transcript, tags];
+}
+
 class LoadMonthMarkers extends JournalEvent {
   final int year;
   final int month;
@@ -125,6 +142,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     on<LoadEntries>(_onLoadEntries);
     on<SelectDate>(_onSelectDate);
     on<AddEntry>(_onAddEntry);
+    on<AddVoiceEntry>(_onAddVoiceEntry);
     on<UpdateEntry>(_onUpdateEntry);
     on<DeleteEntry>(_onDeleteEntry);
     on<LoadMonthMarkers>(_onLoadMonthMarkers);
@@ -177,6 +195,39 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.selectedDateString,
         event.category,
         event.text,
+      );
+      final entries = await _repository.getCategoryEntries(
+        state.selectedDateString,
+      );
+      final markers = await _repository.getDaysWithEntries(
+        state.selectedDate.year,
+        state.selectedDate.month,
+      );
+      emit(state.copyWith(
+        status: JournalStatus.loaded,
+        entries: entries,
+        daysWithEntries: markers,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        status: JournalStatus.error,
+        error: e.toString(),
+      ));
+    }
+  }
+
+  Future<void> _onAddVoiceEntry(
+    AddVoiceEntry event,
+    Emitter<JournalState> emit,
+  ) async {
+    try {
+      await _repository.addCategoryEntry(
+        state.selectedDateString,
+        event.category,
+        event.text,
+        source: 'voice',
+        transcript: event.transcript,
+        tags: event.tags,
       );
       final entries = await _repository.getCategoryEntries(
         state.selectedDateString,

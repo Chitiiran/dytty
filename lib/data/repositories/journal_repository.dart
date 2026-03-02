@@ -50,8 +50,11 @@ class JournalRepository {
   Future<CategoryEntry> addCategoryEntry(
     String date,
     JournalCategory category,
-    String text,
-  ) async {
+    String text, {
+    String source = 'manual',
+    String? transcript,
+    List<String> tags = const [],
+  }) async {
     await getOrCreateDailyEntry(date);
 
     final now = DateTime.now();
@@ -59,7 +62,10 @@ class JournalRepository {
       id: '',
       category: category,
       text: text,
+      source: source,
       createdAt: now,
+      transcript: transcript,
+      tags: tags,
     );
 
     final docRef = await _categoryEntries(date).add(entry.toFirestore());
@@ -71,7 +77,10 @@ class JournalRepository {
       id: docRef.id,
       category: category,
       text: text,
+      source: source,
       createdAt: now,
+      transcript: transcript,
+      tags: tags,
     );
   }
 

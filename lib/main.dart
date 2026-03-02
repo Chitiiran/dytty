@@ -10,6 +10,9 @@ import 'firebase_options.dart';
 /// Set via --dart-define=USE_EMULATORS=true for E2E testing builds
 const useEmulators = bool.fromEnvironment('USE_EMULATORS') || kDebugMode;
 
+/// Set via `--dart-define=GEMINI_API_KEY=...` to enable LLM categorization
+const geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
