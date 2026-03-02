@@ -33,7 +33,7 @@ export default defineConfig({
 
   webServer: {
     command:
-      'flutter build web --dart-define=USE_EMULATORS=true && npx serve build/web -l 5555 --no-clipboard',
+      'flutter build web --dart-define=USE_EMULATORS=true --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY && npx serve build/web -l 5555 --no-clipboard',
     url: 'http://localhost:5555',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

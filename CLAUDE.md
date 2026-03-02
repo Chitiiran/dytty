@@ -10,7 +10,7 @@ Daily journaling app with 5 structured categories. Cross-platform Flutter app ba
 - Flutter 3.41.1 / Dart 3.11.0
 - Firebase Auth (Google Sign-In)
 - Cloud Firestore (database)
-- State management: Provider
+- State management: Bloc
 - E2E tests: Playwright
 
 ## Architecture
@@ -33,12 +33,21 @@ users/{uid}/
 ## Daily Categories (enum: JournalCategory)
 1. positive, 2. negative, 3. gratitude, 4. beauty, 5. identity
 
+## Environment Variables
+API keys live in `.env` (gitignored) and are injected via `--dart-define` at build time. See `.env.example` for required variables.
+
+| Variable | Purpose |
+|----------|---------|
+| `FIREBASE_WEB_API_KEY` | Firebase web API key (required for web builds) |
+| `FIREBASE_ANDROID_API_KEY` | Firebase Android API key (required for Android builds) |
+| `GEMINI_API_KEY` | Gemini LLM API key (optional — falls back to NoOpLlmService) |
+
 ## Commands
 - `flutter pub get` - Install dependencies
 - `flutter analyze` - Static analysis
 - `flutter test` - Run unit tests
-- `flutter build web` - Build for web
-- `flutter run -d chrome` - Run in Chrome
+- `flutter build web --dart-define=FIREBASE_WEB_API_KEY=<key>` - Build for web
+- `flutter run -d chrome --dart-define=FIREBASE_WEB_API_KEY=<key>` - Run in Chrome
 - `npm install` - Install Playwright
 - `npx playwright test` - Run E2E tests
 - `firebase emulators:start` - Start Firebase emulators for local dev
