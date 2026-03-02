@@ -1,6 +1,10 @@
 # Claude Code
 .claude/
 
+# Planning, research & progress docs (local only)
+docs/planning/
+PROGRESS.md
+
 # Environment secrets
 .env
 
