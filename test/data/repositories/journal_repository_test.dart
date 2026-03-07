@@ -212,6 +212,105 @@ void main() {
       });
     });
 
+    group('getStreakData', () {
+      test('returns 0 streak when no entries exist', () async {
+        final streak = await repository.getStreakData();
+        expect(streak.currentStreak, 0);
+        expect(streak.longestStreak, 0);
+        expect(streak.lastJournalDate, isNull);
+      });
+
+      test('returns 1 day streak for entry today', () async {
+        final today = DateTime.now();
+        final dateStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        await repository.addCategoryEntry(
+          dateStr,
+          JournalCategory.positive,
+          'Today entry',
+        );
+
+        final streak = await repository.getStreakData();
+        expect(streak.currentStreak, 1);
+        expect(streak.lastJournalDate, dateStr);
+      });
+
+      test('counts consecutive days as streak', () async {
+        final today = DateTime.now();
+        for (int i = 0; i < 5; i++) {
+          final day = today.subtract(Duration(days: i));
+          final dateStr =
+              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+          await repository.addCategoryEntry(
+            dateStr,
+            JournalCategory.positive,
+            'Entry $i',
+          );
+        }
+
+        final streak = await repository.getStreakData();
+        expect(streak.currentStreak, 5);
+        expect(streak.longestStreak, 5);
+      });
+
+      test('gap breaks current streak', () async {
+        final today = DateTime.now();
+        // Today
+        final todayStr =
+            '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+        await repository.addCategoryEntry(
+          todayStr,
+          JournalCategory.positive,
+          'Today',
+        );
+        // 3 days ago (gap of 1 day)
+        final threeDaysAgo = today.subtract(const Duration(days: 3));
+        final threeStr =
+            '${threeDaysAgo.year}-${threeDaysAgo.month.toString().padLeft(2, '0')}-${threeDaysAgo.day.toString().padLeft(2, '0')}';
+        await repository.addCategoryEntry(
+          threeStr,
+          JournalCategory.positive,
+          'Three days ago',
+        );
+
+        final streak = await repository.getStreakData();
+        expect(streak.currentStreak, 1);
+      });
+
+      test('streak starts from yesterday if no entry today', () async {
+        final yesterday = DateTime.now().subtract(const Duration(days: 1));
+        final dayBefore = DateTime.now().subtract(const Duration(days: 2));
+
+        for (final day in [yesterday, dayBefore]) {
+          final dateStr =
+              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+          await repository.addCategoryEntry(
+            dateStr,
+            JournalCategory.positive,
+            'Entry',
+          );
+        }
+
+        final streak = await repository.getStreakData();
+        expect(streak.currentStreak, 2);
+      });
+    });
+
+    group('getUserSettings / updateUserSettings', () {
+      test('returns default settings when no profile exists', () async {
+        final settings = await repository.getUserSettings();
+        expect(settings['hideEntries'], false);
+      });
+
+      test('persists and retrieves hideEntries', () async {
+        await repository.ensureUserProfile('Test', 'test@test.com');
+        await repository.updateUserSettings({'hideEntries': true});
+
+        final settings = await repository.getUserSettings();
+        expect(settings['hideEntries'], true);
+      });
+    });
+
     group('ensureUserProfile', () {
       test('creates profile if it does not exist', () async {
         await repository.ensureUserProfile('Test User', 'test@example.com');

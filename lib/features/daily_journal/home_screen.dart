@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
         month: _focusedDay.month,
       ));
       bloc.add(SelectDate(DateTime.now()));
+      bloc.add(const LoadStreak());
     });
   }
 
@@ -217,11 +218,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 16),
 
+                // Nudge card — show after 6pm if no entries today
+                if (DateTime.now().hour >= 18 && !journalState.journaledToday)
+                  Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _NudgeCard(
+                          onTap: () => _openVoiceNote(context),
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: 0.1, end: 0, duration: 400.ms),
+
+                if (DateTime.now().hour >= 18 && !journalState.journaledToday)
+                  const SizedBox(height: 12),
+
                 // Progress card
                 Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child:
-                          _ProgressCard(entries: journalState.entries),
+                      child: _ProgressCard(
+                        entries: journalState.entries,
+                        currentStreak: journalState.currentStreak,
+                      ),
                     )
                     .animate()
                     .fadeIn(delay: 200.ms, duration: 400.ms)
@@ -271,6 +289,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  SnackBar _buildVoiceNoteSnackBar(
+    BuildContext context, {
+    required JournalCategory category,
+    required String text,
+  }) {
+    final theme = Theme.of(context);
+    final preview = text.length > 60 ? '${text.substring(0, 60)}...' : text;
+
+    return SnackBar(
+      duration: const Duration(seconds: 3),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: theme.colorScheme.inverseSurface,
+      content: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: category.color.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(category.icon, size: 16, color: category.color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Saved to ${category.displayName}',
+                  style: TextStyle(
+                    color: theme.colorScheme.onInverseSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  preview,
+                  style: TextStyle(
+                    color: theme.colorScheme.onInverseSurface.withValues(
+                      alpha: 0.7,
+                    ),
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openVoiceNote(BuildContext context) async {
     final result = await showVoiceRecordingSheet(context);
     if (result == null || !context.mounted) return;
@@ -288,7 +364,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (context.mounted) {
       Navigator.pushNamed(context, '/daily-journal');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Voice note saved')),
+        _buildVoiceNoteSnackBar(
+          context,
+          category: result.category,
+          text: result.text,
+        ),
       );
     }
   }
@@ -360,8 +440,9 @@ class _InitialsAvatar extends StatelessWidget {
 
 class _ProgressCard extends StatelessWidget {
   final List entries;
+  final int currentStreak;
 
-  const _ProgressCard({required this.entries});
+  const _ProgressCard({required this.entries, this.currentStreak = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +479,38 @@ class _ProgressCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (currentStreak > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.local_fire_department_rounded,
+                          size: 14,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '$currentStreak day${currentStreak == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 Text(
                   '$filled/$total',
@@ -474,6 +587,71 @@ class _ProgressCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NudgeCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _NudgeCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.tertiary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.mic_rounded,
+                  size: 20,
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "You haven't journaled today",
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'It only takes a minute.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );

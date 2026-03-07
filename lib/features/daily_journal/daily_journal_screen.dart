@@ -10,6 +10,7 @@ import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/core/widgets/shimmer_loading.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 
 String formatRelativeTime(DateTime dateTime) {
   final now = DateTime.now();
@@ -87,6 +88,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   @override
   Widget build(BuildContext context) {
     final journalState = context.watch<JournalBloc>().state;
+    final hideEntries = context.watch<SettingsCubit>().state.hideEntries;
     final theme = Theme.of(context);
     final selectedDate = journalState.selectedDate;
     final dayOfWeek = DateFormat('EEEE').format(selectedDate);
@@ -167,6 +169,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                                       journalState.entriesForCategory(
                                     category,
                                   ),
+                                  hideEntries: hideEntries,
                                   onAdd: (text) =>
                                       _addEntry(category, text),
                                   onEdit: (entryId, text) =>
@@ -249,6 +252,7 @@ class _EmptyDayBanner extends StatelessWidget {
 class _CategoryCard extends StatelessWidget {
   final JournalCategory category;
   final List<CategoryEntry> entries;
+  final bool hideEntries;
   final ValueChanged<String> onAdd;
   final void Function(String entryId, String text) onEdit;
   final void Function(CategoryEntry entry) onDelete;
@@ -259,6 +263,7 @@ class _CategoryCard extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
     required this.onDelete,
+    this.hideEntries = false,
   });
 
   @override
@@ -368,6 +373,7 @@ class _CategoryCard extends StatelessWidget {
                     (entry) => _EntryTile(
                       entry: entry,
                       category: category,
+                      hideText: hideEntries,
                       onEdit: (text) => onEdit(entry.id, text),
                       onDelete: () => onDelete(entry),
                     ),
@@ -389,9 +395,10 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
-class _EntryTile extends StatelessWidget {
+class _EntryTile extends StatefulWidget {
   final CategoryEntry entry;
   final JournalCategory category;
+  final bool hideText;
   final ValueChanged<String> onEdit;
   final VoidCallback onDelete;
 
@@ -400,18 +407,28 @@ class _EntryTile extends StatelessWidget {
     required this.category,
     required this.onEdit,
     required this.onDelete,
+    this.hideText = false,
   });
+
+  @override
+  State<_EntryTile> createState() => _EntryTileState();
+}
+
+class _EntryTileState extends State<_EntryTile> {
+  bool _revealed = false;
+
+  bool get _isHidden => widget.hideText && !_revealed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Semantics(
-      label: 'Journal entry: ${entry.text}',
+      label: 'Journal entry: ${widget.entry.text}',
       child: Dismissible(
-        key: ValueKey(entry.id),
+        key: ValueKey(widget.entry.id),
         direction: DismissDirection.endToStart,
-        onDismissed: (_) => onDelete(),
+        onDismissed: (_) => widget.onDelete(),
         background: Container(
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 20),
@@ -426,6 +443,7 @@ class _EntryTile extends StatelessWidget {
           ),
         ),
         child: GestureDetector(
+          onTap: _isHidden ? () => setState(() => _revealed = true) : null,
           onLongPress: () => _showContextMenu(context),
           child: Container(
             width: double.infinity,
@@ -446,10 +464,20 @@ class _EntryTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(entry.text, style: theme.textTheme.bodyMedium),
+                      if (_isHidden)
+                        Text(
+                          'Tap to reveal',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.4),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        )
+                      else
+                        Text(widget.entry.text, style: theme.textTheme.bodyMedium),
                       const SizedBox(height: 4),
                       Text(
-                        formatRelativeTime(entry.createdAt),
+                        formatRelativeTime(widget.entry.createdAt),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color:
                               theme.colorScheme.onSurfaceVariant.withValues(
@@ -460,24 +488,26 @@ class _EntryTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 16),
-                  onPressed: () => _showEditSheet(context),
-                  tooltip: 'Edit entry',
-                  visualDensity: VisualDensity.compact,
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.5,
+                if (!_isHidden) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    onPressed: () => _showEditSheet(context),
+                    tooltip: 'Edit entry',
+                    visualDensity: VisualDensity.compact,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.5,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 16),
-                  onPressed: onDelete,
-                  tooltip: 'Delete entry',
-                  visualDensity: VisualDensity.compact,
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.5,
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    onPressed: widget.onDelete,
+                    tooltip: 'Delete entry',
+                    visualDensity: VisualDensity.compact,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.5,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -513,7 +543,7 @@ class _EntryTile extends StatelessWidget {
               ),
               onTap: () {
                 Navigator.pop(ctx);
-                onDelete();
+                widget.onDelete();
               },
             ),
           ],
@@ -525,11 +555,11 @@ class _EntryTile extends StatelessWidget {
   void _showEditSheet(BuildContext context) async {
     final text = await showEntryBottomSheet(
       context,
-      category: category,
-      initialText: entry.text,
+      category: widget.category,
+      initialText: widget.entry.text,
     );
     if (text != null) {
-      onEdit(text);
+      widget.onEdit(text);
     }
   }
 }

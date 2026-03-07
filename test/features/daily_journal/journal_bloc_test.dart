@@ -205,6 +205,46 @@ void main() {
       ],
     );
 
+    blocTest<JournalBloc, JournalState>(
+      'LoadStreak loads streak data',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        final today = DateTime.now();
+        for (int i = 0; i < 3; i++) {
+          final day = today.subtract(Duration(days: i));
+          final dateStr =
+              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+          await repository.addCategoryEntry(
+            dateStr,
+            JournalCategory.positive,
+            'Entry $i',
+          );
+        }
+      },
+      act: (bloc) => bloc.add(const LoadStreak()),
+      expect: () => [
+        isA<JournalState>()
+            .having((s) => s.currentStreak, 'currentStreak', 3),
+      ],
+    );
+
+    test('journaledToday returns true when today has entries', () {
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final state = JournalState(
+        daysWithEntries: {todayStr},
+      );
+      expect(state.journaledToday, true);
+    });
+
+    test('journaledToday returns false when today has no entries', () {
+      final state = JournalState(
+        daysWithEntries: {'2025-01-01'},
+      );
+      expect(state.journaledToday, false);
+    });
+
     test('entriesForCategory filters correctly', () {
       final now = DateTime.now();
       final state = JournalState(

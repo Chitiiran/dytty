@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -12,6 +13,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
     final themeMode = context.watch<ThemeCubit>().state;
+    final settingsState = context.watch<SettingsCubit>().state;
     final theme = Theme.of(context);
 
     final displayName = authState is Authenticated
@@ -131,6 +133,22 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Journal section
+          _SectionLabel(label: 'Journal'),
+          const SizedBox(height: 8),
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.visibility_off_rounded),
+              title: const Text('Hide entries'),
+              subtitle: const Text('Show entries in weekly review only'),
+              value: settingsState.hideEntries,
+              onChanged: (_) =>
+                  context.read<SettingsCubit>().toggleHideEntries(),
             ),
           ),
 

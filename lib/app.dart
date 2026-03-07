@@ -7,6 +7,7 @@ import 'package:dytty/features/auth/login_screen.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
 import 'package:dytty/main.dart' show geminiApiKey;
@@ -109,9 +110,16 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           create: (_) => SpeechService(),
         ),
       ],
-      child: BlocProvider(
-        key: ValueKey(widget.authState.uid),
-        create: (_) => JournalBloc(repository: _repository),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            key: ValueKey(widget.authState.uid),
+            create: (_) => JournalBloc(repository: _repository),
+          ),
+          BlocProvider(
+            create: (_) => SettingsCubit(repository: _repository)..loadSettings(),
+          ),
+        ],
         child: _themedApp(
           context,
           home: const HomeScreen(),

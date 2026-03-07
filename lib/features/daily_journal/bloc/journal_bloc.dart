@@ -5,6 +5,8 @@ import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
+export 'package:dytty/data/repositories/journal_repository.dart' show StreakData;
+
 // --- Events ---
 
 sealed class JournalEvent extends Equatable {
@@ -83,6 +85,10 @@ class LoadMonthMarkers extends JournalEvent {
   List<Object?> get props => [year, month];
 }
 
+class LoadStreak extends JournalEvent {
+  const LoadStreak();
+}
+
 // --- State ---
 
 enum JournalStatus { initial, loading, loaded, error }
@@ -92,6 +98,8 @@ class JournalState extends Equatable {
   final DateTime selectedDate;
   final List<CategoryEntry> entries;
   final Set<String> daysWithEntries;
+  final int currentStreak;
+  final String? lastJournalDate;
   final String? error;
 
   static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
@@ -101,10 +109,19 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     this.entries = const [],
     this.daysWithEntries = const {},
+    this.currentStreak = 0,
+    this.lastJournalDate,
     this.error,
   }) : selectedDate = selectedDate ?? DateTime.now();
 
   String get selectedDateString => _dateFormat.format(selectedDate);
+
+  /// Whether the user has journaled today (based on daysWithEntries).
+  bool get journaledToday {
+    final now = DateTime.now();
+    final todayStr = _dateFormat.format(now);
+    return daysWithEntries.contains(todayStr);
+  }
 
   List<CategoryEntry> entriesForCategory(JournalCategory category) {
     return entries.where((e) => e.category == category).toList();
@@ -115,6 +132,8 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     List<CategoryEntry>? entries,
     Set<String>? daysWithEntries,
+    int? currentStreak,
+    String? lastJournalDate,
     String? error,
   }) {
     return JournalState(
@@ -122,13 +141,15 @@ class JournalState extends Equatable {
       selectedDate: selectedDate ?? this.selectedDate,
       entries: entries ?? this.entries,
       daysWithEntries: daysWithEntries ?? this.daysWithEntries,
+      currentStreak: currentStreak ?? this.currentStreak,
+      lastJournalDate: lastJournalDate ?? this.lastJournalDate,
       error: error,
     );
   }
 
   @override
   List<Object?> get props =>
-      [status, selectedDate, entries, daysWithEntries, error];
+      [status, selectedDate, entries, daysWithEntries, currentStreak, lastJournalDate, error];
 }
 
 // --- Bloc ---
@@ -146,6 +167,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     on<UpdateEntry>(_onUpdateEntry);
     on<DeleteEntry>(_onDeleteEntry);
     on<LoadMonthMarkers>(_onLoadMonthMarkers);
+    on<LoadStreak>(_onLoadStreak);
   }
 
   Future<void> _onLoadEntries(
@@ -203,10 +225,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.selectedDate.year,
         state.selectedDate.month,
       );
+      final streak = await _repository.getStreakData();
       emit(state.copyWith(
         status: JournalStatus.loaded,
         entries: entries,
         daysWithEntries: markers,
+        currentStreak: streak.currentStreak,
+        lastJournalDate: streak.lastJournalDate,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -236,10 +261,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.selectedDate.year,
         state.selectedDate.month,
       );
+      final streak = await _repository.getStreakData();
       emit(state.copyWith(
         status: JournalStatus.loaded,
         entries: entries,
         daysWithEntries: markers,
+        currentStreak: streak.currentStreak,
+        lastJournalDate: streak.lastJournalDate,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -287,10 +315,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.selectedDate.year,
         state.selectedDate.month,
       );
+      final streak = await _repository.getStreakData();
       emit(state.copyWith(
         status: JournalStatus.loaded,
         entries: entries,
         daysWithEntries: markers,
+        currentStreak: streak.currentStreak,
+        lastJournalDate: streak.lastJournalDate,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -312,6 +343,21 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       emit(state.copyWith(daysWithEntries: markers));
     } catch (_) {
       // Non-critical — silently fail for markers
+    }
+  }
+
+  Future<void> _onLoadStreak(
+    LoadStreak event,
+    Emitter<JournalState> emit,
+  ) async {
+    try {
+      final streak = await _repository.getStreakData();
+      emit(state.copyWith(
+        currentStreak: streak.currentStreak,
+        lastJournalDate: streak.lastJournalDate,
+      ));
+    } catch (_) {
+      // Non-critical — silently fail for streak
     }
   }
 }
