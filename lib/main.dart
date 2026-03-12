@@ -1,17 +1,21 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dytty/app.dart';
+import 'package:dytty/services/notification/notification_service.dart';
 import 'firebase_options.dart';
 
-/// Set via --dart-define=USE_EMULATORS=true for E2E testing builds
-const useEmulators = bool.fromEnvironment('USE_EMULATORS') || kDebugMode;
+/// Set via --dart-define=USE_EMULATORS=true for E2E testing builds.
+/// In debug mode, emulators are opt-in (not automatic) so Android dev
+/// can use real Firebase with Google Sign-In.
+const useEmulators = bool.fromEnvironment('USE_EMULATORS');
 
 /// Set via `--dart-define=GEMINI_API_KEY=...` to enable LLM categorization
 const geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
+late final NotificationService notificationService;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +26,9 @@ void main() async {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
   }
+
+  notificationService = NotificationService();
+  await notificationService.init();
 
   // Enable semantics for accessibility tree (needed for Playwright testing)
   SemanticsBinding.instance.ensureSemantics();

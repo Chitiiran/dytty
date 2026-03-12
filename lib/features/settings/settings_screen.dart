@@ -154,6 +154,55 @@ class SettingsScreen extends StatelessWidget {
 
           const SizedBox(height: 20),
 
+          // Reminders section
+          _SectionLabel(label: 'Reminders'),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.notifications_outlined),
+                  title: const Text('Daily reminder'),
+                  subtitle: const Text('Get reminded to journal'),
+                  value: settingsState.reminderEnabled,
+                  onChanged: (_) =>
+                      context.read<SettingsCubit>().toggleReminder(),
+                ),
+                if (settingsState.reminderEnabled) ...[
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.access_time_rounded),
+                    title: const Text('Reminder time'),
+                    trailing: Text(
+                      settingsState.reminderTime.format(context),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: settingsState.reminderTime,
+                      );
+                      if (picked != null && context.mounted) {
+                        context.read<SettingsCubit>().setReminderTime(picked);
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
           // Account section
           _SectionLabel(label: 'Account'),
           const SizedBox(height: 8),

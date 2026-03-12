@@ -1,32 +1,52 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
+import 'package:dytty/services/notification/notification_service.dart';
 
 class SettingsState extends Equatable {
   final bool hideEntries;
   final bool loaded;
+  final bool reminderEnabled;
+  final TimeOfDay reminderTime;
 
   const SettingsState({
     this.hideEntries = false,
     this.loaded = false,
+    this.reminderEnabled = false,
+    this.reminderTime = const TimeOfDay(
+      hour: NotificationService.defaultHour,
+      minute: NotificationService.defaultMinute,
+    ),
   });
 
-  SettingsState copyWith({bool? hideEntries, bool? loaded}) {
+  SettingsState copyWith({
+    bool? hideEntries,
+    bool? loaded,
+    bool? reminderEnabled,
+    TimeOfDay? reminderTime,
+  }) {
     return SettingsState(
       hideEntries: hideEntries ?? this.hideEntries,
       loaded: loaded ?? this.loaded,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      reminderTime: reminderTime ?? this.reminderTime,
     );
   }
 
   @override
-  List<Object?> get props => [hideEntries, loaded];
+  List<Object?> get props => [hideEntries, loaded, reminderEnabled, reminderTime];
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
   final JournalRepository _repository;
+  final NotificationService _notificationService;
 
-  SettingsCubit({required JournalRepository repository})
-      : _repository = repository,
+  SettingsCubit({
+    required JournalRepository repository,
+    required NotificationService notificationService,
+  })  : _repository = repository,
+        _notificationService = notificationService,
         super(const SettingsState());
 
   Future<void> loadSettings() async {
@@ -35,9 +55,21 @@ class SettingsCubit extends Cubit<SettingsState> {
       emit(SettingsState(
         hideEntries: settings['hideEntries'] as bool? ?? false,
         loaded: true,
+        reminderEnabled: _notificationService.isReminderEnabled,
+        reminderTime: TimeOfDay(
+          hour: _notificationService.reminderHour,
+          minute: _notificationService.reminderMinute,
+        ),
       ));
     } catch (_) {
-      emit(state.copyWith(loaded: true));
+      emit(state.copyWith(
+        loaded: true,
+        reminderEnabled: _notificationService.isReminderEnabled,
+        reminderTime: TimeOfDay(
+          hour: _notificationService.reminderHour,
+          minute: _notificationService.reminderMinute,
+        ),
+      ));
     }
   }
 
@@ -47,8 +79,33 @@ class SettingsCubit extends Cubit<SettingsState> {
     try {
       await _repository.updateUserSettings({'hideEntries': newValue});
     } catch (_) {
-      // Revert on failure
       emit(state.copyWith(hideEntries: !newValue));
+    }
+  }
+
+  Future<void> toggleReminder() async {
+    if (state.reminderEnabled) {
+      await _notificationService.cancelReminder();
+      emit(state.copyWith(reminderEnabled: false));
+    } else {
+      final granted = await _notificationService.requestPermission();
+      if (granted) {
+        await _notificationService.scheduleDailyReminder(
+          hour: state.reminderTime.hour,
+          minute: state.reminderTime.minute,
+        );
+        emit(state.copyWith(reminderEnabled: true));
+      }
+    }
+  }
+
+  Future<void> setReminderTime(TimeOfDay time) async {
+    emit(state.copyWith(reminderTime: time));
+    if (state.reminderEnabled) {
+      await _notificationService.scheduleDailyReminder(
+        hour: time.hour,
+        minute: time.minute,
+      );
     }
   }
 }
