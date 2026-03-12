@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart';
 import 'package:dytty/core/constants/categories.dart';
 
-class CategoryEntry {
+class CategoryEntry extends Equatable {
   final String id;
   final JournalCategory category;
   final String text;
@@ -11,7 +12,7 @@ class CategoryEntry {
   final String? transcript;
   final List<String> tags;
 
-  CategoryEntry({
+  const CategoryEntry({
     required this.id,
     required this.category,
     required this.text,
@@ -21,6 +22,10 @@ class CategoryEntry {
     this.transcript,
     this.tags = const [],
   });
+
+  @override
+  List<Object?> get props =>
+      [id, category, text, source, createdAt, audioUrl, transcript, tags];
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

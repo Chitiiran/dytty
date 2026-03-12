@@ -35,11 +35,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final bloc = context.read<JournalBloc>();
-      if (bloc.state.entries.isEmpty &&
-          bloc.state.status != JournalStatus.loading) {
-        bloc.add(const LoadEntries());
-      }
+      context.read<JournalBloc>().add(const LoadEntries());
     });
   }
 
