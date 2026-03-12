@@ -218,8 +218,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 16),
 
-                // Nudge card — show after 6pm if no entries today
-                if (DateTime.now().hour >= 18 && !journalState.journaledToday)
+                // Nudge card — show if no entries today
+                if (!journalState.journaledToday)
                   Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _NudgeCard(
@@ -230,8 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       .fadeIn(duration: 400.ms)
                       .slideY(begin: 0.1, end: 0, duration: 400.ms),
 
-                if (DateTime.now().hour >= 18 && !journalState.journaledToday)
-                  const SizedBox(height: 12),
+                if (!journalState.journaledToday) const SizedBox(height: 12),
 
                 // Progress card
                 Padding(
