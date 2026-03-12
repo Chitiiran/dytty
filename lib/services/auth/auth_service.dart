@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:dytty/main.dart' show useEmulators;
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 class AuthService {
   final FirebaseAuth _auth;
@@ -33,7 +33,7 @@ class AuthService {
   }
 
   Future<UserCredential> signInAnonymously() async {
-    assert(useEmulators, 'signInAnonymously is for emulator use only');
+    assert(kDebugMode, 'signInAnonymously is for debug use only');
     return _auth.signInAnonymously();
   }
 

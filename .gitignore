@@ -11,6 +11,7 @@ PROGRESS.md
 # Firebase
 .firebase/
 android/app/google-services.json
+*-firebase-adminsdk-*.json
 
 # Node.js (Playwright E2E tests)
 node_modules/

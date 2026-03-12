@@ -10,7 +10,7 @@ import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
-import 'package:dytty/main.dart' show geminiApiKey;
+import 'package:dytty/main.dart' show geminiApiKey, notificationService;
 import 'package:dytty/services/auth/auth_service.dart';
 import 'package:dytty/services/llm/gemini_llm_service.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -117,7 +117,10 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
             create: (_) => JournalBloc(repository: _repository),
           ),
           BlocProvider(
-            create: (_) => SettingsCubit(repository: _repository)..loadSettings(),
+            create: (_) => SettingsCubit(
+              repository: _repository,
+              notificationService: notificationService,
+            )..loadSettings(),
           ),
         ],
         child: _themedApp(

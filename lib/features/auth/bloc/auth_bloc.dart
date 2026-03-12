@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dytty/main.dart' show useEmulators;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:dytty/services/auth/auth_service.dart';
 
 // --- Events ---
@@ -147,7 +147,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SignInAnonymously event,
     Emitter<AuthState> emit,
   ) async {
-    if (!useEmulators) return;
+    if (!kDebugMode) return;
     emit(const AuthLoading());
     try {
       await _authService.signInAnonymously();
