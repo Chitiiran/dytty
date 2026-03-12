@@ -10,6 +10,7 @@ import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/main.dart' show geminiApiKey, notificationService;
 import 'package:dytty/services/auth/auth_service.dart';
 import 'package:dytty/services/llm/gemini_llm_service.dart';
@@ -157,6 +158,7 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
   final routes = <String, WidgetBuilder>{
     '/daily-journal': (_) => const DailyJournalScreen(),
     '/settings': (_) => const SettingsScreen(),
+    '/voice-call': (_) => const VoiceCallScreen(),
   };
 
   final builder = routes[settings.name];
