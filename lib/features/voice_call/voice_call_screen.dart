@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
 
@@ -22,34 +23,46 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   final AudioPlayer _player = AudioPlayer();
   final List<int> _audioBuffer = [];
 
+  late GeminiLiveService _service;
+  late VoiceCallBloc _bloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = GeminiLiveService();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Wire JournalBloc so entries persist to Firestore
+    _bloc = VoiceCallBloc(
+      service: _service,
+      journalBloc: context.read<JournalBloc>(),
+    );
+  }
+
   @override
   void dispose() {
     _audioOutputSub?.cancel();
     _recorder.dispose();
     _player.dispose();
+    _bloc.close();
     super.dispose();
   }
 
   Future<void> _startCall() async {
-    final bloc = context.read<VoiceCallBloc>();
-
-    // Request mic permission
     if (!await _recorder.hasPermission()) return;
 
-    bloc.add(const StartCall());
+    _bloc.add(const StartCall());
 
-    // Listen for audio output from model
-    _audioOutputSub = bloc.audioOutputStream.listen((audioData) {
+    _audioOutputSub = _bloc.audioOutputStream.listen((audioData) {
       _audioBuffer.addAll(audioData);
-      // Buffer audio and play in chunks to avoid choppy playback
       if (_audioBuffer.length > 24000) {
-        // ~0.5s at 24kHz 16-bit mono
         _playAudioBuffer();
       }
     });
 
-    // Start recording mic audio and stream to bloc
-    // PCM 16kHz 16-bit mono — the format Gemini expects
     final stream = await _recorder.startStream(
       const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
@@ -58,54 +71,44 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       ),
     );
     stream.listen((data) {
-      bloc.sendAudio(Uint8List.fromList(data));
+      _bloc.sendAudio(Uint8List.fromList(data));
     });
   }
 
   Future<void> _endCall() async {
-    final bloc = context.read<VoiceCallBloc>();
     await _recorder.stop();
     _audioOutputSub?.cancel();
     _audioOutputSub = null;
     _audioBuffer.clear();
-    bloc.add(const EndCall());
+    _bloc.add(const EndCall());
   }
 
   void _playAudioBuffer() {
-    // For the prototype, we accumulate PCM and play via just_audio.
-    // Production would use a streaming audio player.
     final bytes = Uint8List.fromList(_audioBuffer);
     _audioBuffer.clear();
-
-    // Create a WAV header for PCM data (24kHz, 16-bit, mono)
     final wav = _createWavFromPcm(bytes, sampleRate: 24000);
-    _player.setAudioSource(
-      _InMemoryAudioSource(wav, 'audio/wav'),
-    );
+    _player.setAudioSource(_InMemoryAudioSource(wav, 'audio/wav'));
     _player.play();
   }
 
   Uint8List _createWavFromPcm(Uint8List pcmData, {required int sampleRate}) {
-    final byteRate = sampleRate * 2; // 16-bit mono
+    final byteRate = sampleRate * 2;
     final dataSize = pcmData.length;
     final fileSize = 36 + dataSize;
 
     final header = ByteData(44);
-    // RIFF header
-    header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    header.setUint32(0, 0x52494646, Endian.big);
     header.setUint32(4, fileSize, Endian.little);
-    header.setUint32(8, 0x57415645, Endian.big); // "WAVE"
-    // fmt chunk
-    header.setUint32(12, 0x666D7420, Endian.big); // "fmt "
-    header.setUint32(16, 16, Endian.little); // chunk size
-    header.setUint16(20, 1, Endian.little); // PCM format
-    header.setUint16(22, 1, Endian.little); // mono
+    header.setUint32(8, 0x57415645, Endian.big);
+    header.setUint32(12, 0x666D7420, Endian.big);
+    header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little);
+    header.setUint16(22, 1, Endian.little);
     header.setUint32(24, sampleRate, Endian.little);
     header.setUint32(28, byteRate, Endian.little);
-    header.setUint16(32, 2, Endian.little); // block align
-    header.setUint16(34, 16, Endian.little); // bits per sample
-    // data chunk
-    header.setUint32(36, 0x64617461, Endian.big); // "data"
+    header.setUint16(32, 2, Endian.little);
+    header.setUint16(34, 16, Endian.little);
+    header.setUint32(36, 0x64617461, Endian.big);
     header.setUint32(40, dataSize, Endian.little);
 
     return Uint8List.fromList([
@@ -122,112 +125,157 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voice Call'),
-        actions: [
-          BlocBuilder<VoiceCallBloc, VoiceCallState>(
-            builder: (context, state) {
-              if (state.latencyMs != null) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _latencyColor(state.latencyMs!)
-                            .withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${state.latencyMs}ms',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _latencyColor(state.latencyMs!),
+    return BlocProvider.value(
+      value: _bloc,
+      child: BlocBuilder<VoiceCallBloc, VoiceCallState>(
+        builder: (context, state) {
+          // Post-call summary screen
+          if (state.status == VoiceCallStatus.ended) {
+            return _PostCallSummary(
+              savedEntries: state.savedEntries,
+              elapsed: state.elapsed,
+              latencyMs: state.latencyMs,
+              formatDuration: _formatDuration,
+              onDone: () => Navigator.pop(context),
+            );
+          }
+
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Daily Call'),
+              actions: [
+                if (state.latencyMs != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _latencyColor(state.latencyMs!)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${state.latencyMs}ms',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _latencyColor(state.latencyMs!),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-        ],
-      ),
-      body: BlocBuilder<VoiceCallBloc, VoiceCallState>(
-        builder: (context, state) {
-          return Column(
-            children: [
-              // Status + elapsed
-              _StatusBar(
-                status: state.status,
-                elapsed: state.elapsed,
-                formatDuration: _formatDuration,
-              ),
-
-              // Transcripts
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  reverse: true,
-                  itemCount: state.transcripts.length,
-                  itemBuilder: (context, index) {
-                    final transcript = state.transcripts[
-                        state.transcripts.length - 1 - index];
-                    return _TranscriptBubble(
-                      transcript: transcript,
-                    );
-                  },
+              ],
+            ),
+            body: Column(
+              children: [
+                // Status bar
+                _StatusBar(
+                  status: state.status,
+                  elapsed: state.elapsed,
+                  timeRemaining: state.timeRemaining,
+                  isNearTimeout: state.isNearTimeout,
+                  formatDuration: _formatDuration,
                 ),
-              ),
 
-              // Saved entries indicator
-              if (state.savedEntries.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                // Time warning banner
+                if (state.showTimeWarning &&
+                    state.status == VoiceCallStatus.active)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    color: state.isNearTimeout
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                        : const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 16,
+                          color: state.isNearTimeout
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${_formatDuration(state.timeRemaining)} remaining',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: state.isNearTimeout
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.3),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.bookmark_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${state.savedEntries.length} '
-                        '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+
+                // Transcripts
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    reverse: true,
+                    itemCount: state.transcripts.length,
+                    itemBuilder: (context, index) {
+                      final transcript = state.transcripts[
+                          state.transcripts.length - 1 - index];
+                      return _TranscriptBubble(transcript: transcript);
+                    },
+                  ),
+                ),
+
+                // Saved entries indicator
+                if (state.savedEntries.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withValues(alpha: 0.3),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.bookmark_rounded,
+                          size: 18,
                           color: Theme.of(context).colorScheme.primary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Text(
+                          '${state.savedEntries.length} '
+                          '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Call control
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _CallButton(
+                    status: state.status,
+                    onStart: _startCall,
+                    onEnd: _endCall,
                   ),
                 ),
-
-              // Call control
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: _CallButton(
-                  status: state.status,
-                  onStart: _startCall,
-                  onEnd: _endCall,
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -235,20 +283,219 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   Color _latencyColor(int ms) {
-    if (ms <= 200) return const Color(0xFF10B981); // green
-    if (ms <= 400) return const Color(0xFFF59E0B); // amber
-    return const Color(0xFFEF4444); // red
+    if (ms <= 200) return const Color(0xFF10B981);
+    if (ms <= 400) return const Color(0xFFF59E0B);
+    return const Color(0xFFEF4444);
   }
 }
+
+// --- Post-call summary ---
+
+class _PostCallSummary extends StatelessWidget {
+  final List<SavedEntry> savedEntries;
+  final Duration elapsed;
+  final int? latencyMs;
+  final String Function(Duration) formatDuration;
+  final VoidCallback onDone;
+
+  const _PostCallSummary({
+    required this.savedEntries,
+    required this.elapsed,
+    required this.latencyMs,
+    required this.formatDuration,
+    required this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Call Summary')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Stats row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _StatChip(
+                icon: Icons.timer_outlined,
+                label: formatDuration(elapsed),
+                caption: 'Duration',
+              ),
+              _StatChip(
+                icon: Icons.bookmark_rounded,
+                label: '${savedEntries.length}',
+                caption: 'Entries',
+              ),
+              if (latencyMs != null)
+                _StatChip(
+                  icon: Icons.speed_rounded,
+                  label: '${latencyMs}ms',
+                  caption: 'Latency',
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          if (savedEntries.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  'No entries were captured during this session.',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else ...[
+            Text(
+              'Captured entries',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...savedEntries.map((entry) => _SavedEntryTile(entry: entry)),
+          ],
+
+          const SizedBox(height: 32),
+
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              onPressed: onDone,
+              child: const Text('Done'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String caption;
+
+  const _StatChip({
+    required this.icon,
+    required this.label,
+    required this.caption,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          caption,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SavedEntryTile extends StatelessWidget {
+  final SavedEntry entry;
+
+  const _SavedEntryTile({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: entry.category.color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                entry.category.icon,
+                size: 18,
+                color: entry.category.color,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.category.displayName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: entry.category.color,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.text,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Shared widgets ---
 
 class _StatusBar extends StatelessWidget {
   final VoiceCallStatus status;
   final Duration elapsed;
+  final Duration timeRemaining;
+  final bool isNearTimeout;
   final String Function(Duration) formatDuration;
 
   const _StatusBar({
     required this.status,
     required this.elapsed,
+    required this.timeRemaining,
+    required this.isNearTimeout,
     required this.formatDuration,
   });
 
@@ -267,9 +514,14 @@ class _StatusBar extends StatelessWidget {
         color = theme.colorScheme.tertiary;
       case VoiceCallStatus.active:
         label = 'In call  ${formatDuration(elapsed)}';
-        color = const Color(0xFF10B981);
+        color = isNearTimeout
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF10B981);
       case VoiceCallStatus.ending:
-        label = 'Ending call...';
+        label = 'Saving and ending...';
+        color = theme.colorScheme.onSurfaceVariant;
+      case VoiceCallStatus.ended:
+        label = 'Call ended';
         color = theme.colorScheme.onSurfaceVariant;
       case VoiceCallStatus.error:
         label = 'Connection error';
@@ -353,8 +605,8 @@ class _CallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive =
-        status == VoiceCallStatus.active || status == VoiceCallStatus.connecting;
+    final isActive = status == VoiceCallStatus.active ||
+        status == VoiceCallStatus.connecting;
 
     return SizedBox(
       width: 80,
