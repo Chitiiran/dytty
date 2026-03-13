@@ -31,6 +31,7 @@ dependencies:
   firebase_ai: 3.9.0
   record: ^6.2.0
   just_audio: ^0.10.5
+  firebase_storage: ^13.1.0
 
 dev_dependencies:
   flutter_test:

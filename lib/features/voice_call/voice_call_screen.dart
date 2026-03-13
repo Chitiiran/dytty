@@ -6,8 +6,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
+import 'package:dytty/services/llm/llm_service.dart';
+import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
 
 class VoiceCallScreen extends StatefulWidget {
@@ -35,10 +38,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Wire JournalBloc so entries persist to Firestore
+    // Wire dependencies for entry persistence, audio upload, and post-call summary
+    final authState = context.read<AuthBloc>().state;
+    final uid = authState is Authenticated ? authState.uid : null;
+
     _bloc = VoiceCallBloc(
       service: _service,
       journalBloc: context.read<JournalBloc>(),
+      llmService: context.read<LlmService>(),
+      audioStorage: context.read<AudioStorageService>(),
+      uid: uid,
     );
   }
 
@@ -135,6 +144,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
               savedEntries: state.savedEntries,
               elapsed: state.elapsed,
               latencyMs: state.latencyMs,
+              sessionSummary: state.sessionSummary,
+              generatingSummary: state.generatingSummary,
+              audioUrl: state.audioUrl,
+              uploadingAudio: state.uploadingAudio,
               formatDuration: _formatDuration,
               onDone: () => Navigator.pop(context),
             );
@@ -295,6 +308,10 @@ class _PostCallSummary extends StatelessWidget {
   final List<SavedEntry> savedEntries;
   final Duration elapsed;
   final int? latencyMs;
+  final String? sessionSummary;
+  final bool generatingSummary;
+  final String? audioUrl;
+  final bool uploadingAudio;
   final String Function(Duration) formatDuration;
   final VoidCallback onDone;
 
@@ -302,6 +319,10 @@ class _PostCallSummary extends StatelessWidget {
     required this.savedEntries,
     required this.elapsed,
     required this.latencyMs,
+    this.sessionSummary,
+    this.generatingSummary = false,
+    this.audioUrl,
+    this.uploadingAudio = false,
     required this.formatDuration,
     required this.onDone,
   });
@@ -338,7 +359,113 @@ class _PostCallSummary extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // Session summary (loading or generated)
+          if (generatingSummary)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Generating summary...',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (sessionSummary != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Session Summary',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      sessionSummary!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 4),
+
+          // Audio upload status
+          if (uploadingAudio)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Uploading audio...',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (audioUrl != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: const Color(0xFF10B981),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Audio saved to cloud',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF10B981),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           if (savedEntries.isEmpty)
             Center(

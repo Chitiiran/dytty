@@ -11,6 +11,10 @@ class FakeNotificationService extends NotificationService {
   int _hour = NotificationService.defaultHour;
   int _minute = NotificationService.defaultMinute;
 
+  bool _callEnabled = false;
+  int _callHour = NotificationService.defaultHour;
+  int _callMinute = NotificationService.defaultMinute;
+
   @override
   Future<void> init() async {}
 
@@ -36,6 +40,30 @@ class FakeNotificationService extends NotificationService {
   @override
   Future<void> cancelReminder() async {
     _enabled = false;
+  }
+
+  @override
+  bool get isDailyCallEnabled => _callEnabled;
+
+  @override
+  int get dailyCallHour => _callHour;
+
+  @override
+  int get dailyCallMinute => _callMinute;
+
+  @override
+  Future<void> scheduleDailyCall({
+    required int hour,
+    required int minute,
+  }) async {
+    _callEnabled = true;
+    _callHour = hour;
+    _callMinute = minute;
+  }
+
+  @override
+  Future<void> cancelDailyCall() async {
+    _callEnabled = false;
   }
 
   @override

@@ -197,6 +197,54 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                 ],
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.3,
+                  ),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.phone_rounded),
+                  title: const Text('Daily call reminder'),
+                  subtitle:
+                      const Text('Get reminded to start your daily call'),
+                  value: settingsState.dailyCallEnabled,
+                  onChanged: (_) =>
+                      context.read<SettingsCubit>().toggleDailyCall(),
+                ),
+                if (settingsState.dailyCallEnabled) ...[
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.access_time_rounded),
+                    title: const Text('Call time'),
+                    trailing: Text(
+                      settingsState.dailyCallTime.format(context),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: settingsState.dailyCallTime,
+                      );
+                      if (picked != null && context.mounted) {
+                        context
+                            .read<SettingsCubit>()
+                            .setDailyCallTime(picked);
+                      }
+                    },
+                  ),
+                ],
               ],
             ),
           ),
