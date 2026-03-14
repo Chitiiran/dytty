@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
 
@@ -42,12 +41,12 @@ class CategorizeTranscript extends VoiceNoteEvent {
 }
 
 class UpdateCategory extends VoiceNoteEvent {
-  final JournalCategory category;
+  final String categoryId;
 
-  const UpdateCategory(this.category);
+  const UpdateCategory(this.categoryId);
 
   @override
-  List<Object?> get props => [category];
+  List<Object?> get props => [categoryId];
 }
 
 class UpdateText extends VoiceNoteEvent {
@@ -79,7 +78,7 @@ class VoiceNoteState extends Equatable {
   final VoiceNoteStatus status;
   final String transcript;
   final String summary;
-  final JournalCategory? suggestedCategory;
+  final String? suggestedCategory;
   final List<String> suggestedTags;
   final double confidence;
   final String? error;
@@ -98,7 +97,7 @@ class VoiceNoteState extends Equatable {
     VoiceNoteStatus? status,
     String? transcript,
     String? summary,
-    JournalCategory? suggestedCategory,
+    String? suggestedCategory,
     List<String>? suggestedTags,
     double? confidence,
     String? error,
@@ -233,7 +232,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     UpdateCategory event,
     Emitter<VoiceNoteState> emit,
   ) {
-    emit(state.copyWith(suggestedCategory: event.category));
+    emit(state.copyWith(suggestedCategory: event.categoryId));
   }
 
   void _onUpdateText(

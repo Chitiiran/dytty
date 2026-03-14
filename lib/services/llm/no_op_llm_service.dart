@@ -1,4 +1,3 @@
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// No-op [LlmService] used when no API key is configured.
@@ -10,9 +9,10 @@ class NoOpLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text) async {
-    return const CategorizationResult(
-      suggestedCategory: JournalCategory.positive,
+  Future<CategorizationResult> categorizeEntry(String text,
+      {List<String> categoryIds = const ['positive']}) async {
+    return CategorizationResult(
+      suggestedCategory: categoryIds.first,
       summary: '',
       confidence: 0.0,
     );

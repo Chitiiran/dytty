@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
 
 void main() {
@@ -10,7 +9,7 @@ void main() {
       final now = DateTime(2026, 2, 27, 10, 30);
       final entry = CategoryEntry(
         id: 'test-id',
-        category: JournalCategory.gratitude,
+        categoryId: 'gratitude',
         text: 'Grateful for sunshine',
         source: 'manual',
         createdAt: now,
@@ -29,7 +28,7 @@ void main() {
       final now = DateTime(2026, 2, 27, 10, 30);
       final original = CategoryEntry(
         id: '',
-        category: JournalCategory.beauty,
+        categoryId: 'beauty',
         text: 'A beautiful sunset',
         source: 'manual',
         createdAt: now,
@@ -42,7 +41,7 @@ void main() {
       final restored = CategoryEntry.fromFirestore(snapshot);
 
       expect(restored.id, docRef.id);
-      expect(restored.category, JournalCategory.beauty);
+      expect(restored.categoryId, 'beauty');
       expect(restored.text, 'A beautiful sunset');
       expect(restored.source, 'manual');
       expect(restored.createdAt, now);
@@ -62,7 +61,7 @@ void main() {
       expect(entry.source, 'manual');
     });
 
-    test('fromFirestore handles unknown category', () async {
+    test('fromFirestore handles unknown category as raw string', () async {
       final firestore = FakeFirebaseFirestore();
       await firestore.collection('test').doc('unknown').set({
         'category': 'nonexistent',
@@ -73,14 +72,27 @@ void main() {
       final snapshot = await firestore.collection('test').doc('unknown').get();
       final entry = CategoryEntry.fromFirestore(snapshot);
 
-      // Falls back to positive
-      expect(entry.category, JournalCategory.positive);
+      // Preserves the raw string — UI handles fallback display
+      expect(entry.categoryId, 'nonexistent');
+    });
+
+    test('fromFirestore defaults to positive when category missing', () async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('test').doc('nocat').set({
+        'text': 'test',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
+      });
+
+      final snapshot = await firestore.collection('test').doc('nocat').get();
+      final entry = CategoryEntry.fromFirestore(snapshot);
+
+      expect(entry.categoryId, 'positive');
     });
 
     test('toFirestore omits audioUrl/transcript/tags when null or empty', () {
       final entry = CategoryEntry(
         id: 'id',
-        category: JournalCategory.positive,
+        categoryId: 'positive',
         text: 'hello',
         createdAt: DateTime(2026, 3, 1),
       );
@@ -95,7 +107,7 @@ void main() {
     test('toFirestore includes audioUrl/transcript/tags when present', () {
       final entry = CategoryEntry(
         id: 'id',
-        category: JournalCategory.gratitude,
+        categoryId: 'gratitude',
         text: 'voice note',
         createdAt: DateTime(2026, 3, 1),
         audioUrl: 'gs://bucket/audio.wav',
@@ -114,7 +126,7 @@ void main() {
       final firestore = FakeFirebaseFirestore();
       final entry = CategoryEntry(
         id: '',
-        category: JournalCategory.beauty,
+        categoryId: 'beauty',
         text: 'voice entry',
         createdAt: DateTime(2026, 3, 1),
         audioUrl: 'gs://bucket/file.mp3',

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/core/theme/app_theme.dart';
+import 'package:dytty/data/repositories/category_repository.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/auth/login_screen.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
+import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
@@ -67,6 +69,7 @@ class _AuthenticatedApp extends StatefulWidget {
 
 class _AuthenticatedAppState extends State<_AuthenticatedApp> {
   late JournalRepository _repository;
+  late CategoryRepository _categoryRepository;
   bool _profileEnsured = false;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -74,6 +77,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
   void initState() {
     super.initState();
     _repository = JournalRepository(uid: widget.authState.uid);
+    _categoryRepository = CategoryRepository(uid: widget.authState.uid);
     _ensureProfile();
     _checkPendingRoute();
   }
@@ -93,6 +97,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.authState.uid != widget.authState.uid) {
       _repository = JournalRepository(uid: widget.authState.uid);
+      _categoryRepository = CategoryRepository(uid: widget.authState.uid);
       _profileEnsured = false;
       _ensureProfile();
     }
@@ -139,6 +144,10 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
               repository: _repository,
               notificationService: notificationService,
             )..loadSettings(),
+          ),
+          BlocProvider(
+            create: (_) =>
+                CategoryCubit(repository: _categoryRepository)..loadCategories(),
           ),
         ],
         child: _themedApp(
