@@ -17,37 +17,29 @@ class VoiceCallScreen extends StatefulWidget {
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
-  late final GeminiLiveService _service;
-  late final VoiceCallBloc _bloc;
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _audioOutputSub;
   final AudioPlayer _player = AudioPlayer();
   final List<int> _audioBuffer = [];
 
   @override
-  void initState() {
-    super.initState();
-    _service = GeminiLiveService();
-    _bloc = VoiceCallBloc(service: _service);
-  }
-
-  @override
   void dispose() {
     _audioOutputSub?.cancel();
     _recorder.dispose();
     _player.dispose();
-    _bloc.close();
     super.dispose();
   }
 
   Future<void> _startCall() async {
+    final bloc = context.read<VoiceCallBloc>();
+
     // Request mic permission
     if (!await _recorder.hasPermission()) return;
 
-    _bloc.add(const StartCall());
+    bloc.add(const StartCall());
 
     // Listen for audio output from model
-    _audioOutputSub = _bloc.audioOutputStream.listen((audioData) {
+    _audioOutputSub = bloc.audioOutputStream.listen((audioData) {
       _audioBuffer.addAll(audioData);
       // Buffer audio and play in chunks to avoid choppy playback
       if (_audioBuffer.length > 24000) {
@@ -66,16 +58,17 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       ),
     );
     stream.listen((data) {
-      _bloc.sendAudio(Uint8List.fromList(data));
+      bloc.sendAudio(Uint8List.fromList(data));
     });
   }
 
   Future<void> _endCall() async {
+    final bloc = context.read<VoiceCallBloc>();
     await _recorder.stop();
     _audioOutputSub?.cancel();
     _audioOutputSub = null;
     _audioBuffer.clear();
-    _bloc.add(const EndCall());
+    bloc.add(const EndCall());
   }
 
   void _playAudioBuffer() {
@@ -129,119 +122,114 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _bloc,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Voice Call'),
-          actions: [
-            BlocBuilder<VoiceCallBloc, VoiceCallState>(
-              builder: (context, state) {
-                if (state.latencyMs != null) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _latencyColor(state.latencyMs!)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${state.latencyMs}ms',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _latencyColor(state.latencyMs!),
-                          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Voice Call'),
+        actions: [
+          BlocBuilder<VoiceCallBloc, VoiceCallState>(
+            builder: (context, state) {
+              if (state.latencyMs != null) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _latencyColor(state.latencyMs!)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${state.latencyMs}ms',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _latencyColor(state.latencyMs!),
                         ),
                       ),
                     ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          ],
-        ),
-        body: BlocBuilder<VoiceCallBloc, VoiceCallState>(
-          builder: (context, state) {
-            return Column(
-              children: [
-                // Status + elapsed
-                _StatusBar(
-                  status: state.status,
-                  elapsed: state.elapsed,
-                  formatDuration: _formatDuration,
-                ),
-
-                // Transcripts
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    reverse: true,
-                    itemCount: state.transcripts.length,
-                    itemBuilder: (context, index) {
-                      final text = state.transcripts[
-                          state.transcripts.length - 1 - index];
-                      final isUser = text.startsWith('You:');
-                      return _TranscriptBubble(
-                        text: text,
-                        isUser: isUser,
-                      );
-                    },
                   ),
-                ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+      body: BlocBuilder<VoiceCallBloc, VoiceCallState>(
+        builder: (context, state) {
+          return Column(
+            children: [
+              // Status + elapsed
+              _StatusBar(
+                status: state.status,
+                elapsed: state.elapsed,
+                formatDuration: _formatDuration,
+              ),
 
-                // Saved entries indicator
-                if (state.savedEntries.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primaryContainer
-                        .withValues(alpha: 0.3),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.bookmark_rounded,
-                          size: 18,
+              // Transcripts
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  reverse: true,
+                  itemCount: state.transcripts.length,
+                  itemBuilder: (context, index) {
+                    final transcript = state.transcripts[
+                        state.transcripts.length - 1 - index];
+                    return _TranscriptBubble(
+                      transcript: transcript,
+                    );
+                  },
+                ),
+              ),
+
+              // Saved entries indicator
+              if (state.savedEntries.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.3),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.bookmark_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${state.savedEntries.length} '
+                        '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: Theme.of(context).colorScheme.primary,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${state.savedEntries.length} '
-                          '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Call control
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: _CallButton(
-                    status: state.status,
-                    onStart: _startCall,
-                    onEnd: _endCall,
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            );
-          },
-        ),
+
+              // Call control
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: _CallButton(
+                  status: state.status,
+                  onStart: _startCall,
+                  onEnd: _endCall,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -320,14 +308,14 @@ class _StatusBar extends StatelessWidget {
 }
 
 class _TranscriptBubble extends StatelessWidget {
-  final String text;
-  final bool isUser;
+  final Transcript transcript;
 
-  const _TranscriptBubble({required this.text, required this.isUser});
+  const _TranscriptBubble({required this.transcript});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isUser = transcript.speaker == Speaker.user;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -344,7 +332,7 @@ class _TranscriptBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
-          text,
+          transcript.text,
           style: theme.textTheme.bodyMedium,
         ),
       ),

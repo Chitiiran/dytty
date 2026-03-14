@@ -3,6 +3,17 @@ import 'dart:async';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+/// Speaker in a voice call transcript.
+enum Speaker { user, ai }
+
+/// A structured transcript entry with speaker and text.
+class Transcript {
+  final Speaker speaker;
+  final String text;
+
+  const Transcript({required this.speaker, required this.text});
+}
+
 /// Wraps the Firebase AI Live API for bidirectional voice streaming.
 ///
 /// Manages session lifecycle, audio I/O, tool calling, and latency tracking.
@@ -13,7 +24,7 @@ class GeminiLiveService {
   StreamSubscription<LiveServerResponse>? _responseSubscription;
 
   final _audioController = StreamController<Uint8List>.broadcast();
-  final _transcriptController = StreamController<String>.broadcast();
+  final _transcriptController = StreamController<Transcript>.broadcast();
   final _toolCallController = StreamController<FunctionCall>.broadcast();
   final _stateController = StreamController<GeminiLiveState>.broadcast();
 
@@ -21,7 +32,7 @@ class GeminiLiveService {
   Stream<Uint8List> get audioStream => _audioController.stream;
 
   /// Transcription updates (input and output).
-  Stream<String> get transcriptStream => _transcriptController.stream;
+  Stream<Transcript> get transcriptStream => _transcriptController.stream;
 
   /// Tool calls requested by the model.
   Stream<FunctionCall> get toolCallStream => _toolCallController.stream;
@@ -163,10 +174,16 @@ class GeminiLiveService {
 
     // Handle transcriptions
     if (content.inputTranscription?.text != null) {
-      _transcriptController.add('You: ${content.inputTranscription!.text}');
+      _transcriptController.add(Transcript(
+        speaker: Speaker.user,
+        text: content.inputTranscription!.text!,
+      ));
     }
     if (content.outputTranscription?.text != null) {
-      _transcriptController.add('AI: ${content.outputTranscription!.text}');
+      _transcriptController.add(Transcript(
+        speaker: Speaker.ai,
+        text: content.outputTranscription!.text!,
+      ));
     }
   }
 

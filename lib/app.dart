@@ -10,6 +10,7 @@ import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/main.dart' show geminiApiKey, notificationService;
 import 'package:dytty/services/auth/auth_service.dart';
@@ -17,6 +18,7 @@ import 'package:dytty/services/llm/gemini_llm_service.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/llm/no_op_llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
+import 'package:dytty/services/voice_call/gemini_live_service.dart';
 
 class DyttyApp extends StatelessWidget {
   const DyttyApp({super.key});
@@ -110,12 +112,21 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
         RepositoryProvider<SpeechService>(
           create: (_) => SpeechService(),
         ),
+        RepositoryProvider<GeminiLiveService>(
+          create: (_) => GeminiLiveService(),
+          lazy: true,
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
             key: ValueKey(widget.authState.uid),
             create: (_) => JournalBloc(repository: _repository),
+          ),
+          BlocProvider(
+            create: (ctx) => VoiceCallBloc(
+              service: ctx.read<GeminiLiveService>(),
+            ),
           ),
           BlocProvider(
             create: (_) => SettingsCubit(

@@ -24,20 +24,12 @@ class EndCall extends VoiceCallEvent {
   const EndCall();
 }
 
-class AudioChunkReceived extends VoiceCallEvent {
-  final Uint8List pcmData;
-  const AudioChunkReceived(this.pcmData);
-
-  @override
-  List<Object?> get props => [pcmData];
-}
-
 class TranscriptReceived extends VoiceCallEvent {
-  final String text;
-  const TranscriptReceived(this.text);
+  final Transcript transcript;
+  const TranscriptReceived(this.transcript);
 
   @override
-  List<Object?> get props => [text];
+  List<Object?> get props => [transcript];
 }
 
 class ToolCallReceived extends VoiceCallEvent {
@@ -64,6 +56,10 @@ class LatencyUpdated extends VoiceCallEvent {
   List<Object?> get props => [latencyMs];
 }
 
+class _TimerTicked extends VoiceCallEvent {
+  const _TimerTicked();
+}
+
 // --- State ---
 
 enum VoiceCallStatus { idle, connecting, active, ending, error }
@@ -82,7 +78,7 @@ class SavedEntry {
 
 class VoiceCallState extends Equatable {
   final VoiceCallStatus status;
-  final List<String> transcripts;
+  final List<Transcript> transcripts;
   final List<SavedEntry> savedEntries;
   final int? latencyMs;
   final Duration elapsed;
@@ -99,7 +95,7 @@ class VoiceCallState extends Equatable {
 
   VoiceCallState copyWith({
     VoiceCallStatus? status,
-    List<String>? transcripts,
+    List<Transcript>? transcripts,
     List<SavedEntry>? savedEntries,
     int? latencyMs,
     Duration? elapsed,
@@ -122,11 +118,17 @@ class VoiceCallState extends Equatable {
 
 // --- Bloc ---
 
+/// Tool call argument keys for the save_entry function.
+class _SaveEntryArgs {
+  static const category = 'category';
+  static const text = 'text';
+  static const transcript = 'transcript';
+}
+
 class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   final GeminiLiveService _service;
 
-  StreamSubscription<Uint8List>? _audioSub;
-  StreamSubscription<String>? _transcriptSub;
+  StreamSubscription<Transcript>? _transcriptSub;
   StreamSubscription<FunctionCall>? _toolCallSub;
   StreamSubscription<GeminiLiveState>? _stateSub;
   Timer? _elapsedTimer;
@@ -144,6 +146,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<ToolCallReceived>(_onToolCallReceived);
     on<ServiceStateChanged>(_onServiceStateChanged);
     on<LatencyUpdated>(_onLatencyUpdated);
+    on<_TimerTicked>(_onTimerTicked);
   }
 
   Future<void> _onStartCall(
@@ -159,8 +162,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     ));
 
     // Subscribe to service streams
-    _transcriptSub = _service.transcriptStream.listen((text) {
-      add(TranscriptReceived(text));
+    _transcriptSub = _service.transcriptStream.listen((transcript) {
+      add(TranscriptReceived(transcript));
     });
     _toolCallSub = _service.toolCallStream.listen((call) {
       add(ToolCallReceived(call));
@@ -177,7 +180,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       _callStartTime = DateTime.now();
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_callStartTime != null) {
-          add(ServiceStateChanged(GeminiLiveState.active));
+          add(const _TimerTicked());
         }
       });
     } catch (e) {
@@ -204,7 +207,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     Emitter<VoiceCallState> emit,
   ) {
     emit(state.copyWith(
-      transcripts: [...state.transcripts, event.text],
+      transcripts: [...state.transcripts, event.transcript],
     ));
   }
 
@@ -215,9 +218,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final call = event.functionCall;
     if (call.name == 'save_entry') {
       final args = call.args;
-      final categoryName = args['category'] as String? ?? 'positive';
-      final text = args['text'] as String? ?? '';
-      final transcript = args['transcript'] as String? ?? '';
+      final categoryName =
+          args[_SaveEntryArgs.category] as String? ?? 'positive';
+      final text = args[_SaveEntryArgs.text] as String? ?? '';
+      final transcript =
+          args[_SaveEntryArgs.transcript] as String? ?? '';
 
       final category = JournalCategory.values.firstWhere(
         (c) => c.name == categoryName,
@@ -238,7 +243,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       await _service.sendToolResponse(
         call.name,
         call.id,
-        {'status': 'saved', 'category': categoryName},
+        {'status': 'saved', _SaveEntryArgs.category: categoryName},
       );
 
       debugPrint('Tool call: save_entry → $categoryName: $text');
@@ -249,16 +254,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     ServiceStateChanged event,
     Emitter<VoiceCallState> emit,
   ) {
-    final elapsed = _callStartTime != null
-        ? DateTime.now().difference(_callStartTime!)
-        : Duration.zero;
-
     switch (event.state) {
       case GeminiLiveState.active:
-        emit(state.copyWith(
-          status: VoiceCallStatus.active,
-          elapsed: elapsed,
-        ));
+        emit(state.copyWith(status: VoiceCallStatus.active));
       case GeminiLiveState.error:
         emit(state.copyWith(
           status: VoiceCallStatus.error,
@@ -269,6 +267,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       default:
         break;
     }
+  }
+
+  void _onTimerTicked(
+    _TimerTicked event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    final elapsed = _callStartTime != null
+        ? DateTime.now().difference(_callStartTime!)
+        : Duration.zero;
+    emit(state.copyWith(elapsed: elapsed));
   }
 
   void _onLatencyUpdated(
@@ -284,11 +292,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   }
 
   Future<void> _cancelSubscriptions() async {
-    await _audioSub?.cancel();
     await _transcriptSub?.cancel();
     await _toolCallSub?.cancel();
     await _stateSub?.cancel();
-    _audioSub = null;
     _transcriptSub = null;
     _toolCallSub = null;
     _stateSub = null;
