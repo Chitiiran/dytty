@@ -1,6 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
 void main() {
@@ -17,11 +16,11 @@ void main() {
       test('creates daily entry and category entry', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.gratitude,
+          'gratitude',
           'Grateful for tests',
         );
 
-        expect(entry.category, JournalCategory.gratitude);
+        expect(entry.categoryId, 'gratitude');
         expect(entry.text, 'Grateful for tests');
         expect(entry.id, isNotEmpty);
 
@@ -38,7 +37,7 @@ void main() {
       test('with voice fields saves transcript, source, tags', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.gratitude,
+          'gratitude',
           'AI summary of speech',
           source: 'voice',
           transcript: 'I am really grateful for my health today',
@@ -59,7 +58,7 @@ void main() {
       test('defaults to manual source with no optional params', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'A good thing',
         );
 
@@ -71,12 +70,12 @@ void main() {
       test('reuses existing daily entry', () async {
         await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'First entry',
         );
         await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.negative,
+          'negative',
           'Second entry',
         );
 
@@ -94,12 +93,12 @@ void main() {
       test('returns all entries for a date', () async {
         await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'Good thing',
         );
         await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.beauty,
+          'beauty',
           'Beautiful thing',
         );
 
@@ -116,7 +115,7 @@ void main() {
       test('updates entry text', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.identity,
+          'identity',
           'Original text',
         );
 
@@ -135,7 +134,7 @@ void main() {
       test('removes entry', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'To be deleted',
         );
 
@@ -148,7 +147,7 @@ void main() {
       test('deletes daily entry when last category entry removed', () async {
         final entry = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'Only entry',
         );
 
@@ -166,12 +165,12 @@ void main() {
       test('keeps daily entry when other category entries remain', () async {
         final entry1 = await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.positive,
+          'positive',
           'Keep this',
         );
         await repository.addCategoryEntry(
           '2026-02-27',
-          JournalCategory.negative,
+          'negative',
           'Delete this',
         );
 
@@ -192,12 +191,12 @@ void main() {
       test('returns dates that have entries', () async {
         await repository.addCategoryEntry(
           '2026-02-15',
-          JournalCategory.positive,
+          'positive',
           'Entry 1',
         );
         await repository.addCategoryEntry(
           '2026-02-20',
-          JournalCategory.gratitude,
+          'gratitude',
           'Entry 2',
         );
 
@@ -226,7 +225,7 @@ void main() {
             '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
         await repository.addCategoryEntry(
           dateStr,
-          JournalCategory.positive,
+          'positive',
           'Today entry',
         );
 
@@ -243,7 +242,7 @@ void main() {
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
           await repository.addCategoryEntry(
             dateStr,
-            JournalCategory.positive,
+            'positive',
             'Entry $i',
           );
         }
@@ -260,7 +259,7 @@ void main() {
             '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
         await repository.addCategoryEntry(
           todayStr,
-          JournalCategory.positive,
+          'positive',
           'Today',
         );
         // 3 days ago (gap of 1 day)
@@ -269,7 +268,7 @@ void main() {
             '${threeDaysAgo.year}-${threeDaysAgo.month.toString().padLeft(2, '0')}-${threeDaysAgo.day.toString().padLeft(2, '0')}';
         await repository.addCategoryEntry(
           threeStr,
-          JournalCategory.positive,
+          'positive',
           'Three days ago',
         );
 
@@ -286,7 +285,7 @@ void main() {
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
           await repository.addCategoryEntry(
             dateStr,
-            JournalCategory.positive,
+            'positive',
             'Entry',
           );
         }

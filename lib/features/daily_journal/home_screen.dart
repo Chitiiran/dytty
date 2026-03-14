@@ -4,9 +4,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/data/models/category_config.dart';
+import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
     final journalState = context.watch<JournalBloc>().state;
+    final categoryState = context.watch<CategoryCubit>().state;
     final theme = Theme.of(context);
 
     final displayName = authState is Authenticated
@@ -237,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _ProgressCard(
                         entries: journalState.entries,
+                        categories: categoryState.activeCategories,
                         currentStreak: journalState.currentStreak,
                       ),
                     )
@@ -290,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   SnackBar _buildVoiceNoteSnackBar(
     BuildContext context, {
-    required JournalCategory category,
+    required CategoryConfig category,
     required String text,
   }) {
     final theme = Theme.of(context);
@@ -354,21 +358,26 @@ class _HomeScreenState extends State<HomeScreen> {
     final today = DateTime.now();
     bloc.add(SelectDate(today));
     bloc.add(AddVoiceEntry(
-      category: result.category,
+      categoryId: result.categoryId,
       text: result.text,
       transcript: result.transcript,
       tags: result.tags,
     ));
 
     if (context.mounted) {
+      final categoryState = context.read<CategoryCubit>().state;
+      final category = categoryState.findById(result.categoryId);
+
       Navigator.pushNamed(context, '/daily-journal');
-      ScaffoldMessenger.of(context).showSnackBar(
-        _buildVoiceNoteSnackBar(
-          context,
-          category: result.category,
-          text: result.text,
-        ),
-      );
+      if (category != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          _buildVoiceNoteSnackBar(
+            context,
+            category: category,
+            text: result.text,
+          ),
+        );
+      }
     }
   }
 }
@@ -438,20 +447,27 @@ class _InitialsAvatar extends StatelessWidget {
 }
 
 class _ProgressCard extends StatelessWidget {
-  final List entries;
+  final List<CategoryEntry> entries;
+  final List<CategoryConfig> categories;
   final int currentStreak;
 
-  const _ProgressCard({required this.entries, this.currentStreak = 0});
+  const _ProgressCard({
+    required this.entries,
+    required this.categories,
+    this.currentStreak = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final filledCategories = <JournalCategory>{};
+    final filledCategoryIds = <String>{};
     for (final entry in entries) {
-      filledCategories.add(entry.category);
+      filledCategoryIds.add(entry.categoryId);
     }
-    final total = JournalCategory.values.length;
-    final filled = filledCategories.length;
+    final total = categories.length;
+    final filled = filledCategoryIds.intersection(
+      categories.map((c) => c.id).toSet(),
+    ).length;
     final progress = total > 0 ? filled / total : 0.0;
 
     String message;
@@ -524,8 +540,8 @@ class _ProgressCard extends StatelessWidget {
             // Category icons row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: JournalCategory.values.map((cat) {
-                final isFilled = filledCategories.contains(cat);
+              children: categories.map((cat) {
+                final isFilled = filledCategoryIds.contains(cat.id);
                 return Column(
                   children: [
                     Container(

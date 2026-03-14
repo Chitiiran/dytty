@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
-import 'package:dytty/core/constants/categories.dart';
 
 class CategoryEntry extends Equatable {
   final String id;
-  final JournalCategory category;
+  final String categoryId;
   final String text;
   final String source;
   final DateTime createdAt;
@@ -14,7 +13,7 @@ class CategoryEntry extends Equatable {
 
   const CategoryEntry({
     required this.id,
-    required this.category,
+    required this.categoryId,
     required this.text,
     this.source = 'manual',
     required this.createdAt,
@@ -25,16 +24,13 @@ class CategoryEntry extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, category, text, source, createdAt, audioUrl, transcript, tags];
+      [id, categoryId, text, source, createdAt, audioUrl, transcript, tags];
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return CategoryEntry(
       id: doc.id,
-      category: JournalCategory.values.firstWhere(
-        (c) => c.name == data['category'],
-        orElse: () => JournalCategory.positive,
-      ),
+      categoryId: data['category'] as String? ?? 'positive',
       text: (data['text'] as String?) ?? '',
       source: data['source'] as String? ?? 'manual',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -46,7 +42,7 @@ class CategoryEntry extends Equatable {
 
   Map<String, dynamic> toFirestore() {
     return {
-      'category': category.name,
+      'category': categoryId,
       'text': text,
       'source': source,
       'createdAt': Timestamp.fromDate(createdAt),

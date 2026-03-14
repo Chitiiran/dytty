@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/data/models/category_config.dart';
 
 /// Bottom sheet for adding or editing a journal entry.
 /// Returns the entered text, or null if cancelled.
 Future<String?> showEntryBottomSheet(
   BuildContext context, {
-  required JournalCategory category,
+  required CategoryConfig category,
   String? initialText,
 }) {
   return showModalBottomSheet<String>(
@@ -19,7 +19,7 @@ Future<String?> showEntryBottomSheet(
 }
 
 class _EntryBottomSheetContent extends StatefulWidget {
-  final JournalCategory category;
+  final CategoryConfig category;
   final String? initialText;
 
   const _EntryBottomSheetContent({required this.category, this.initialText});

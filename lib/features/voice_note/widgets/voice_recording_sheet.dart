@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/voice_note/bloc/voice_note_bloc.dart';
 import 'package:dytty/features/voice_note/voice_note_result.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -23,14 +23,18 @@ Future<VoiceNoteResult?> showVoiceRecordingSheet(BuildContext context) {
           speechService: context.read<SpeechService>(),
           llmService: context.read<LlmService>(),
         )..add(const InitializeSpeech()),
-        child: const _VoiceRecordingSheetBody(),
+        child: _VoiceRecordingSheetBody(
+          categories: context.read<CategoryCubit>().state.activeCategories,
+        ),
       );
     },
   );
 }
 
 class _VoiceRecordingSheetBody extends StatelessWidget {
-  const _VoiceRecordingSheetBody();
+  final List categories;
+
+  const _VoiceRecordingSheetBody({required this.categories});
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +115,8 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
       VoiceNoteStatus.listening => _ListeningView(transcript: state.transcript),
       VoiceNoteStatus.processing =>
         _ProcessingView(transcript: state.transcript),
-      VoiceNoteStatus.reviewing => _ReviewingView(state: state),
+      VoiceNoteStatus.reviewing =>
+        _ReviewingView(state: state, categories: categories),
       VoiceNoteStatus.error =>
         _ErrorView(error: state.error ?? 'Unknown error'),
       VoiceNoteStatus.unavailable => const _UnavailableView(),
@@ -242,8 +247,9 @@ class _ProcessingView extends StatelessWidget {
 
 class _ReviewingView extends StatefulWidget {
   final VoiceNoteState state;
+  final List categories;
 
-  const _ReviewingView({required this.state});
+  const _ReviewingView({required this.state, required this.categories});
 
   @override
   State<_ReviewingView> createState() => _ReviewingViewState();
@@ -361,14 +367,14 @@ class _ReviewingViewState extends State<_ReviewingView> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: JournalCategory.values.map((cat) {
-            final isSelected = cat == state.suggestedCategory;
+          children: widget.categories.map((cat) {
+            final isSelected = cat.id == state.suggestedCategory;
             return ChoiceChip(
               label: Text(cat.displayName),
               avatar: Icon(cat.icon, size: 18, color: cat.color),
               selected: isSelected,
               onSelected: (_) {
-                context.read<VoiceNoteBloc>().add(UpdateCategory(cat));
+                context.read<VoiceNoteBloc>().add(UpdateCategory(cat.id));
               },
             );
           }).toList(),
@@ -414,7 +420,7 @@ class _ReviewingViewState extends State<_ReviewingView> {
                         Navigator.pop(
                           context,
                           VoiceNoteResult(
-                            category: state.suggestedCategory!,
+                            categoryId: state.suggestedCategory!,
                             text: _textController.text.isNotEmpty
                                 ? _textController.text
                                 : state.transcript,
