@@ -21,13 +21,16 @@ class VoiceCallScreen extends StatefulWidget {
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
+  /// ~0.5s of audio at 24kHz 16-bit mono before triggering playback.
+  static const _audioPlaybackThreshold = 24000;
+
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _audioOutputSub;
   final AudioPlayer _player = AudioPlayer();
   final List<int> _audioBuffer = [];
 
-  late GeminiLiveService _service;
-  late VoiceCallBloc _bloc;
+  late final GeminiLiveService _service;
+  late final VoiceCallBloc _bloc;
 
   @override
   void initState() {
@@ -67,7 +70,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
     _audioOutputSub = _bloc.audioOutputStream.listen((audioData) {
       _audioBuffer.addAll(audioData);
-      if (_audioBuffer.length > 24000) {
+      if (_audioBuffer.length > _audioPlaybackThreshold) {
         _playAudioBuffer();
       }
     });
@@ -106,18 +109,21 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     final fileSize = 36 + dataSize;
 
     final header = ByteData(44);
-    header.setUint32(0, 0x52494646, Endian.big);
+    // RIFF header
+    header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
     header.setUint32(4, fileSize, Endian.little);
-    header.setUint32(8, 0x57415645, Endian.big);
-    header.setUint32(12, 0x666D7420, Endian.big);
-    header.setUint32(16, 16, Endian.little);
-    header.setUint16(20, 1, Endian.little);
-    header.setUint16(22, 1, Endian.little);
+    header.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+    // fmt sub-chunk
+    header.setUint32(12, 0x666D7420, Endian.big); // "fmt "
+    header.setUint32(16, 16, Endian.little); // sub-chunk size
+    header.setUint16(20, 1, Endian.little); // PCM format
+    header.setUint16(22, 1, Endian.little); // mono
     header.setUint32(24, sampleRate, Endian.little);
     header.setUint32(28, byteRate, Endian.little);
-    header.setUint16(32, 2, Endian.little);
-    header.setUint16(34, 16, Endian.little);
-    header.setUint32(36, 0x64617461, Endian.big);
+    header.setUint16(32, 2, Endian.little); // block align
+    header.setUint16(34, 16, Endian.little); // bits per sample
+    // data sub-chunk
+    header.setUint32(36, 0x64617461, Endian.big); // "data"
     header.setUint32(40, dataSize, Endian.little);
 
     return Uint8List.fromList([

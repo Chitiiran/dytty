@@ -8,6 +8,7 @@ import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
+import 'package:intl/intl.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
 
 // --- Events ---
@@ -293,8 +294,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
 
       try {
         final now = DateTime.now();
-        final date =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        final date = DateFormat('yyyy-MM-dd').format(now);
         final url = await _audioStorage.uploadCallAudio(
           uid: _uid,
           date: date,
