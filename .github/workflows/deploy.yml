@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          cache: true
+      - run: flutter pub get
+      - name: Build web
+        run: flutter build web --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+  deploy:
+    name: Deploy to Firebase Hosting
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
+          channelId: live
+          projectId: dytty-4b83d
+
+  tag:
+    name: Tag Release
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Get version from pubspec
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Create tag
+        run: |
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}" || true
+          git push origin "v${{ steps.version.outputs.version }}" || true

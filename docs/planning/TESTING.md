@@ -12,14 +12,29 @@ Every bug fix must include a test that reproduces the bug before the fix. Every 
 
 ---
 
-## Test Layers
+## Test Pyramid (5 Layers)
 
-| Layer | Tool | Target | Speed | Location |
-|-------|------|--------|-------|----------|
-| Unit | `flutter test` | Bloc logic, repositories, models | Fast (~2s) | `test/` |
-| Widget | `flutter test` | Individual widget rendering | Fast (~2s) | `test/` |
-| E2E (Web) | Playwright | Full user flows on web | Medium (~30s) | `e2e/` |
-| E2E (Android) | Maestro | Full user flows on Android | Slow (~60s) | `.maestro/` |
+```
+                 /\            Layer 5: Black Box E2E (Maestro)
+                /  \           - Screen-only, no code access
+               /----\          Layer 4: Integration Tests (Patrol)
+              /      \         - On-device, Dart, widget tree + native OS
+             /--------\        Layer 3: Golden Tests
+            /          \       - Visual regression, pixel comparison
+           /------------\      Layer 2: Widget Tests (Robot pattern)
+          /              \     - Individual UI component rendering
+         /----------------\    Layer 1: Unit Tests
+        /                  \   - Bloc, repos, models, services
+       /____________________\
+```
+
+| Layer | Tool | Location | Speed | When it runs |
+|-------|------|----------|-------|-------------|
+| Unit | `flutter test` | `test/` | ~2s | Dev loop, every PR |
+| Widget | `flutter test` | `test/widgets/` | ~3s | Dev loop, every PR |
+| Golden | `flutter test --update-goldens` | `test/goldens/` | ~5s | Every PR |
+| Integration | Patrol | `integration_test/` | ~60s/flow | Release candidate only |
+| Black Box E2E | Maestro | `.maestro/` | ~90s/flow | Release candidate + PR smoke |
 
 ---
 
@@ -45,6 +60,77 @@ flutter test --coverage               # With coverage report
 - File naming: `<source>_test.dart`
 - Use `blocTest<Bloc, State>()` for Bloc testing
 - Use `FakeFirebaseFirestore()` — never mock Firestore
+
+---
+
+## Widget Tests (Robot Pattern)
+
+**Libraries:** `flutter_test`, `bloc_test`, `mocktail`
+
+**What to test:**
+- Individual widget rendering with given props
+- Tap handlers fire correctly
+- Loading/error/empty states display properly
+- Accessibility labels present
+
+**Location:** `test/widgets/` mirroring `lib/features/` structure.
+
+**Robot Pattern:** One Robot class per screen encapsulates interaction logic. Tests read like user stories:
+
+```dart
+// test/robots/home_screen_robot.dart
+class HomeScreenRobot {
+  HomeScreenRobot(this.tester);
+  final WidgetTester tester;
+
+  void expectNudgeCardVisible() {
+    expect(find.textContaining("haven't journaled"), findsOneWidget);
+  }
+  // ...
+}
+
+// test/widgets/home_screen_test.dart — reads like a spec
+testWidgets('nudge card visible when no entries', (tester) async {
+  await tester.pumpApp(const HomeScreen());
+  final robot = HomeScreenRobot(tester);
+  robot.expectNudgeCardVisible();
+});
+```
+
+**Key files:**
+- `test/helpers/pump_app.dart` — shared test setup with mock Blocs
+- `test/robots/` — Robot classes for each screen
+- `test/widgets/` — Widget test files
+
+**Commands:**
+```bash
+flutter test test/widgets/       # Run widget tests only
+flutter test test/robots/        # Robot helper tests (if any)
+```
+
+---
+
+## Golden Tests (Visual Regression)
+
+**Tool:** Built-in `matchesGoldenFile` from `flutter_test`.
+
+**What to capture:** Login screen (default, loading, error, dark), journal screen (empty, with entries, dark), dashboard states.
+
+**Location:** `test/goldens/` with baseline PNGs in `test/goldens/fixtures/`.
+
+**Commands:**
+```bash
+flutter test test/goldens/                       # Verify goldens match
+flutter test --update-goldens test/goldens/      # Regenerate baseline PNGs
+```
+
+**Workflow:**
+1. Write golden test with `matchesGoldenFile('fixtures/name.png')`
+2. First run: `flutter test --update-goldens test/goldens/` to generate baselines
+3. Commit the PNG files to git
+4. CI runs `flutter test test/goldens/` — fails if pixels differ
+
+**Cross-platform note:** Ubuntu CI vs Windows dev may cause font rendering mismatches. If this becomes an issue, add `alchemist` package for platform-independent golden generation.
 
 ---
 
@@ -247,6 +333,52 @@ tags:
 
 10. **Settings button accessibility** — The settings `IconButton` with a `?` icon renders as `"?"` in the accessibility tree, not the tooltip text. Tap with: `tapOn: "\\?"`.
 
+### Maestro Tags (updated)
+
+| Tag | Purpose | When to run |
+|-----|---------|-------------|
+| `smoke` | Core happy paths | Every PR (CI) |
+| `state` | State management regression | Every PR (CI) |
+| `release` | Full regression suite | Release candidates only |
+| `auth` | Authentication flows only | Auth changes |
+| `journal` | Journal CRUD + navigation | Journal changes |
+| `dashboard` | Dashboard element verification | Dashboard/state changes |
+
+---
+
+## Integration Tests — Patrol (Layer 4)
+
+**Tool:** Patrol 3.13+
+
+**Why Patrol over plain `integration_test`:** Dytty uses mic permission (voice notes), notification permission (reminders), and Google Sign-In (native OAuth). All trigger native OS dialogs that only Patrol can interact with.
+
+**Packages:** `patrol: ^3.13.0`, `patrol_finders: ^2.4.0` in `dev_dependencies`.
+
+**Structure:**
+```
+integration_test/
+├── robots/                        # Robot classes (same vocabulary as widget test robots)
+│   ├── home_screen_robot.dart
+│   ├── journal_screen_robot.dart
+│   └── auth_robot.dart
+├── flows/
+│   ├── auth_flow_test.dart        # Login -> verify home -> logout
+│   ├── journal_crud_test.dart     # Add -> verify -> edit -> delete
+│   └── dashboard_state_test.dart  # Add entries -> verify progress updates
+└── app_test_setup.dart            # Common setup: pump app with emulator config
+```
+
+**Commands:**
+```bash
+bash scripts/patrol-test.sh                    # Run all integration tests
+bash scripts/patrol-test.sh --flow auth        # Run specific flow
+bash scripts/patrol-test.sh --skip-build       # Skip APK build
+```
+
+**When to run:** Release candidates only (too slow for every PR).
+
+---
+
 ### Screenshot-Driven AI Development Workflow
 
 This is the primary workflow for AI-assisted development with Maestro:
@@ -266,37 +398,50 @@ This is the primary workflow for AI-assisted development with Maestro:
 
 ---
 
-## CI/CD Pipeline
+## CI/CD Pipeline (3 Workflow Files)
 
-**File:** `.github/workflows/ci.yml`
+### `.github/workflows/ci.yml` — PRs to `develop`
 
-### Jobs
+| Job | What | Blocks merge? |
+|-----|------|---------------|
+| `analyze-test` | flutter analyze + test + coverage (min 60%) + build web + build APK | Yes |
+| `maestro` | Maestro E2E with `smoke,state` tags | Yes |
 
-| Job | Trigger | Runner | What it does |
-|-----|---------|--------|--------------|
-| `ci` | PR + main push | ubuntu-latest | Analyze, unit test, build web, upload artifact |
-| `maestro` | PR + main push | ubuntu-latest | Build APK, start emulator, run Maestro smoke flows, upload screenshots |
-| `deploy` | main push only | ubuntu-latest | Deploy web build to Firebase Hosting |
+### `.github/workflows/release-candidate.yml` — Release branches
+
+| Job | What | Blocks release? |
+|-----|------|-----------------|
+| `analyze-test` | flutter analyze + test + coverage | Yes |
+| `build` | Web + release APK builds | Yes |
+| `maestro` | Full Maestro suite (`smoke,state,release` tags) | Yes |
+| `distribute` | Upload APK to Firebase App Distribution | Automated |
+
+### `.github/workflows/deploy.yml` — Push to `main`
+
+| Job | What |
+|-----|------|
+| `build` | Build web |
+| `deploy` | Firebase Hosting deploy |
+| `tag` | Create git tag `vX.Y.Z` |
 
 ### Required GitHub Secrets
 
 | Secret | Purpose | Status |
 |--------|---------|--------|
 | `FIREBASE_WEB_API_KEY` | Web build dart-define | Needed |
-| `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` | Firebase Hosting deploy | Needed |
+| `FIREBASE_ANDROID_API_KEY` | Android build dart-define | Needed |
+| `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` | Firebase Hosting deploy + App Distribution | Needed |
+| `FIREBASE_ANDROID_APP_ID` | App Distribution upload | Needed |
 
-### Maestro CI Details
+### Quality Gates Summary
 
-The Maestro job:
-1. Checks out code
-2. Sets up JDK 21 + Flutter 3.41.1
-3. Builds debug APK with `USE_EMULATORS=true`
-4. Installs Maestro CLI
-5. Starts Android emulator via `reactivecircus/android-emulator-runner@v2` (API 33, x86_64)
-6. Installs APK and runs `smoke`-tagged flows
-7. Uploads screenshots + JUnit results as `maestro-screenshots` artifact
-
-**Note:** The Maestro CI job runs without Firebase emulators — flows that depend on emulator auth will fail in CI until Firebase emulator setup is added to the workflow. This is a known limitation; smoke flows should be designed to handle this gracefully.
+| Gate | When | Checks |
+|------|------|--------|
+| **Gate 1: Dev loop** | Every save | `flutter analyze` + `flutter test` (~10s) |
+| **Gate 2: PR to develop** | Every PR | Analyze + test + coverage + build + Maestro smoke |
+| **Gate 3: Release candidate** | Release branch push | All Gate 2 + Maestro full suite + App Distribution |
+| **Gate 4: Dogfooding** | 2-3 day window | Internal testers via Firebase App Distribution |
+| **Gate 5: Production** | Merge to main | Auto deploy web + tag release |
 
 ---
 
@@ -306,16 +451,21 @@ The Maestro job:
 - [ ] Unit tests for Bloc events/states
 - [ ] Unit tests for repository methods (if new)
 - [ ] Unit tests for model serialization (if new model)
+- [ ] Widget tests with Robot pattern for new screens/widgets
+- [ ] Golden tests for key visual states
 - [ ] Playwright E2E if the feature involves cross-screen state changes (web)
 - [ ] Maestro flow if the feature has an Android-specific interaction
 - [ ] `takeScreenshot` at key visual states in Maestro flows
+- [ ] Patrol integration test if the feature involves native OS dialogs
 
 ### Bug fix
 - [ ] Unit test that reproduces the bug (must fail before fix)
 - [ ] Fix the bug
 - [ ] Verify test passes
+- [ ] Update golden baselines if visual change (`flutter test --update-goldens`)
 - [ ] Add Maestro screenshot if the bug was visual
 
 ### Refactor
 - [ ] Existing tests still pass
+- [ ] Golden tests still match (or update baselines)
 - [ ] No new tests needed unless behavior changes
