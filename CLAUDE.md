@@ -15,7 +15,7 @@ Daily journaling app with 5 structured categories. Cross-platform Flutter app ba
 - Firebase Auth (Google Sign-In)
 - Cloud Firestore (database)
 - State management: Bloc
-- E2E tests: Playwright
+- E2E tests: Playwright (web), Maestro (Android)
 
 ## Architecture
 Clean architecture with features-based organization:
@@ -57,6 +57,11 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 - `firebase emulators:start` - Start Firebase emulators for local dev
 - `bash scripts/distribute.sh "Release notes"` - Build debug APK and upload to Firebase App Distribution
   - The release notes string should include: (1) a short summary of what changed, and (2) a test checklist of specific things to verify. This text is emailed to the tester, so make it human-friendly and complete.
+- `bash scripts/maestro-test.sh` - Run all Maestro Android E2E flows
+- `bash scripts/maestro-test.sh --flow auth` - Run only auth flows
+- `bash scripts/maestro-test.sh --tags smoke` - Run smoke-tagged flows (includes state tests)
+- `bash scripts/maestro-test.sh --flow state` - Run state management regression flows only
+- `bash scripts/maestro-test.sh --skip-build` - Skip APK build, reuse existing
 
 ## Firebase Setup (manual steps)
 1. `dart pub global activate flutterfire_cli`
@@ -74,12 +79,12 @@ Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
 - Milestones M0-M2 closed, M3-M7 open on GitHub
 
 ## Testing Strategy
-TDD is mandatory. Tests first, then implementation, then iterate until green.
+TDD is mandatory. Full details in `docs/planning/TESTING.md`.
 
 - **Unit tests** (`flutter test`) — Bloc logic, repository methods, model serialization. Use `bloc_test` + `FakeFirebaseFirestore`.
-- **E2E tests** (`npx playwright test`) — Full user flows against web build + Firebase emulators. Must cover UI state changes visible on screen (calendar markers, banners, progress indicators — not just CRUD on a single screen).
-- **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria.
-- **E2E test structure**: `e2e/` directory, Playwright, helpers in `e2e/helpers.ts`. Tests run against `flutter build web --dart-define=USE_EMULATORS=true` served locally.
+- **E2E web** (`npx playwright test`) — Full user flows against web build + Firebase emulators. `e2e/` directory.
+- **E2E Android** (`bash scripts/maestro-test.sh`) — Maestro YAML flows in `.maestro/`. Screenshots captured via `takeScreenshot` for visual verification. CI uploads screenshots as artifacts.
+- **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E required for cross-screen UI state changes.
 
 ## Conventions
 - Files: snake_case (daily_journal_screen.dart)

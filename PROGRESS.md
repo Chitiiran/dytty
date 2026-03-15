@@ -16,7 +16,7 @@
 
 **Open PRs:** None
 
-**Test status:** 100 unit tests, 15 E2E tests — all passing
+**Test status:** 100 unit tests, 15 Playwright E2E tests, 9 Maestro Android flows (4 state mgmt) — all 9/9 passing
 
 **Milestone status:**
 | Milestone | Status |
@@ -30,11 +30,19 @@
 | M6: Configurable Categories + Polish | Data model done (PR #16 merged). UI settings page pending |
 | M7: Launch Prep | Not started |
 
+**Maestro Android E2E setup:**
+- Maestro 2.3.0 installed locally
+- 9 flows: login, logout, add-entry, dashboard, navigate-days + 4 state management regression tests (nudge #21, progress #22, all-complete, streak)
+- CI job added to `.github/workflows/ci.yml` (runs smoke flows, uploads screenshots)
+- Runner script: `scripts/maestro-test.sh`
+- Full testing docs: `docs/planning/TESTING.md`
+
 ## Blockers
 - CI/CD deploy: needs `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` GitHub secret
 - CI/CD web build: needs `FIREBASE_WEB_API_KEY` GitHub secret
 - CI/CD analyze: `playground/` sub-project breaks `flutter analyze` (missing genui deps). Tracked in #19, blocked by #18.
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
+- Maestro CI: flows that need Firebase emulators will fail until emulator setup added to workflow
 
 ## Up Next
 - **#24, #25, #33**: Voice call active state + UI fixes
@@ -48,6 +56,27 @@
 ---
 
 ## Log
+
+### 2026-03-15 (session 20, continued)
+- **Maestro 9/9 flows all green**
+  - Fixed parallel-interference: runner script now executes each flow individually and sequentially
+  - Fixed `add-entry-flow`: removed `assertVisible: "Time to reflect"` (fails when other flows add entries)
+  - Fixed `all-categories-complete`: added `centerElement: true` to `scrollUntilVisible` for Identity card, used `inputText` directly (autofocus handles focus), `retryTapIfNoChange: true` for + button
+  - Key Maestro lessons: `scrollUntilVisible` + `centerElement` for off-screen elements, `retryTapIfNoChange` for buttons that may not register, `inputText` for autofocused fields, regex `.*pattern.*` for partial text matching
+  - Cleaned up stale screenshot dirs from project root, added to `.gitignore`
+
+### 2026-03-15 (session 20)
+- **Maestro Android E2E setup — complete**
+  - Installed Maestro 2.3.0 CLI locally
+  - Created `.maestro/` directory with 9 YAML flows across 3 categories
+  - Auth: login, logout | Journal: add-entry, dashboard, navigate-days | State: nudge-disappears (#21), progress-updates (#22), all-categories-complete, streak-updates
+  - All flows use `takeScreenshot` for visual verification at key states
+  - Created `scripts/maestro-test.sh` runner script (build APK, install, run, collect screenshots)
+  - Added `maestro` job to `.github/workflows/ci.yml` — builds APK, starts emulator, runs smoke flows, uploads screenshots as artifacts
+  - Created `docs/planning/TESTING.md` — comprehensive testing strategy doc
+  - Fixed Firebase emulator connectivity on Android (`10.0.2.2` vs `localhost`)
+  - Fixed curly apostrophe matching in assertions (regex `haven.*journaled`)
+  - Fixed stylus handwriting dialog blocking text input (adb settings)
 
 ### 2026-03-15 (session 19)
 - **#42 JournalBloc state audit — complete** (PR #44 merged)
