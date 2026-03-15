@@ -1,0 +1,84 @@
+appId: com.dytty.dytty
+name: "State: all categories complete message after filling all 5"
+tags:
+  - state
+---
+- runFlow: "../helpers/login.yaml"
+
+# Navigate to journal
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+# 1. Positive Things
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Positive entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 2. Negative Things
+- tapOn: "Add Negative Things entry"
+- waitForAnimationToEnd
+- tapOn: "What was challenging today.*"
+- inputText: "Negative entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 3. Gratitude
+- tapOn: "Add Gratitude entry"
+- waitForAnimationToEnd
+- tapOn: "What are you grateful for today.*"
+- inputText: "Gratitude entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 4. Beauty (may need scroll)
+- scrollUntilVisible:
+    element: "Add Beauty entry"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Add Beauty entry"
+- waitForAnimationToEnd
+- tapOn: "What was beautiful today.*"
+- inputText: "Beauty entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 5. Identity (may need scroll)
+- scrollUntilVisible:
+    element: "Add Identity entry"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    text: "Add Identity entry"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: "Identity entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/complete-01-all-entries-added"
+
+# Go back to home
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/complete-02-all-categories-done"
+
+# Verify progress shows 5 of 5
+- assertVisible: "Progress 5 of 5.*"
+- assertVisible: ".*All categories complete.*"
+
+# Nudge should be gone
+- assertNotVisible: "You haven.*journaled today.*"

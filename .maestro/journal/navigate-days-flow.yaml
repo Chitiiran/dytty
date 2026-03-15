@@ -1,0 +1,25 @@
+appId: com.dytty.dytty
+name: "Navigate between days in journal"
+tags:
+  - journal
+---
+- runFlow: "../helpers/login.yaml"
+
+# Go to journal screen
+- tapOn: "Today button"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/05-today"
+
+# Navigate to previous day (uses tooltip, not id)
+- tapOn: "Previous day"
+- waitForAnimationToEnd
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/06-previous-day"
+
+# Navigate back to today
+- tapOn: "Next day"
+- waitForAnimationToEnd
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/07-back-to-today"

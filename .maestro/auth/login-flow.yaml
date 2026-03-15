@@ -1,0 +1,34 @@
+appId: com.dytty.dytty
+name: "Login with emulator auth"
+tags:
+  - smoke
+  - auth
+---
+- launchApp:
+    clearState: true
+
+# Wait for Flutter cold start
+- waitForAnimationToEnd:
+    timeout: 15000
+
+- takeScreenshot: ".maestro/screenshots/latest/auth/01-login-screen"
+
+- assertVisible: "Dytty"
+- assertVisible: "Your daily reflection journal"
+
+- tapOn:
+    text: "Sign in anonymously.*emulator.*"
+    retryTapIfNoChange: true
+
+# Wait for auth + home screen load (triple wait for reliability)
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 10000
+
+- takeScreenshot: ".maestro/screenshots/latest/auth/02-home-after-login"
+
+# Verify home screen loaded
+- assertVisible: ".*Progress.*"

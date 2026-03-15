@@ -1,0 +1,28 @@
+appId: com.dytty.dytty
+name: "Login then sign out"
+tags:
+  - smoke
+  - auth
+---
+- runFlow: "../helpers/login.yaml"
+
+# Navigate to settings (icon shows as "?" in accessibility tree)
+- tapOn: "\\?"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/auth/03-settings-screen"
+
+# Tap sign out
+- tapOn: "Sign Out"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/auth/04-after-logout"
+
+# Verify back on login screen
+- assertVisible: "Your daily reflection journal"

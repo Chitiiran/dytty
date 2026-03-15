@@ -1,0 +1,24 @@
+appId: com.dytty.dytty
+name: "Reusable: login via emulator auth"
+---
+- launchApp:
+    clearState: true
+
+# Wait for Flutter cold start (Firebase init + first frame render)
+- waitForAnimationToEnd:
+    timeout: 15000
+
+- tapOn:
+    text: "Sign in anonymously.*emulator.*"
+    retryTapIfNoChange: true
+
+# Wait for auth + Firestore data loading + home screen render.
+# The loading spinner is an animation, so waitForAnimationToEnd
+# will wait for it to finish. We chain two waits to handle the
+# sequence: route transition animation -> loading spinner animation.
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 10000

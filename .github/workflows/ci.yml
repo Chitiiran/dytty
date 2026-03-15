@@ -35,6 +35,61 @@ jobs:
           name: web-build
           path: build/web
 
+  maestro:
+    name: Maestro Android E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build debug APK
+        run: |
+          flutter build apk --debug \
+            --dart-define=USE_EMULATORS=true \
+            --dart-define=FIREBASE_ANDROID_API_KEY=dummy
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Run Maestro flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            adb install build/app/outputs/flutter-apk/app-debug.apk
+            mkdir -p maestro-output
+            maestro test \
+              --debug-output maestro-output \
+              --format junit \
+              --output maestro-output/results.xml \
+              --include-tags=smoke,state \
+              .maestro/ || true
+
+      - name: Upload Maestro screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-screenshots
+          path: maestro-output/
+          retention-days: 14
+
   deploy:
     name: Deploy to Firebase Hosting
     needs: ci

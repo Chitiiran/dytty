@@ -1,0 +1,44 @@
+appId: com.dytty.dytty
+name: "State: nudge banner disappears after adding an entry"
+tags:
+  - smoke
+  - state
+---
+# Regression test for #21: nudge CTA persists after entry is added
+
+- runFlow: "../helpers/login.yaml"
+
+# Verify nudge banner is visible (no entries yet)
+# Note: curly apostrophe in source requires regex
+- assertVisible: "You haven.*journaled today.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug21-01-nudge-visible"
+
+# Navigate to journal
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+# Add an entry to Positive Things
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+
+- tapOn: "What good things happened today.*"
+- inputText: "Nudge state test entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug21-02-entry-saved"
+
+# Verify entry was saved (semantic label includes "Journal entry:" prefix)
+- assertVisible: ".*Nudge state test entry.*"
+
+# Go back to home screen
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug21-03-home-after-entry"
+
+# Nudge banner should be gone
+- assertNotVisible: "You haven.*journaled today.*"

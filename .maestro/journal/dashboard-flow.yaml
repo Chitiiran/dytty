@@ -1,0 +1,28 @@
+appId: com.dytty.dytty
+name: "Verify dashboard elements after login"
+tags:
+  - smoke
+  - dashboard
+---
+- runFlow: "../helpers/login.yaml"
+
+- takeScreenshot: ".maestro/screenshots/latest/dashboard/01-home-screen"
+
+# Verify calendar
+- assertVisible: "Calendar"
+
+# Verify progress card (0 of 5 initially)
+- assertVisible: "Progress 0 of 5"
+
+# Verify nudge card (curly apostrophe requires regex)
+- assertVisible: "You haven.*journaled today.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/dashboard/02-dashboard-elements"
+
+# Verify FAB
+- assertVisible: "Record voice note"
+
+# Verify action buttons
+- assertVisible: "Today button"
+
+- takeScreenshot: ".maestro/screenshots/latest/dashboard/03-full-dashboard"
