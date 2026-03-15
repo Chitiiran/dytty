@@ -9,12 +9,19 @@ class SettingsState extends Equatable {
   final bool loaded;
   final bool reminderEnabled;
   final TimeOfDay reminderTime;
+  final bool dailyCallEnabled;
+  final TimeOfDay dailyCallTime;
 
   const SettingsState({
     this.hideEntries = false,
     this.loaded = false,
     this.reminderEnabled = false,
     this.reminderTime = const TimeOfDay(
+      hour: NotificationService.defaultHour,
+      minute: NotificationService.defaultMinute,
+    ),
+    this.dailyCallEnabled = false,
+    this.dailyCallTime = const TimeOfDay(
       hour: NotificationService.defaultHour,
       minute: NotificationService.defaultMinute,
     ),
@@ -25,17 +32,28 @@ class SettingsState extends Equatable {
     bool? loaded,
     bool? reminderEnabled,
     TimeOfDay? reminderTime,
+    bool? dailyCallEnabled,
+    TimeOfDay? dailyCallTime,
   }) {
     return SettingsState(
       hideEntries: hideEntries ?? this.hideEntries,
       loaded: loaded ?? this.loaded,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderTime: reminderTime ?? this.reminderTime,
+      dailyCallEnabled: dailyCallEnabled ?? this.dailyCallEnabled,
+      dailyCallTime: dailyCallTime ?? this.dailyCallTime,
     );
   }
 
   @override
-  List<Object?> get props => [hideEntries, loaded, reminderEnabled, reminderTime];
+  List<Object?> get props => [
+        hideEntries,
+        loaded,
+        reminderEnabled,
+        reminderTime,
+        dailyCallEnabled,
+        dailyCallTime,
+      ];
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
@@ -60,6 +78,11 @@ class SettingsCubit extends Cubit<SettingsState> {
           hour: _notificationService.reminderHour,
           minute: _notificationService.reminderMinute,
         ),
+        dailyCallEnabled: _notificationService.isDailyCallEnabled,
+        dailyCallTime: TimeOfDay(
+          hour: _notificationService.dailyCallHour,
+          minute: _notificationService.dailyCallMinute,
+        ),
       ));
     } catch (_) {
       emit(state.copyWith(
@@ -68,6 +91,11 @@ class SettingsCubit extends Cubit<SettingsState> {
         reminderTime: TimeOfDay(
           hour: _notificationService.reminderHour,
           minute: _notificationService.reminderMinute,
+        ),
+        dailyCallEnabled: _notificationService.isDailyCallEnabled,
+        dailyCallTime: TimeOfDay(
+          hour: _notificationService.dailyCallHour,
+          minute: _notificationService.dailyCallMinute,
         ),
       ));
     }
@@ -103,6 +131,32 @@ class SettingsCubit extends Cubit<SettingsState> {
     emit(state.copyWith(reminderTime: time));
     if (state.reminderEnabled) {
       await _notificationService.scheduleDailyReminder(
+        hour: time.hour,
+        minute: time.minute,
+      );
+    }
+  }
+
+  Future<void> toggleDailyCall() async {
+    if (state.dailyCallEnabled) {
+      await _notificationService.cancelDailyCall();
+      emit(state.copyWith(dailyCallEnabled: false));
+    } else {
+      final granted = await _notificationService.requestPermission();
+      if (granted) {
+        await _notificationService.scheduleDailyCall(
+          hour: state.dailyCallTime.hour,
+          minute: state.dailyCallTime.minute,
+        );
+        emit(state.copyWith(dailyCallEnabled: true));
+      }
+    }
+  }
+
+  Future<void> setDailyCallTime(TimeOfDay time) async {
+    emit(state.copyWith(dailyCallTime: time));
+    if (state.dailyCallEnabled) {
+      await _notificationService.scheduleDailyCall(
         hour: time.hour,
         minute: time.minute,
       );

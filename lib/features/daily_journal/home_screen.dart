@@ -280,6 +280,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     .fadeIn(delay: 350.ms, duration: 400.ms)
                     .slideY(begin: 0.1, end: 0, duration: 400.ms),
 
+                const SizedBox(height: 12),
+
+                // Daily call button
+                Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/voice-call');
+                          },
+                          icon: const Icon(Icons.call_rounded),
+                          label: const Text('Start Daily Call'),
+                        ),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 450.ms, duration: 400.ms)
+                    .slideY(begin: 0.1, end: 0, duration: 400.ms),
+
                 const SizedBox(height: 24),
 
                 // Extra space so FAB doesn't overlap content
@@ -356,12 +377,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final bloc = context.read<JournalBloc>();
     final today = DateTime.now();
-    bloc.add(SelectDate(today));
     bloc.add(AddVoiceEntry(
       categoryId: result.categoryId,
       text: result.text,
       transcript: result.transcript,
       tags: result.tags,
+      date: today,
     ));
 
     if (context.mounted) {
@@ -480,7 +501,9 @@ class _ProgressCard extends StatelessWidget {
       message = 'All categories complete!';
     }
 
-    return Card(
+    return Semantics(
+      label: 'Progress $filled of $total${currentStreak > 0 ? ', streak $currentStreak day${currentStreak == 1 ? '' : 's'}' : ''}',
+      child: Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -604,6 +627,7 @@ class _ProgressCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/semantics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:dytty/app.dart';
 import 'package:dytty/services/notification/notification_service.dart';
 import 'firebase_options.dart';
@@ -25,6 +26,7 @@ void main() async {
   if (useEmulators) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    FirebaseStorage.instance.useStorageEmulator('localhost', 9199);
   }
 
   notificationService = NotificationService();

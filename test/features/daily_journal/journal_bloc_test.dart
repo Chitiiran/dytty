@@ -25,7 +25,7 @@ void main() {
     );
 
     blocTest<JournalBloc, JournalState>(
-      'SelectDate updates selectedDate and loads entries',
+      'SelectDate updates selectedDate and loads entries, markers, and streak',
       build: () => JournalBloc(repository: repository),
       act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
       expect: () => [
@@ -77,6 +77,8 @@ void main() {
       ),
       expect: () => [
         isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.saving),
+        isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.length, 'entries.length', 1)
             .having(
@@ -100,6 +102,8 @@ void main() {
         ),
       ),
       expect: () => [
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.saving),
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.length, 'entries.length', 1)
@@ -140,11 +144,17 @@ void main() {
         bloc.add(UpdateEntry(entryId: entryId, text: 'Updated'));
       },
       expect: () => [
+        // LoadEntries: loading
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loading),
+        // LoadEntries: loaded with Original
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.first.text, 'text', 'Original'),
+        // UpdateEntry: saving
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.saving),
+        // UpdateEntry: loaded with Updated
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.first.text, 'text', 'Updated'),
@@ -169,10 +179,16 @@ void main() {
         bloc.add(DeleteEntry(entryId));
       },
       expect: () => [
+        // LoadEntries: loading
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loading),
+        // LoadEntries: loaded with 1 entry
         isA<JournalState>()
             .having((s) => s.entries.length, 'entries.length', 1),
+        // DeleteEntry: saving
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.saving),
+        // DeleteEntry: loaded with 0 entries
         isA<JournalState>()
             .having((s) => s.entries, 'entries', isEmpty),
       ],
@@ -266,5 +282,87 @@ void main() {
       expect(state.entriesForCategory('positive').length, 1);
       expect(state.entriesForCategory('gratitude'), isEmpty);
     });
+
+    blocTest<JournalBloc, JournalState>(
+      'AddEntry updates daysWithEntries (calendar markers)',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) => bloc.add(
+        const AddEntry(categoryId: 'positive', text: 'marker test'),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.daysWithEntries, contains('2026-03-10'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'AddEntry updates currentStreak',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime.now()),
+      act: (bloc) => bloc.add(
+        const AddEntry(
+          categoryId: 'gratitude',
+          text: 'streak test',
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.currentStreak, greaterThanOrEqualTo(1));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'AddVoiceEntry with explicit date saves to correct date',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 1, 1)),
+      act: (bloc) => bloc.add(
+        AddVoiceEntry(
+          categoryId: 'beauty',
+          text: 'Voice on specific date',
+          transcript: 'voice transcript',
+          date: DateTime(2026, 3, 20),
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.selectedDate, DateTime(2026, 3, 20));
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'Voice on specific date');
+        expect(bloc.state.daysWithEntries, contains('2026-03-20'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'SelectDate then AddEntry processes sequentially',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 5)));
+        await Future.delayed(const Duration(milliseconds: 100));
+        bloc.add(
+          const AddEntry(
+            categoryId: 'negative',
+            text: 'Sequential test',
+          ),
+        );
+      },
+      verify: (bloc) {
+        expect(bloc.state.selectedDate, DateTime(2026, 3, 5));
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'Sequential test');
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'journaledToday is true after AddEntry on today',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime.now()),
+      act: (bloc) => bloc.add(
+        const AddEntry(
+          categoryId: 'identity',
+          text: 'Today entry',
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.journaledToday, true);
+      },
+    );
   });
 }

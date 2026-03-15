@@ -12,12 +12,15 @@ import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/main.dart' show geminiApiKey, notificationService;
+import 'package:dytty/services/notification/notification_service.dart';
 import 'package:dytty/services/auth/auth_service.dart';
 import 'package:dytty/services/llm/gemini_llm_service.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/llm/no_op_llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
+import 'package:dytty/services/storage/audio_storage_service.dart';
 
 class DyttyApp extends StatelessWidget {
   const DyttyApp({super.key});
@@ -68,6 +71,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
   late JournalRepository _repository;
   late CategoryRepository _categoryRepository;
   bool _profileEnsured = false;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -75,6 +79,17 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
     _repository = JournalRepository(uid: widget.authState.uid);
     _categoryRepository = CategoryRepository(uid: widget.authState.uid);
     _ensureProfile();
+    _checkPendingRoute();
+  }
+
+  void _checkPendingRoute() {
+    final route = NotificationService.pendingRoute;
+    if (route != null) {
+      NotificationService.pendingRoute = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.pushNamed(route);
+      });
+    }
   }
 
   @override
@@ -114,6 +129,9 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
         RepositoryProvider<SpeechService>(
           create: (_) => SpeechService(),
         ),
+        RepositoryProvider<AudioStorageService>(
+          create: (_) => AudioStorageService(),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -136,6 +154,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           context,
           home: const HomeScreen(),
           routes: true,
+          navigatorKey: _navigatorKey,
         ),
       ),
     );
@@ -146,11 +165,13 @@ Widget _themedApp(
   BuildContext context, {
   required Widget home,
   bool routes = false,
+  GlobalKey<NavigatorState>? navigatorKey,
 }) {
   return BlocBuilder<ThemeCubit, ThemeMode>(
     builder: (context, themeMode) {
       return MaterialApp(
         title: 'Dytty',
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
@@ -166,6 +187,7 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
   final routes = <String, WidgetBuilder>{
     '/daily-journal': (_) => const DailyJournalScreen(),
     '/settings': (_) => const SettingsScreen(),
+    '/voice-call': (_) => const VoiceCallScreen(),
   };
 
   final builder = routes[settings.name];
