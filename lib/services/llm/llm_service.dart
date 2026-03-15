@@ -1,5 +1,3 @@
-import 'package:dytty/core/constants/categories.dart';
-
 class LlmResponse {
   final String text;
   final Map<String, dynamic>? metadata;
@@ -8,7 +6,7 @@ class LlmResponse {
 }
 
 class CategorizationResult {
-  final JournalCategory suggestedCategory;
+  final String suggestedCategory;
   final String summary;
   final double confidence;
   final List<String> suggestedTags;
@@ -24,7 +22,8 @@ class CategorizationResult {
 abstract class LlmService {
   Future<LlmResponse> generateResponse(String prompt);
 
-  Future<CategorizationResult> categorizeEntry(String text);
+  Future<CategorizationResult> categorizeEntry(String text,
+      {List<String> categoryIds});
 
   Future<String> summarizeEntry(String text);
 

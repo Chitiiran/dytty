@@ -1,7 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
@@ -50,7 +49,7 @@ void main() {
       setUp: () async {
         await repository.addCategoryEntry(
           '2026-03-01',
-          JournalCategory.positive,
+          'positive',
           'Good thing',
         );
       },
@@ -74,7 +73,7 @@ void main() {
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
       act: (bloc) => bloc.add(
-        const AddEntry(category: JournalCategory.beauty, text: 'A sunset'),
+        const AddEntry(categoryId: 'beauty', text: 'A sunset'),
       ),
       expect: () => [
         isA<JournalState>()
@@ -96,7 +95,7 @@ void main() {
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
       act: (bloc) => bloc.add(
         const AddVoiceEntry(
-          category: JournalCategory.gratitude,
+          categoryId: 'gratitude',
           text: 'Grateful for sunshine',
           transcript: 'I am really grateful for the sunshine today',
           tags: ['sunshine', 'gratitude'],
@@ -133,7 +132,7 @@ void main() {
       setUp: () async {
         await repository.addCategoryEntry(
           '2026-03-01',
-          JournalCategory.identity,
+          'identity',
           'Original',
         );
       },
@@ -169,7 +168,7 @@ void main() {
       setUp: () async {
         await repository.addCategoryEntry(
           '2026-03-01',
-          JournalCategory.gratitude,
+          'gratitude',
           'To delete',
         );
       },
@@ -201,12 +200,12 @@ void main() {
       setUp: () async {
         await repository.addCategoryEntry(
           '2026-03-01',
-          JournalCategory.positive,
+          'positive',
           'entry',
         );
         await repository.addCategoryEntry(
           '2026-03-15',
-          JournalCategory.positive,
+          'positive',
           'entry',
         );
       },
@@ -232,7 +231,7 @@ void main() {
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
           await repository.addCategoryEntry(
             dateStr,
-            JournalCategory.positive,
+            'positive',
             'Entry $i',
           );
         }
@@ -267,27 +266,21 @@ void main() {
         entries: [
           CategoryEntry(
             id: '1',
-            category: JournalCategory.positive,
+            categoryId: 'positive',
             text: 'pos',
             createdAt: now,
           ),
           CategoryEntry(
             id: '2',
-            category: JournalCategory.negative,
+            categoryId: 'negative',
             text: 'neg',
             createdAt: now,
           ),
         ],
       );
 
-      expect(
-        state.entriesForCategory(JournalCategory.positive).length,
-        1,
-      );
-      expect(
-        state.entriesForCategory(JournalCategory.gratitude),
-        isEmpty,
-      );
+      expect(state.entriesForCategory('positive').length, 1);
+      expect(state.entriesForCategory('gratitude'), isEmpty);
     });
 
     blocTest<JournalBloc, JournalState>(
@@ -295,7 +288,7 @@ void main() {
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
       act: (bloc) => bloc.add(
-        const AddEntry(category: JournalCategory.positive, text: 'marker test'),
+        const AddEntry(categoryId: 'positive', text: 'marker test'),
       ),
       verify: (bloc) {
         expect(bloc.state.daysWithEntries, contains('2026-03-10'));
@@ -308,7 +301,7 @@ void main() {
       seed: () => JournalState(selectedDate: DateTime.now()),
       act: (bloc) => bloc.add(
         const AddEntry(
-          category: JournalCategory.gratitude,
+          categoryId: 'gratitude',
           text: 'streak test',
         ),
       ),
@@ -323,7 +316,7 @@ void main() {
       seed: () => JournalState(selectedDate: DateTime(2026, 1, 1)),
       act: (bloc) => bloc.add(
         AddVoiceEntry(
-          category: JournalCategory.beauty,
+          categoryId: 'beauty',
           text: 'Voice on specific date',
           transcript: 'voice transcript',
           date: DateTime(2026, 3, 20),
@@ -345,7 +338,7 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 100));
         bloc.add(
           const AddEntry(
-            category: JournalCategory.negative,
+            categoryId: 'negative',
             text: 'Sequential test',
           ),
         );
@@ -363,7 +356,7 @@ void main() {
       seed: () => JournalState(selectedDate: DateTime.now()),
       act: (bloc) => bloc.add(
         const AddEntry(
-          category: JournalCategory.identity,
+          categoryId: 'identity',
           text: 'Today entry',
         ),
       ),

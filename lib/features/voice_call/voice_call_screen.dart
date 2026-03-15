@@ -12,6 +12,7 @@ import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
+import 'package:dytty/data/models/category_config.dart';
 
 class VoiceCallScreen extends StatefulWidget {
   const VoiceCallScreen({super.key});
@@ -566,6 +567,10 @@ class _SavedEntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cat = CategoryConfig.defaults.firstWhere(
+      (c) => c.id == entry.categoryId,
+      orElse: () => CategoryConfig.defaults.first,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -578,13 +583,13 @@ class _SavedEntryTile extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: entry.category.color.withValues(alpha: 0.15),
+                color: cat.color.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                entry.category.icon,
+                cat.icon,
                 size: 18,
-                color: entry.category.color,
+                color: cat.color,
               ),
             ),
             const SizedBox(width: 12),
@@ -593,11 +598,11 @@ class _SavedEntryTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.category.displayName,
+                    cat.displayName,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: entry.category.color,
+                      color: cat.color,
                     ),
                   ),
                   const SizedBox(height: 2),

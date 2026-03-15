@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/daily_entry.dart';
 
@@ -49,7 +48,7 @@ class JournalRepository {
   /// Adds a new category entry.
   Future<CategoryEntry> addCategoryEntry(
     String date,
-    JournalCategory category,
+    String categoryId,
     String text, {
     String source = 'manual',
     String? transcript,
@@ -60,7 +59,7 @@ class JournalRepository {
     final now = DateTime.now();
     final entry = CategoryEntry(
       id: '',
-      category: category,
+      categoryId: categoryId,
       text: text,
       source: source,
       createdAt: now,
@@ -75,7 +74,7 @@ class JournalRepository {
 
     return CategoryEntry(
       id: docRef.id,
-      category: category,
+      categoryId: categoryId,
       text: text,
       source: source,
       createdAt: now,

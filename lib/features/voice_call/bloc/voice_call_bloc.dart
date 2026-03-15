@@ -4,7 +4,6 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
@@ -77,12 +76,12 @@ class GenerateSessionSummary extends VoiceCallEvent {
 enum VoiceCallStatus { idle, connecting, active, ending, ended, error }
 
 class SavedEntry {
-  final JournalCategory category;
+  final String categoryId;
   final String text;
   final String transcript;
 
   const SavedEntry({
-    required this.category,
+    required this.categoryId,
     required this.text,
     required this.transcript,
   });
@@ -412,13 +411,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       final transcript =
           args[_SaveEntryArgs.transcript] as String? ?? '';
 
-      final category = JournalCategory.values.firstWhere(
-        (c) => c.name == categoryName,
-        orElse: () => JournalCategory.positive,
-      );
-
       final entry = SavedEntry(
-        category: category,
+        categoryId: categoryName,
         text: text,
         transcript: transcript,
       );
@@ -429,7 +423,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
 
       // Persist to Firestore via JournalBloc
       _journalBloc?.add(AddVoiceEntry(
-        category: category,
+        categoryId: categoryName,
         text: text,
         transcript: transcript,
         tags: const ['voice-call'],

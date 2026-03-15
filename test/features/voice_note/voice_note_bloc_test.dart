@@ -1,7 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/features/voice_note/bloc/voice_note_bloc.dart';
 import 'package:dytty/services/speech/speech_service.dart';
 import '../../services/llm/fake_llm_service.dart';
@@ -44,7 +43,7 @@ void main() {
 
   group('VoiceNoteBloc', () {
     blocTest<VoiceNoteBloc, VoiceNoteState>(
-      'InitializeSpeech → ready when available',
+      'InitializeSpeech -> ready when available',
       build: () => VoiceNoteBloc(
         speechService: speechService,
         llmService: llmService,
@@ -57,7 +56,7 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
-      'InitializeSpeech → unavailable when not available',
+      'InitializeSpeech -> unavailable when not available',
       build: () {
         speechService = FakeSpeechService(simulateAvailable: false);
         return VoiceNoteBloc(
@@ -73,7 +72,7 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
-      'CategorizeTranscript → processing → reviewing with LLM results',
+      'CategorizeTranscript -> processing -> reviewing with LLM results',
       build: () => VoiceNoteBloc(
         speechService: speechService,
         llmService: llmService,
@@ -93,7 +92,7 @@ void main() {
             .having(
               (s) => s.suggestedCategory,
               'suggestedCategory',
-              JournalCategory.positive,
+              'positive',
             )
             .having(
               (s) => s.suggestedTags,
@@ -112,15 +111,15 @@ void main() {
       ),
       seed: () => const VoiceNoteState(
         status: VoiceNoteStatus.reviewing,
-        suggestedCategory: JournalCategory.positive,
+        suggestedCategory: 'positive',
       ),
-      act: (bloc) => bloc.add(const UpdateCategory(JournalCategory.gratitude)),
+      act: (bloc) => bloc.add(const UpdateCategory('gratitude')),
       expect: () => [
         isA<VoiceNoteState>()
             .having(
               (s) => s.suggestedCategory,
               'suggestedCategory',
-              JournalCategory.gratitude,
+              'gratitude',
             ),
       ],
     );
@@ -152,7 +151,7 @@ void main() {
         status: VoiceNoteStatus.reviewing,
         transcript: 'some text',
         summary: 'some summary',
-        suggestedCategory: JournalCategory.positive,
+        suggestedCategory: 'positive',
       ),
       act: (bloc) => bloc.add(const ResetVoiceNote()),
       expect: () => [

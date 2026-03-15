@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
@@ -30,14 +29,14 @@ class SelectDate extends JournalEvent {
 }
 
 class AddEntry extends JournalEvent {
-  final JournalCategory category;
+  final String categoryId;
   final String text;
   final DateTime? date;
 
-  const AddEntry({required this.category, required this.text, this.date});
+  const AddEntry({required this.categoryId, required this.text, this.date});
 
   @override
-  List<Object?> get props => [category, text, date];
+  List<Object?> get props => [categoryId, text, date];
 }
 
 class UpdateEntry extends JournalEvent {
@@ -60,14 +59,14 @@ class DeleteEntry extends JournalEvent {
 }
 
 class AddVoiceEntry extends JournalEvent {
-  final JournalCategory category;
+  final String categoryId;
   final String text;
   final String transcript;
   final List<String> tags;
   final DateTime? date;
 
   const AddVoiceEntry({
-    required this.category,
+    required this.categoryId,
     required this.text,
     required this.transcript,
     this.tags = const [],
@@ -75,7 +74,7 @@ class AddVoiceEntry extends JournalEvent {
   });
 
   @override
-  List<Object?> get props => [category, text, transcript, tags, date];
+  List<Object?> get props => [categoryId, text, transcript, tags, date];
 }
 
 class LoadMonthMarkers extends JournalEvent {
@@ -126,8 +125,8 @@ class JournalState extends Equatable {
     return daysWithEntries.contains(todayStr);
   }
 
-  List<CategoryEntry> entriesForCategory(JournalCategory category) {
-    return entries.where((e) => e.category == category).toList();
+  List<CategoryEntry> entriesForCategory(String categoryId) {
+    return entries.where((e) => e.categoryId == categoryId).toList();
   }
 
   JournalState copyWith({
@@ -235,7 +234,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final created = await _repository.addCategoryEntry(
         dateString,
-        event.category,
+        event.categoryId,
         event.text,
       );
       // Optimistic: update UI immediately with the new entry
@@ -281,7 +280,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final created = await _repository.addCategoryEntry(
         dateString,
-        event.category,
+        event.categoryId,
         event.text,
         source: 'voice',
         transcript: event.transcript,
@@ -332,7 +331,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         if (e.id == event.entryId) {
           return CategoryEntry(
             id: e.id,
-            category: e.category,
+            categoryId: e.categoryId,
             text: event.text,
             source: e.source,
             createdAt: e.createdAt,

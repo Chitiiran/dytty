@@ -4,12 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/theme/app_colors.dart';
+import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/core/widgets/shimmer_loading.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
+import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 
 String formatRelativeTime(DateTime dateTime) {
@@ -39,10 +40,10 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
     });
   }
 
-  void _addEntry(JournalCategory category, String text) {
+  void _addEntry(String categoryId, String text) {
     context
         .read<JournalBloc>()
-        .add(AddEntry(category: category, text: text));
+        .add(AddEntry(categoryId: categoryId, text: text));
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Entry added')));
   }
@@ -66,7 +67,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
           label: 'Undo',
           onPressed: () {
             context.read<JournalBloc>().add(
-                  AddEntry(category: entry.category, text: entry.text),
+                  AddEntry(categoryId: entry.categoryId, text: entry.text),
                 );
           },
         ),
@@ -84,14 +85,16 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   @override
   Widget build(BuildContext context) {
     final journalState = context.watch<JournalBloc>().state;
+    final categoryState = context.watch<CategoryCubit>().state;
     final hideEntries = context.watch<SettingsCubit>().state.hideEntries;
     final theme = Theme.of(context);
     final selectedDate = journalState.selectedDate;
     final dayOfWeek = DateFormat('EEEE').format(selectedDate);
     final dateStr = DateFormat('MMMM d, yyyy').format(selectedDate);
     final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
-    final allEmpty = JournalCategory.values.every(
-      (c) => journalState.entriesForCategory(c).isEmpty,
+    final categories = categoryState.activeCategories;
+    final allEmpty = categories.every(
+      (c) => journalState.entriesForCategory(c.id).isEmpty,
     );
 
     return Scaffold(
@@ -145,7 +148,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                             .animate()
                             .fadeIn(duration: 400.ms)
                             .slideY(begin: 0.1, end: 0, duration: 400.ms),
-                      ...JournalCategory.values
+                      ...categories
                           .asMap()
                           .entries
                           .map((mapEntry) {
@@ -163,11 +166,11 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                                   category: category,
                                   entries:
                                       journalState.entriesForCategory(
-                                    category,
+                                    category.id,
                                   ),
                                   hideEntries: hideEntries,
                                   onAdd: (text) =>
-                                      _addEntry(category, text),
+                                      _addEntry(category.id, text),
                                   onEdit: (entryId, text) =>
                                       _updateEntry(entryId, text),
                                   onDelete: (entry) =>
@@ -246,7 +249,7 @@ class _EmptyDayBanner extends StatelessWidget {
 }
 
 class _CategoryCard extends StatelessWidget {
-  final JournalCategory category;
+  final CategoryConfig category;
   final List<CategoryEntry> entries;
   final bool hideEntries;
   final ValueChanged<String> onAdd;
@@ -266,7 +269,7 @@ class _CategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final brightness = theme.brightness;
-    final surfaceColor = AppColors.categorySurface(category.name, brightness);
+    final surfaceColor = AppColors.categorySurface(category.id, brightness);
 
     return Semantics(
       label: '${category.displayName} category',
@@ -393,7 +396,7 @@ class _CategoryCard extends StatelessWidget {
 
 class _EntryTile extends StatefulWidget {
   final CategoryEntry entry;
-  final JournalCategory category;
+  final CategoryConfig category;
   final bool hideText;
   final ValueChanged<String> onEdit;
   final VoidCallback onDelete;

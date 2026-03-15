@@ -1,4 +1,3 @@
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// Fake implementation of [LlmService] for testing consumers.
@@ -16,10 +15,11 @@ class FakeLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text) async {
+  Future<CategorizationResult> categorizeEntry(String text,
+      {List<String> categoryIds = const ['positive']}) async {
     callCount++;
     return const CategorizationResult(
-      suggestedCategory: JournalCategory.positive,
+      suggestedCategory: 'positive',
       summary: 'Fake categorization summary',
       confidence: 0.95,
       suggestedTags: ['fake', 'test'],

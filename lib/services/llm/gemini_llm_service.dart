@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 class GeminiLlmService implements LlmService {
@@ -21,8 +20,15 @@ class GeminiLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text) async {
-    final categories = JournalCategory.values.map((c) => c.name).join(', ');
+  Future<CategorizationResult> categorizeEntry(String text,
+      {List<String> categoryIds = const [
+        'positive',
+        'negative',
+        'gratitude',
+        'beauty',
+        'identity',
+      ]}) async {
+    final categories = categoryIds.join(', ');
     final prompt = '''
 Categorize this journal entry into one of these categories: $categories.
 
@@ -36,13 +42,10 @@ Respond with valid JSON only, no markdown:
     final json = jsonDecode(response.text ?? '{}') as Map<String, dynamic>;
 
     final categoryName = json['category'] as String? ?? 'positive';
-    final category = JournalCategory.values.firstWhere(
-      (c) => c.name == categoryName,
-      orElse: () => JournalCategory.positive,
-    );
 
     return CategorizationResult(
-      suggestedCategory: category,
+      suggestedCategory:
+          categoryIds.contains(categoryName) ? categoryName : categoryIds.first,
       summary: json['summary'] as String? ?? '',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.5,
       suggestedTags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],

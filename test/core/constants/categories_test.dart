@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/data/models/category_config.dart';
 
 void main() {
-  group('JournalCategory', () {
-    test('has 5 categories', () {
-      expect(JournalCategory.values.length, 5);
+  group('CategoryConfig.defaults', () {
+    test('has 5 default categories', () {
+      expect(CategoryConfig.defaults.length, 5);
     });
 
     test('each category has displayName, prompt, icon, and color', () {
-      for (final category in JournalCategory.values) {
+      for (final category in CategoryConfig.defaults) {
         expect(category.displayName, isNotEmpty);
         expect(category.prompt, isNotEmpty);
         expect(category.icon, isA<IconData>());
@@ -18,21 +18,28 @@ void main() {
     });
 
     test('each category has a unique color', () {
-      final colors = JournalCategory.values.map((c) => c.color).toSet();
-      expect(colors.length, JournalCategory.values.length);
+      final colors = CategoryConfig.defaults.map((c) => c.colorValue).toSet();
+      expect(colors.length, CategoryConfig.defaults.length);
     });
 
     test('categories are in expected order', () {
-      expect(JournalCategory.values[0], JournalCategory.positive);
-      expect(JournalCategory.values[1], JournalCategory.negative);
-      expect(JournalCategory.values[2], JournalCategory.gratitude);
-      expect(JournalCategory.values[3], JournalCategory.beauty);
-      expect(JournalCategory.values[4], JournalCategory.identity);
+      expect(CategoryConfig.defaults[0].id, 'positive');
+      expect(CategoryConfig.defaults[1].id, 'negative');
+      expect(CategoryConfig.defaults[2].id, 'gratitude');
+      expect(CategoryConfig.defaults[3].id, 'beauty');
+      expect(CategoryConfig.defaults[4].id, 'identity');
     });
 
     test('each category has a unique icon', () {
-      final icons = JournalCategory.values.map((c) => c.icon).toSet();
-      expect(icons.length, JournalCategory.values.length);
+      final icons =
+          CategoryConfig.defaults.map((c) => c.iconCodePoint).toSet();
+      expect(icons.length, CategoryConfig.defaults.length);
+    });
+
+    test('all defaults are marked isDefault', () {
+      for (final category in CategoryConfig.defaults) {
+        expect(category.isDefault, true);
+      }
     });
   });
 }
