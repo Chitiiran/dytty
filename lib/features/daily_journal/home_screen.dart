@@ -373,12 +373,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final bloc = context.read<JournalBloc>();
     final today = DateTime.now();
-    bloc.add(SelectDate(today));
     bloc.add(AddVoiceEntry(
       category: result.category,
       text: result.text,
       transcript: result.transcript,
       tags: result.tags,
+      date: today,
     ));
 
     if (context.mounted) {
@@ -485,7 +485,9 @@ class _ProgressCard extends StatelessWidget {
       message = 'All categories complete!';
     }
 
-    return Card(
+    return Semantics(
+      label: 'Progress $filled of $total${currentStreak > 0 ? ', streak $currentStreak day${currentStreak == 1 ? '' : 's'}' : ''}',
+      child: Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -609,6 +611,7 @@ class _ProgressCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

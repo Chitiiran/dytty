@@ -32,11 +32,12 @@ class SelectDate extends JournalEvent {
 class AddEntry extends JournalEvent {
   final JournalCategory category;
   final String text;
+  final DateTime? date;
 
-  const AddEntry({required this.category, required this.text});
+  const AddEntry({required this.category, required this.text, this.date});
 
   @override
-  List<Object?> get props => [category, text];
+  List<Object?> get props => [category, text, date];
 }
 
 class UpdateEntry extends JournalEvent {
@@ -63,16 +64,18 @@ class AddVoiceEntry extends JournalEvent {
   final String text;
   final String transcript;
   final List<String> tags;
+  final DateTime? date;
 
   const AddVoiceEntry({
     required this.category,
     required this.text,
     required this.transcript,
     this.tags = const [],
+    this.date,
   });
 
   @override
-  List<Object?> get props => [category, text, transcript, tags];
+  List<Object?> get props => [category, text, transcript, tags, date];
 }
 
 class LoadMonthMarkers extends JournalEvent {
@@ -91,7 +94,7 @@ class LoadStreak extends JournalEvent {
 
 // --- State ---
 
-enum JournalStatus { initial, loading, loaded, error }
+enum JournalStatus { initial, loading, saving, loaded, error }
 
 class JournalState extends Equatable {
   final JournalStatus status;
@@ -199,7 +202,18 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final dateString = JournalState._dateFormat.format(event.date);
       final entries = await _repository.getCategoryEntries(dateString);
-      emit(state.copyWith(status: JournalStatus.loaded, entries: entries));
+      final markers = await _repository.getDaysWithEntries(
+        event.date.year,
+        event.date.month,
+      );
+      final streak = await _repository.getStreakData();
+      emit(state.copyWith(
+        status: JournalStatus.loaded,
+        entries: entries,
+        daysWithEntries: markers,
+        currentStreak: streak.currentStreak,
+        lastJournalDate: streak.lastJournalDate,
+      ));
     } catch (e) {
       emit(state.copyWith(
         status: JournalStatus.error,
@@ -212,26 +226,39 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     AddEntry event,
     Emitter<JournalState> emit,
   ) async {
+    final targetDate = event.date ?? state.selectedDate;
+    final dateString = JournalState._dateFormat.format(targetDate);
+    emit(state.copyWith(
+      status: JournalStatus.saving,
+      selectedDate: targetDate,
+    ));
     try {
-      await _repository.addCategoryEntry(
-        state.selectedDateString,
+      final created = await _repository.addCategoryEntry(
+        dateString,
         event.category,
         event.text,
       );
-      final entries = await _repository.getCategoryEntries(
-        state.selectedDateString,
+      // Optimistic: update UI immediately with the new entry
+      final updatedEntries = [...state.entries, created];
+      final updatedMarkers = {...state.daysWithEntries, dateString};
+      // Optimistic streak: if this date wasn't in markers, it's a new day
+      final isNewDay = !state.daysWithEntries.contains(dateString);
+      final todayStr = JournalState._dateFormat.format(DateTime.now());
+      final yesterdayStr = JournalState._dateFormat.format(
+        DateTime.now().subtract(const Duration(days: 1)),
       );
-      final markers = await _repository.getDaysWithEntries(
-        state.selectedDate.year,
-        state.selectedDate.month,
-      );
-      final streak = await _repository.getStreakData();
+      int optimisticStreak = state.currentStreak;
+      if (isNewDay) {
+        if (dateString == todayStr || dateString == yesterdayStr) {
+          optimisticStreak = state.currentStreak + 1;
+        }
+      }
       emit(state.copyWith(
         status: JournalStatus.loaded,
-        entries: entries,
-        daysWithEntries: markers,
-        currentStreak: streak.currentStreak,
-        lastJournalDate: streak.lastJournalDate,
+        entries: updatedEntries,
+        daysWithEntries: updatedMarkers,
+        currentStreak: optimisticStreak,
+        lastJournalDate: dateString,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -245,29 +272,41 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     AddVoiceEntry event,
     Emitter<JournalState> emit,
   ) async {
+    final targetDate = event.date ?? state.selectedDate;
+    final dateString = JournalState._dateFormat.format(targetDate);
+    emit(state.copyWith(
+      status: JournalStatus.saving,
+      selectedDate: targetDate,
+    ));
     try {
-      await _repository.addCategoryEntry(
-        state.selectedDateString,
+      final created = await _repository.addCategoryEntry(
+        dateString,
         event.category,
         event.text,
         source: 'voice',
         transcript: event.transcript,
         tags: event.tags,
       );
-      final entries = await _repository.getCategoryEntries(
-        state.selectedDateString,
+      // Optimistic: update UI immediately with the new entry
+      final updatedEntries = [...state.entries, created];
+      final updatedMarkers = {...state.daysWithEntries, dateString};
+      final isNewDay = !state.daysWithEntries.contains(dateString);
+      final todayStr = JournalState._dateFormat.format(DateTime.now());
+      final yesterdayStr = JournalState._dateFormat.format(
+        DateTime.now().subtract(const Duration(days: 1)),
       );
-      final markers = await _repository.getDaysWithEntries(
-        state.selectedDate.year,
-        state.selectedDate.month,
-      );
-      final streak = await _repository.getStreakData();
+      int optimisticStreak = state.currentStreak;
+      if (isNewDay) {
+        if (dateString == todayStr || dateString == yesterdayStr) {
+          optimisticStreak = state.currentStreak + 1;
+        }
+      }
       emit(state.copyWith(
         status: JournalStatus.loaded,
-        entries: entries,
-        daysWithEntries: markers,
-        currentStreak: streak.currentStreak,
-        lastJournalDate: streak.lastJournalDate,
+        entries: updatedEntries,
+        daysWithEntries: updatedMarkers,
+        currentStreak: optimisticStreak,
+        lastJournalDate: dateString,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -281,16 +320,30 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     UpdateEntry event,
     Emitter<JournalState> emit,
   ) async {
+    emit(state.copyWith(status: JournalStatus.saving));
     try {
       await _repository.updateCategoryEntry(
         state.selectedDateString,
         event.entryId,
         event.text,
       );
-      final entries = await _repository.getCategoryEntries(
-        state.selectedDateString,
-      );
-      emit(state.copyWith(status: JournalStatus.loaded, entries: entries));
+      // Optimistic: update entry in current list
+      final updatedEntries = state.entries.map((e) {
+        if (e.id == event.entryId) {
+          return CategoryEntry(
+            id: e.id,
+            category: e.category,
+            text: event.text,
+            source: e.source,
+            createdAt: e.createdAt,
+            audioUrl: e.audioUrl,
+            transcript: e.transcript,
+            tags: e.tags,
+          );
+        }
+        return e;
+      }).toList();
+      emit(state.copyWith(status: JournalStatus.loaded, entries: updatedEntries));
     } catch (e) {
       emit(state.copyWith(
         status: JournalStatus.error,
@@ -303,26 +356,34 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     DeleteEntry event,
     Emitter<JournalState> emit,
   ) async {
+    emit(state.copyWith(status: JournalStatus.saving));
     try {
       await _repository.deleteCategoryEntry(
         state.selectedDateString,
         event.entryId,
       );
-      final entries = await _repository.getCategoryEntries(
-        state.selectedDateString,
-      );
-      final markers = await _repository.getDaysWithEntries(
-        state.selectedDate.year,
-        state.selectedDate.month,
-      );
-      final streak = await _repository.getStreakData();
+      // Optimistic: remove entry from current list
+      final updatedEntries =
+          state.entries.where((e) => e.id != event.entryId).toList();
+      final updatedMarkers = updatedEntries.isEmpty
+          ? (Set<String>.from(state.daysWithEntries)
+            ..remove(state.selectedDateString))
+          : state.daysWithEntries;
       emit(state.copyWith(
         status: JournalStatus.loaded,
-        entries: entries,
-        daysWithEntries: markers,
-        currentStreak: streak.currentStreak,
-        lastJournalDate: streak.lastJournalDate,
+        entries: updatedEntries,
+        daysWithEntries: updatedMarkers,
       ));
+      // Refresh streak in background (non-blocking for UI)
+      try {
+        final streak = await _repository.getStreakData();
+        emit(state.copyWith(
+          currentStreak: streak.currentStreak,
+          lastJournalDate: streak.lastJournalDate,
+        ));
+      } catch (_) {
+        // Streak refresh is non-critical
+      }
     } catch (e) {
       emit(state.copyWith(
         status: JournalStatus.error,

@@ -55,6 +55,8 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 - `npm install` - Install Playwright
 - `npx playwright test` - Run E2E tests
 - `firebase emulators:start` - Start Firebase emulators for local dev
+- `bash scripts/distribute.sh "Release notes"` - Build debug APK and upload to Firebase App Distribution
+  - The release notes string should include: (1) a short summary of what changed, and (2) a test checklist of specific things to verify. This text is emailed to the tester, so make it human-friendly and complete.
 
 ## Firebase Setup (manual steps)
 1. `dart pub global activate flutterfire_cli`
@@ -70,6 +72,14 @@ Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
 - PRs use `.github/pull_request_template.md`, include `Fixes #N` to auto-close issues
 - Always ask user before pushing or creating PRs
 - Milestones M0-M2 closed, M3-M7 open on GitHub
+
+## Testing Strategy
+TDD is mandatory. Tests first, then implementation, then iterate until green.
+
+- **Unit tests** (`flutter test`) — Bloc logic, repository methods, model serialization. Use `bloc_test` + `FakeFirebaseFirestore`.
+- **E2E tests** (`npx playwright test`) — Full user flows against web build + Firebase emulators. Must cover UI state changes visible on screen (calendar markers, banners, progress indicators — not just CRUD on a single screen).
+- **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria.
+- **E2E test structure**: `e2e/` directory, Playwright, helpers in `e2e/helpers.ts`. Tests run against `flutter build web --dart-define=USE_EMULATORS=true` served locally.
 
 ## Conventions
 - Files: snake_case (daily_journal_screen.dart)
