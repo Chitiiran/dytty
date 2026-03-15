@@ -1,0 +1,59 @@
+appId: com.dytty.dytty
+name: "State: progress card updates after adding entries"
+tags:
+  - smoke
+  - state
+---
+# Regression test for #22: category completion symbols stale after entry added
+
+- runFlow: "../helpers/login.yaml"
+
+# Verify initial progress is 0 of 5
+- assertVisible: "Progress 0 of 5"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug22-01-progress-0-of-5"
+
+# Navigate to journal
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+# Add entry to Positive Things
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Progress test entry 1"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Progress test entry 1.*"
+
+# Go back to home — progress should show 1 of 5
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 1 of 5.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug22-02-progress-1-of-5"
+
+# Go back to journal and add a second category entry
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+- tapOn: "Add Gratitude entry"
+- waitForAnimationToEnd
+- tapOn: "What are you grateful for today.*"
+- inputText: "Progress test entry 2"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Progress test entry 2.*"
+
+# Go back to home — progress should show 2 of 5
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 2 of 5.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug22-03-progress-2-of-5"

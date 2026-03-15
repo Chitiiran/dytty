@@ -1,0 +1,6 @@
+app_name: Dytty
+flavor: ""
+android:
+  package_name: com.dytty.dytty
+ios:
+  bundle_id: com.dytty.dytty

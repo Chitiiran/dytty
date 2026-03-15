@@ -1,0 +1,35 @@
+appId: com.dytty.dytty
+name: "Add a journal entry to a category"
+tags:
+  - smoke
+  - journal
+---
+- runFlow: "../helpers/login.yaml"
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/01-home-before-entry"
+
+# Navigate to journal
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/02-journal-screen"
+
+# Tap add button on first category (Positive Things)
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/03-add-entry-sheet"
+
+# Type an entry
+- tapOn: "What good things happened today.*"
+- inputText: "Today I completed the Maestro test setup"
+
+# Confirm
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/journal/04-after-add-entry"
+
+# Verify entry appears
+- assertVisible: ".*Today I completed the Maestro test setup.*"

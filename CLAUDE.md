@@ -15,7 +15,7 @@ Daily journaling app with 5 structured categories. Cross-platform Flutter app ba
 - Firebase Auth (Google Sign-In)
 - Cloud Firestore (database)
 - State management: Bloc
-- E2E tests: Playwright
+- E2E tests: Playwright (web), Maestro (Android)
 
 ## Architecture
 Clean architecture with features-based organization:
@@ -47,14 +47,32 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 | `GEMINI_API_KEY` | Gemini LLM API key (optional — falls back to NoOpLlmService) |
 
 ## Commands
+
+### Build & Run
 - `flutter pub get` - Install dependencies
 - `flutter analyze` - Static analysis
-- `flutter test` - Run unit tests
 - `flutter build web --dart-define=FIREBASE_WEB_API_KEY=<key>` - Build for web
 - `flutter run -d chrome --dart-define=FIREBASE_WEB_API_KEY=<key>` - Run in Chrome
-- `npm install` - Install Playwright
-- `npx playwright test` - Run E2E tests
 - `firebase emulators:start` - Start Firebase emulators for local dev
+
+### Testing (5-layer pyramid)
+- `flutter test` - Run all unit + widget + golden tests
+- `flutter test test/widgets/` - Widget tests only
+- `flutter test test/goldens/` - Golden tests only (verify visual regression)
+- `flutter test --update-goldens test/goldens/` - Regenerate golden baselines
+- `flutter test --coverage` - Run tests with coverage report
+- `npx playwright test` - Run web E2E tests
+- `bash scripts/maestro-test.sh` - Run all Maestro Android E2E flows
+- `bash scripts/maestro-test.sh --flow auth` - Run only auth flows
+- `bash scripts/maestro-test.sh --tags smoke` - Run smoke-tagged flows (includes state tests)
+- `bash scripts/maestro-test.sh --flow state` - Run state management regression flows only
+- `bash scripts/maestro-test.sh --skip-build` - Skip APK build, reuse existing
+- `bash scripts/patrol-test.sh` - Run Patrol integration tests (Android)
+- `bash scripts/patrol-test.sh --flow auth` - Run specific Patrol flow
+
+### Release & Distribution
+- `bash scripts/release.sh <version>` - Create release branch from develop with version bump
+- `bash scripts/release.sh <version> --dry-run` - Preview release steps without executing
 - `bash scripts/distribute.sh "Release notes"` - Build debug APK and upload to Firebase App Distribution
   - The release notes string should include: (1) a short summary of what changed, and (2) a test checklist of specific things to verify. This text is emailed to the tester, so make it human-friendly and complete.
 
@@ -66,20 +84,26 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 
 ## Git Workflow
 Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
+- **Branch model**: `develop` + `release/*` + `main` (feature branches target `develop`)
 - Every change needs a GitHub Issue (check existing before creating)
 - Branch naming: `<type>/<issue#>-<short-name>` (e.g. `feat/14-voice-sheet`)
 - Conventional commits: `type(scope): what` + body with why + key decisions + `Refs #N`
-- PRs use `.github/pull_request_template.md`, include `Fixes #N` to auto-close issues
+- PRs target `develop` (not main), use `.github/pull_request_template.md`, include `Fixes #N`
+- Release process: `bash scripts/release.sh X.Y.Z` (see `docs/planning/RELEASE.md`)
 - Always ask user before pushing or creating PRs
 - Milestones M0-M2 closed, M3-M7 open on GitHub
 
 ## Testing Strategy
-TDD is mandatory. Tests first, then implementation, then iterate until green.
+TDD is mandatory. 5-layer test pyramid. Full details in `docs/planning/TESTING.md`.
 
-- **Unit tests** (`flutter test`) — Bloc logic, repository methods, model serialization. Use `bloc_test` + `FakeFirebaseFirestore`.
-- **E2E tests** (`npx playwright test`) — Full user flows against web build + Firebase emulators. Must cover UI state changes visible on screen (calendar markers, banners, progress indicators — not just CRUD on a single screen).
-- **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria.
-- **E2E test structure**: `e2e/` directory, Playwright, helpers in `e2e/helpers.ts`. Tests run against `flutter build web --dart-define=USE_EMULATORS=true` served locally.
+- **Layer 1: Unit tests** (`flutter test`) — Bloc logic, repository methods, model serialization. Use `bloc_test` + `FakeFirebaseFirestore`.
+- **Layer 2: Widget tests** (`flutter test test/widgets/`) — Robot pattern, mock Blocs via `mocktail`. `test/robots/` + `test/widgets/`.
+- **Layer 3: Golden tests** (`flutter test test/goldens/`) — Visual regression via `matchesGoldenFile`. Baselines in `test/goldens/fixtures/`.
+- **Layer 4: Integration tests** (Patrol) — On-device tests with native OS dialog support. `integration_test/`.
+- **Layer 5: E2E Android** (`bash scripts/maestro-test.sh`) — Black-box Maestro YAML flows. Screenshots as artifacts.
+- **E2E web** (`npx playwright test`) — Playwright against web build + Firebase emulators.
+- **Coverage enforcement**: CI enforces minimum 60% coverage (ratchets up over time).
+- **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E required for cross-screen UI state changes.
 
 ## Conventions
 - Files: snake_case (daily_journal_screen.dart)

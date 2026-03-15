@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "State: streak updates after adding first entry today"
+tags:
+  - state
+---
+- runFlow: "../helpers/login.yaml"
+
+# Verify initial progress has no streak
+- assertVisible: "Progress 0 of 5"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/streak-01-no-streak"
+
+# Navigate to journal and add entry
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Streak test entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Go back to home
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/streak-02-after-first-entry"
+
+# Navigate to journal and back to trigger fresh streak load
+- tapOn: "Today button"
+- waitForAnimationToEnd
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: ".maestro/screenshots/latest/state/streak-03-after-re-nav"
+
+# Progress should show streak
+- assertVisible: ".*streak 1 day.*"
