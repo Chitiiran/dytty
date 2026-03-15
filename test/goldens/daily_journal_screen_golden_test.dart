@@ -1,3 +1,4 @@
+@Tags(['golden'])
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dytty/data/models/category_config.dart';
@@ -11,6 +12,7 @@ import 'golden_test_helper.dart';
 //
 // Inter font is bundled in assets/fonts/ and runtime fetching is disabled
 // in test/flutter_test_config.dart. See login_screen_golden_test.dart.
+// Skipped in CI (Ubuntu font rendering differs from dev machines).
 
 void main() {
   group('DailyJournalScreen golden tests', () {

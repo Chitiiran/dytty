@@ -1,3 +1,4 @@
+@Tags(['golden'])
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
@@ -8,7 +9,8 @@ import 'golden_test_helper.dart';
 //
 // Inter font is bundled in assets/fonts/ and runtime fetching is disabled
 // in test/flutter_test_config.dart, so GoogleFonts.inter() uses local files.
-// Run: flutter test --update-goldens test/goldens/ to regenerate baselines.
+// Run locally: flutter test --update-goldens test/goldens/
+// Skipped in CI (Ubuntu font rendering differs from dev machines).
 
 void main() {
   group('LoginScreen golden tests', () {

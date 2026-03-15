@@ -24,7 +24,7 @@ jobs:
         run: flutter analyze --no-fatal-warnings --no-fatal-infos lib test
 
       - name: Test with coverage
-        run: flutter test --coverage
+        run: flutter test --coverage --exclude-tags=golden
 
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
@@ -33,11 +33,6 @@ jobs:
 
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
-
-      - name: Build debug APK
-        run: |
-          flutter build apk --debug \
-            --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
@@ -63,6 +58,34 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Create google-services.json for CI
+        run: |
+          cat > android/app/google-services.json << 'GSEOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "dytty-4b83d",
+              "storage_bucket": "dytty-4b83d.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.dytty.dytty"
+                  }
+                },
+                "api_key": [
+                  {
+                    "current_key": "dummy-key-for-ci"
+                  }
+                ]
+              }
+            ],
+            "configuration_version": "1"
+          }
+          GSEOF
 
       - name: Build debug APK
         run: |
