@@ -48,9 +48,17 @@ class CategoryCubit extends Cubit<CategoryState> {
         super(const CategoryState());
 
   Future<void> loadCategories() async {
-    await _repository.seedDefaults();
-    final categories = await _repository.getCategories();
-    emit(state.copyWith(categories: categories, loaded: true));
+    // Emit defaults immediately so the UI is never empty
+    emit(state.copyWith(categories: CategoryConfig.defaults, loaded: true));
+    try {
+      await _repository.seedDefaults();
+      final categories = await _repository.getCategories();
+      if (categories.isNotEmpty) {
+        emit(state.copyWith(categories: categories));
+      }
+    } catch (_) {
+      // Firestore unavailable — defaults already loaded
+    }
   }
 
   Future<void> addCategory(CategoryConfig config) async {
