@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
+import 'package:dytty/main.dart' show useEmulators;
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -205,7 +206,7 @@ class LoginScreen extends StatelessWidget {
                           .fadeIn(delay: 500.ms, duration: 500.ms)
                           .slideY(begin: 0.3, end: 0, duration: 500.ms),
 
-                      if (kDebugMode) ...[
+                      if (kDebugMode || useEmulators) ...[
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
