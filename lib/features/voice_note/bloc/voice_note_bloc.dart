@@ -58,6 +58,10 @@ class UpdateText extends VoiceNoteEvent {
   List<Object?> get props => [text];
 }
 
+class RequestCategorization extends VoiceNoteEvent {
+  const RequestCategorization();
+}
+
 class ResetVoiceNote extends VoiceNoteEvent {
   const ResetVoiceNote();
 }
@@ -68,6 +72,7 @@ enum VoiceNoteStatus {
   initial,
   ready,
   listening,
+  transcriptReview,
   processing,
   reviewing,
   error,
@@ -115,14 +120,14 @@ class VoiceNoteState extends Equatable {
 
   @override
   List<Object?> get props => [
-        status,
-        transcript,
-        summary,
-        suggestedCategory,
-        suggestedTags,
-        confidence,
-        error,
-      ];
+    status,
+    transcript,
+    summary,
+    suggestedCategory,
+    suggestedTags,
+    confidence,
+    error,
+  ];
 }
 
 // --- Bloc ---
@@ -130,17 +135,21 @@ class VoiceNoteState extends Equatable {
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   final SpeechService _speechService;
   final LlmService _llmService;
+  final Duration _categorizationTimeout;
 
   VoiceNoteBloc({
     required SpeechService speechService,
     required LlmService llmService,
-  })  : _speechService = speechService,
-        _llmService = llmService,
-        super(const VoiceNoteState()) {
+    Duration categorizationTimeout = const Duration(seconds: 10),
+  }) : _speechService = speechService,
+       _llmService = llmService,
+       _categorizationTimeout = categorizationTimeout,
+       super(const VoiceNoteState()) {
     on<InitializeSpeech>(_onInitializeSpeech);
     on<StartListening>(_onStartListening);
     on<StopListening>(_onStopListening);
     on<_SpeechResultReceived>(_onSpeechResultReceived);
+    on<RequestCategorization>(_onRequestCategorization);
     on<CategorizeTranscript>(_onCategorizeTranscript);
     on<UpdateCategory>(_onUpdateCategory);
     on<UpdateText>(_onUpdateText);
@@ -153,16 +162,20 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) async {
     try {
       final available = await _speechService.initialize();
-      emit(state.copyWith(
-        status: available
-            ? VoiceNoteStatus.ready
-            : VoiceNoteStatus.unavailable,
-      ));
+      emit(
+        state.copyWith(
+          status: available
+              ? VoiceNoteStatus.ready
+              : VoiceNoteStatus.unavailable,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: VoiceNoteStatus.error,
-        error: 'Failed to initialize speech: $e',
-      ));
+      emit(
+        state.copyWith(
+          status: VoiceNoteStatus.error,
+          error: 'Failed to initialize speech: $e',
+        ),
+      );
     }
   }
 
@@ -170,16 +183,15 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     StartListening event,
     Emitter<VoiceNoteState> emit,
   ) async {
-    emit(state.copyWith(
-      status: VoiceNoteStatus.listening,
-      transcript: '',
-    ));
+    emit(state.copyWith(status: VoiceNoteStatus.listening, transcript: ''));
     await _speechService.startListening(
       onResult: (result) {
-        add(_SpeechResultReceived(
-          text: result.recognizedWords,
-          isFinal: result.finalResult,
-        ));
+        add(
+          _SpeechResultReceived(
+            text: result.recognizedWords,
+            isFinal: result.finalResult,
+          ),
+        );
       },
     );
   }
@@ -190,7 +202,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) {
     emit(state.copyWith(transcript: event.text));
     if (event.isFinal && event.text.isNotEmpty) {
-      add(const CategorizeTranscript());
+      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
     }
   }
 
@@ -200,10 +212,17 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) async {
     await _speechService.stopListening();
     if (state.transcript.isNotEmpty) {
-      add(const CategorizeTranscript());
+      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
     } else {
       emit(state.copyWith(status: VoiceNoteStatus.ready));
     }
+  }
+
+  void _onRequestCategorization(
+    RequestCategorization event,
+    Emitter<VoiceNoteState> emit,
+  ) {
+    add(const CategorizeTranscript());
   }
 
   Future<void> _onCategorizeTranscript(
@@ -212,40 +231,48 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) async {
     emit(state.copyWith(status: VoiceNoteStatus.processing));
     try {
-      final result = await _llmService.categorizeEntry(state.transcript);
-      emit(state.copyWith(
-        status: VoiceNoteStatus.reviewing,
-        summary: result.summary.isNotEmpty ? result.summary : state.transcript,
-        suggestedCategory: result.suggestedCategory,
-        suggestedTags: result.suggestedTags,
-        confidence: result.confidence,
-      ));
+      final result = await _llmService
+          .categorizeEntry(state.transcript)
+          .timeout(_categorizationTimeout);
+      emit(
+        state.copyWith(
+          status: VoiceNoteStatus.reviewing,
+          summary: result.summary.isNotEmpty
+              ? result.summary
+              : state.transcript,
+          suggestedCategory: result.suggestedCategory,
+          suggestedTags: result.suggestedTags,
+          confidence: result.confidence,
+        ),
+      );
+    } on TimeoutException {
+      // LLM timed out — let user pick category manually
+      emit(
+        VoiceNoteState(
+          status: VoiceNoteStatus.reviewing,
+          transcript: state.transcript,
+          summary: state.transcript,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: VoiceNoteStatus.error,
-        error: 'Failed to categorize: $e',
-      ));
+      emit(
+        state.copyWith(
+          status: VoiceNoteStatus.error,
+          error: 'Failed to categorize: $e',
+        ),
+      );
     }
   }
 
-  void _onUpdateCategory(
-    UpdateCategory event,
-    Emitter<VoiceNoteState> emit,
-  ) {
+  void _onUpdateCategory(UpdateCategory event, Emitter<VoiceNoteState> emit) {
     emit(state.copyWith(suggestedCategory: event.categoryId));
   }
 
-  void _onUpdateText(
-    UpdateText event,
-    Emitter<VoiceNoteState> emit,
-  ) {
+  void _onUpdateText(UpdateText event, Emitter<VoiceNoteState> emit) {
     emit(state.copyWith(summary: event.text));
   }
 
-  void _onResetVoiceNote(
-    ResetVoiceNote event,
-    Emitter<VoiceNoteState> emit,
-  ) {
+  void _onResetVoiceNote(ResetVoiceNote event, Emitter<VoiceNoteState> emit) {
     _speechService.cancel();
     emit(const VoiceNoteState(status: VoiceNoteStatus.ready));
   }

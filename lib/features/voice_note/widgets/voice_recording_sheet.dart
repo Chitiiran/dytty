@@ -66,10 +66,9 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withValues(alpha: 0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -94,6 +93,7 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
       VoiceNoteStatus.initial => 'Initializing...',
       VoiceNoteStatus.ready => 'Ready to listen',
       VoiceNoteStatus.listening => 'Listening...',
+      VoiceNoteStatus.transcriptReview => 'Review transcript',
       VoiceNoteStatus.processing => 'Processing...',
       VoiceNoteStatus.reviewing => 'Review your note',
       VoiceNoteStatus.error => 'Something went wrong',
@@ -102,9 +102,7 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
 
     return Text(
       title,
-      style: theme.textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
+      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
@@ -113,12 +111,19 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
       VoiceNoteStatus.initial => const _LoadingView(),
       VoiceNoteStatus.ready => const _LoadingView(),
       VoiceNoteStatus.listening => _ListeningView(transcript: state.transcript),
-      VoiceNoteStatus.processing =>
-        _ProcessingView(transcript: state.transcript),
-      VoiceNoteStatus.reviewing =>
-        _ReviewingView(state: state, categories: categories),
-      VoiceNoteStatus.error =>
-        _ErrorView(error: state.error ?? 'Unknown error'),
+      VoiceNoteStatus.transcriptReview => _TranscriptReviewView(
+        transcript: state.transcript,
+      ),
+      VoiceNoteStatus.processing => _ProcessingView(
+        transcript: state.transcript,
+      ),
+      VoiceNoteStatus.reviewing => _ReviewingView(
+        state: state,
+        categories: categories,
+      ),
+      VoiceNoteStatus.error => _ErrorView(
+        error: state.error ?? 'Unknown error',
+      ),
       VoiceNoteStatus.unavailable => const _UnavailableView(),
     };
   }
@@ -150,25 +155,22 @@ class _ListeningView extends StatelessWidget {
         // Pulsing mic icon
         Semantics(
           label: 'Listening for speech',
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.mic_rounded,
-              size: 40,
-              color: theme.colorScheme.primary,
-            ),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                begin: const Offset(1.0, 1.0),
-                end: const Offset(1.15, 1.15),
-                duration: 800.ms,
-              ),
+          child:
+              Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.mic_rounded, size: 40, color: Colors.red),
+                  )
+                  .animate(onPlay: (c) => c.repeat(reverse: true))
+                  .scale(
+                    begin: const Offset(1.0, 1.0),
+                    end: const Offset(1.15, 1.15),
+                    duration: 800.ms,
+                  ),
         ),
         const SizedBox(height: 24),
 
@@ -180,8 +182,9 @@ class _ListeningView extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 80),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.5),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -210,6 +213,60 @@ class _ListeningView extends StatelessWidget {
   }
 }
 
+class _TranscriptReviewView extends StatelessWidget {
+  final String transcript;
+
+  const _TranscriptReviewView({required this.transcript});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        Semantics(
+          label: 'Transcript',
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 80),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(transcript, style: theme.textTheme.bodyLarge),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Discard'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () {
+                  context.read<VoiceNoteBloc>().add(
+                    const RequestCategorization(),
+                  );
+                },
+                icon: const Icon(Icons.auto_awesome_rounded),
+                label: const Text('Summarize'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _ProcessingView extends StatelessWidget {
   final String transcript;
 
@@ -225,8 +282,9 @@ class _ProcessingView extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.5,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(transcript, style: theme.textTheme.bodyLarge),
@@ -290,7 +348,8 @@ class _ReviewingViewState extends State<_ReviewingView> {
       children: [
         // Collapsible transcript
         GestureDetector(
-          onTap: () => setState(() => _transcriptExpanded = !_transcriptExpanded),
+          onTap: () =>
+              setState(() => _transcriptExpanded = !_transcriptExpanded),
           child: Row(
             children: [
               Icon(
@@ -318,8 +377,9 @@ class _ReviewingViewState extends State<_ReviewingView> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -345,9 +405,7 @@ class _ReviewingViewState extends State<_ReviewingView> {
           controller: _textController,
           maxLines: 3,
           decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             hintText: 'Edit your note...',
           ),
           onChanged: (text) {
