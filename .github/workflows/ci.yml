@@ -32,7 +32,7 @@ jobs:
           min_coverage: 60
 
       - name: Build web
-        run: flutter build web --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
+        run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
 
       - name: Build debug APK
         run: |
