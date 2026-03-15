@@ -445,6 +445,237 @@ This is the primary workflow for AI-assisted development with Maestro:
 
 ---
 
+## End-to-End Development Workflow — Bug Fix Scenario
+
+This walks through fixing a real bug from discovery to production, showing exactly **what runs where** at each step.
+
+### Scenario: "Nudge card still shows after adding an entry"
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {
+  'primaryColor': '#2563eb',
+  'primaryTextColor': '#ffffff',
+  'primaryBorderColor': '#1d4ed8',
+  'secondaryColor': '#16a34a',
+  'secondaryTextColor': '#ffffff',
+  'secondaryBorderColor': '#15803d',
+  'tertiaryColor': '#d97706',
+  'tertiaryTextColor': '#ffffff',
+  'tertiaryBorderColor': '#b45309',
+  'noteTextColor': '#1e293b',
+  'noteBkgColor': '#f1f5f9',
+  'noteBorderColor': '#94a3b8'
+}}}%%
+
+flowchart TD
+    classDef local fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef ci fill:#16a34a,stroke:#15803d,color:#fff
+    classDef release fill:#d97706,stroke:#b45309,color:#fff
+    classDef prod fill:#dc2626,stroke:#b91c1c,color:#fff
+    classDef manual fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef decision fill:#64748b,stroke:#475569,color:#fff
+
+    subgraph LOCAL ["LOCAL MACHINE (your dev environment)"]
+        direction TB
+        A1[1. Create branch<br/>fix/49-nudge-stuck]:::local
+        A2[2. Write failing test<br/>flutter test]:::local
+        A3[3. Implement fix]:::local
+        A4[4. Run unit tests<br/>flutter test]:::local
+        A5[5. Run widget tests<br/>flutter test test/widgets/]:::local
+        A6[6. Run golden tests<br/>flutter test test/goldens/]:::local
+        A7{All pass?}:::decision
+        A8[7. Commit + push branch]:::local
+        A9[Fix and iterate]:::local
+
+        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7
+        A7 -- No --> A9 --> A3
+        A7 -- Yes --> A8
+    end
+
+    subgraph CICD ["GITHUB ACTIONS (ci.yml — automatic on PR)"]
+        direction TB
+        B1[8. flutter analyze]:::ci
+        B2[9. flutter test --coverage<br/>unit + widget, excl. golden]:::ci
+        B3[10. Coverage check >= 60%]:::ci
+        B4[11. Build web + APK]:::ci
+        B5[12. Maestro E2E<br/>smoke + state tags<br/>on Android emulator]:::ci
+        B6{All green?}:::decision
+        B7[CI blocks merge]:::ci
+        B8[PR ready for review]:::ci
+
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6
+        B6 -- No --> B7
+        B6 -- Yes --> B8
+    end
+
+    subgraph PR ["PULL REQUEST (GitHub)"]
+        direction TB
+        C1[13. Open PR to main]:::manual
+        C2[14. Code review]:::manual
+        C3{Approved +<br/>CI green?}:::decision
+        C4[15. Merge to main]:::manual
+        C5[Request changes]:::manual
+
+        C1 --> C2 --> C3
+        C3 -- No --> C5
+        C3 -- Yes --> C4
+    end
+
+    subgraph DEPLOY ["GITHUB ACTIONS (deploy.yml — automatic on main push)"]
+        direction TB
+        D1[16. Build web]:::prod
+        D2[17. Deploy to<br/>Firebase Hosting]:::prod
+        D3[18. Git tag vX.Y.Z]:::prod
+        D1 --> D2 --> D3
+    end
+
+    subgraph RELEASE_FLOW ["RELEASE CANDIDATE (when cutting a release)"]
+        direction TB
+        E1[Run scripts/release.sh 0.2.0<br/>LOCAL — creates release branch]:::release
+        E2[Push release branch]:::release
+        E3[release-candidate.yml<br/>analyze + test + full Maestro<br/>+ build release APK]:::release
+        E4[distribute job<br/>uploads APK to<br/>Firebase App Distribution<br/>GITHUB ACTIONS]:::release
+        E5[Dogfooding<br/>2-3 days internal testing<br/>MANUAL — testers on phones]:::manual
+        E6{Bugs found?}:::decision
+        E7[Fix on release branch<br/>cherry-pick to develop]:::release
+        E8[Merge release to main]:::release
+
+        E1 --> E2 --> E3 --> E4 --> E5 --> E6
+        E6 -- Yes --> E7 --> E3
+        E6 -- No --> E8
+    end
+
+    A8 --> B1
+    B7 -.->|fix locally| A9
+    B8 --> C1
+    C4 --> D1
+    C5 -.->|fix locally| A9
+    E8 --> D1
+```
+
+**Colour key:**
+- **Blue** = Local machine (your laptop)
+- **Green** = GitHub Actions CI (automatic)
+- **Orange** = Release candidate pipeline
+- **Red** = Production deploy
+- **Purple** = Manual human steps
+
+---
+
+### Step-by-Step Walkthrough
+
+#### Phase 1: Local Development (your machine)
+
+| Step | What | Where | Command | Time |
+|------|------|-------|---------|------|
+| 1 | Create branch from main | Local | `git checkout -b fix/49-nudge-stuck` | instant |
+| 2 | Write failing test (TDD) | Local | Write test in `test/`, run `flutter test` — must FAIL | ~2s |
+| 3 | Implement the fix | Local | Edit source code | varies |
+| 4 | Run unit tests | Local | `flutter test` | ~3s |
+| 5 | Run widget tests | Local | `flutter test test/widgets/` | ~3s |
+| 6 | Run golden tests | Local | `flutter test test/goldens/` | ~5s |
+| 7 | All pass? | Local | If no — iterate (back to step 3). If yes — continue | — |
+| 8 | Commit and push | Local | `git commit`, `git push -u origin fix/49-nudge-stuck` | instant |
+
+**What does NOT run locally:** Maestro E2E, Patrol integration tests, APK builds, coverage enforcement. You *can* run these locally (`bash scripts/maestro-test.sh`) but they're slow (~90s per flow) so they're not part of the fast TDD loop.
+
+#### Phase 2: CI Pipeline (GitHub Actions — automatic)
+
+Pushing the branch triggers `ci.yml` automatically. Two jobs run in parallel:
+
+**Job 1: Analyze, Test & Build** (~2 min)
+| Step | What | Blocks merge? |
+|------|------|---------------|
+| 8 | `flutter analyze` — static analysis on `lib/` and `test/` | Yes (errors only) |
+| 9 | `flutter test --coverage --exclude-tags=golden` — unit + widget tests | Yes |
+| 10 | Coverage check — must be >= 60% | Yes |
+| 11 | Build web (Firebase Hosting) + Build debug APK | Yes |
+
+**Job 2: Maestro Android E2E** (~5 min)
+| Step | What | Blocks merge? |
+|------|------|---------------|
+| 12 | Boot Android emulator, install APK, run Maestro flows tagged `smoke` + `state` | Yes |
+
+If CI fails, you go back to step 3 locally, fix, push again. CI re-runs automatically.
+
+#### Phase 3: Pull Request (GitHub — manual)
+
+| Step | What | Who |
+|------|------|-----|
+| 13 | Open PR to `main` with description | You |
+| 14 | Code review | You / reviewer |
+| 15 | Merge when approved + CI green | You |
+
+Branch protection enforces: "Analyze, Test & Build" must pass before merge is allowed.
+
+#### Phase 4: Production Deploy (GitHub Actions — automatic)
+
+Merging to `main` triggers `deploy.yml` automatically:
+
+| Step | What | Time |
+|------|------|------|
+| 16 | Build web app | ~1 min |
+| 17 | Deploy to Firebase Hosting (live) | ~30s |
+| 18 | Create git tag `vX.Y.Z` from pubspec version | instant |
+
+**Web app is now live.** Android users get the fix in the next release.
+
+---
+
+### When Does `distribute.sh` Run?
+
+`distribute.sh` is for **ad-hoc Android testing** — it runs **locally on your machine**, not in CI.
+
+| Scenario | How distribute happens | Where |
+|----------|----------------------|-------|
+| **Quick dogfooding** (any time) | `bash scripts/distribute.sh "Fix nudge card bug"` | **Local** — builds debug APK, uploads to Firebase App Distribution, emails testers |
+| **Release candidate** | Push `release/*` branch → `release-candidate.yml` runs → `distribute` job uploads APK automatically | **GitHub Actions** — builds release APK, uploads to App Distribution |
+| **Hotfix** | Same as quick dogfooding — run `distribute.sh` locally | **Local** |
+
+**distribute.sh does:**
+1. Reads `.env` for API keys
+2. Auto-increments version in `pubspec.yaml`
+3. Builds debug APK (`flutter build apk --debug`)
+4. Uploads to Firebase App Distribution via `firebase appdistribution:distribute`
+5. Sends email to `TESTER_EMAIL` with your release notes
+
+---
+
+### Release Candidate Flow (Cutting a Release)
+
+This is a separate, heavier process for when you're ready to ship a batch of work:
+
+| Step | What | Where | Command |
+|------|------|-------|---------|
+| 1 | Cut release branch | Local | `bash scripts/release.sh 0.2.0` |
+| 2 | Push release branch | Local | `git push -u origin release/0.2.0` |
+| 3 | Full CI runs | GitHub Actions | `release-candidate.yml` — analyze, test, full Maestro, build release APK |
+| 4 | APK distributed | GitHub Actions | `distribute` job → Firebase App Distribution → testers get email |
+| 5 | Dogfooding | Testers' phones | 2-3 days of manual testing |
+| 6 | Fix P0/P1 bugs | Local + GitHub | Fix on release branch, cherry-pick to develop |
+| 7 | Merge to main | GitHub | PR from `release/0.2.0` → `main` |
+| 8 | Production deploy | GitHub Actions | `deploy.yml` auto-deploys web + tags |
+
+---
+
+### Summary: What Runs Where
+
+| Test Layer | Local Dev Loop | CI (PR) | Release Candidate | Production |
+|------------|:-:|:-:|:-:|:-:|
+| Unit tests | Y | Y | Y | — |
+| Widget tests | Y | Y | Y | — |
+| Golden tests | Y | — (skipped, [#48](https://github.com/Chitiiran/dytty/issues/48)) | — | — |
+| Coverage check | — | Y (>= 60%) | Y (>= 60%) | — |
+| Static analysis | Y | Y | Y | — |
+| Maestro smoke | optional | Y | Y (full suite) | — |
+| Build web | — | Y | Y | Y |
+| Build APK | — | Y (debug) | Y (release) | — |
+| App Distribution | `distribute.sh` | — | Y (auto) | — |
+| Firebase Hosting | — | — | — | Y (auto) |
+| Git tag | — | — | — | Y (auto) |
+
+---
+
 ## Adding Tests — Checklist
 
 ### New feature
