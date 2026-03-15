@@ -1,12 +1,12 @@
 # Dytty — Testing Strategy
 
-> Comprehensive testing guide covering all test layers, tools, and workflows.
+> Comprehensive testing guide covering all test layers, tools, workflows, and lessons learned.
 
 ---
 
 ## Philosophy
 
-**TDD is mandatory.** Every feature and bug fix follows: tests first → implement → iterate → verify.
+**TDD is mandatory.** Every feature and bug fix follows: tests first -> implement -> iterate -> verify.
 
 Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E tests are required for cross-screen UI state changes.
 
@@ -32,18 +32,20 @@ Every bug fix must include a test that reproduces the bug before the fix. Every 
 |-------|------|----------|-------|-------------|
 | Unit | `flutter test` | `test/` | ~2s | Dev loop, every PR |
 | Widget | `flutter test` | `test/widgets/` | ~3s | Dev loop, every PR |
-| Golden | `flutter test --update-goldens` | `test/goldens/` | ~5s | Every PR |
+| Golden | `flutter test --update-goldens` | `test/goldens/` | ~5s | Local only (see [#48]) |
 | Integration | Patrol | `integration_test/` | ~60s/flow | Release candidate only |
-| Black Box E2E | Maestro | `.maestro/` | ~90s/flow | Release candidate + PR smoke |
+| Black Box E2E | Maestro | `.maestro/` | ~90s/flow | CI on every PR + release |
+
+[#48]: https://github.com/Chitiiran/dytty/issues/48
 
 ---
 
-## Unit Tests
+## Layer 1: Unit Tests
 
 **Libraries:** `bloc_test`, `fake_cloud_firestore`, `mockito`
 
 **What to test:**
-- Bloc state transitions (events → states)
+- Bloc state transitions (events -> states)
 - Repository CRUD operations (using `FakeFirebaseFirestore`)
 - Model serialization/deserialization (toMap/fromMap)
 - Service interfaces (using fakes/mocks)
@@ -56,14 +58,26 @@ flutter test --coverage               # With coverage report
 ```
 
 **Conventions:**
-- Test files mirror `lib/` structure: `lib/features/auth/` → `test/features/auth/`
+- Test files mirror `lib/` structure: `lib/features/auth/` -> `test/features/auth/`
 - File naming: `<source>_test.dart`
 - Use `blocTest<Bloc, State>()` for Bloc testing
 - Use `FakeFirebaseFirestore()` — never mock Firestore
 
+### Unit Test Gotchas & Lessons Learned
+
+1. **`FakeFirebaseFirestore` does not enforce security rules** — Your tests will pass even if Firestore rules would block the operation in production. Test rules separately or accept this gap.
+
+2. **`blocTest` runs events synchronously by default** — If your Bloc uses `await` in event handlers, use `wait: Duration(...)` or the `build`/`act`/`expect` pattern carefully. Missing `wait` leads to flaky tests that pass locally but fail in CI.
+
+3. **Sealed class events can't be mocked** — `JournalEvent` is a sealed class, so `registerFallbackValue(FakeJournalEvent())` won't compile. Don't stub `bloc.add()` — `MockBloc` from `bloc_test` handles it automatically.
+
+4. **`FakeFirebaseFirestore` auto-ID collisions** — When testing multiple `add()` calls in the same test, the fake may assign predictable IDs. Don't assert on auto-generated document IDs.
+
+5. **Timezone sensitivity** — Tests using `DateTime.now()` can fail around midnight or in different CI timezones. Use fixed dates like `DateTime(2026, 3, 15)` in test data.
+
 ---
 
-## Widget Tests (Robot Pattern)
+## Layer 2: Widget Tests (Robot Pattern)
 
 **Libraries:** `flutter_test`, `bloc_test`, `mocktail`
 
@@ -105,12 +119,25 @@ testWidgets('nudge card visible when no entries', (tester) async {
 **Commands:**
 ```bash
 flutter test test/widgets/       # Run widget tests only
-flutter test test/robots/        # Robot helper tests (if any)
 ```
+
+### Widget Test Gotchas & Lessons Learned
+
+1. **`mocktail` vs `mockito` — don't mix them** — Widget tests use `mocktail` (required by `bloc_test`'s `MockBloc`/`MockCubit`). Unit tests use `mockito`. They have different stub syntax (`when(() => ...)` vs `when(mock.method()).then...`). Pick the right one per test file.
+
+2. **Stream stubs are required for BlocBuilder** — Mocking `bloc.state` alone isn't enough. You must also stub `bloc.stream` or `BlocBuilder` will throw. Use `when(() => mockBloc.stream).thenAnswer((_) => const Stream.empty())`.
+
+3. **`pumpAndSettle` can hang on animations** — If a widget uses `flutter_animate` or repeating animations, `pumpAndSettle` never completes. Use `pump(Duration(...))` instead for a fixed wait.
+
+4. **GoogleFonts throws in tests** — `GoogleFonts.inter()` triggers HTTP font downloads that fail in the test environment. The Inter font is bundled in `assets/fonts/` and `test/flutter_test_config.dart` sets `GoogleFonts.config.allowRuntimeFetching = false`. The test-safe wrapper in `test/helpers/pump_app.dart` handles this.
+
+5. **Theme must be provided** — Widgets that use `Theme.of(context)` will crash without a `MaterialApp` ancestor. Always use `pumpApp()` from `test/helpers/pump_app.dart`, not raw `pumpWidget()`.
+
+6. **`find.text` vs `find.textContaining`** — `find.text('Progress')` matches exact strings only. For dynamic text like "Progress 3 of 5", use `find.textContaining('Progress')`.
 
 ---
 
-## Golden Tests (Visual Regression)
+## Layer 3: Golden Tests (Visual Regression)
 
 **Tool:** Built-in `matchesGoldenFile` from `flutter_test`.
 
@@ -128,57 +155,72 @@ flutter test --update-goldens test/goldens/      # Regenerate baseline PNGs
 1. Write golden test with `matchesGoldenFile('fixtures/name.png')`
 2. First run: `flutter test --update-goldens test/goldens/` to generate baselines
 3. Commit the PNG files to git
-4. CI runs `flutter test test/goldens/` — fails if pixels differ
+4. Run `flutter test test/goldens/` locally — fails if pixels differ
 
-**Cross-platform note:** Ubuntu CI vs Windows dev may cause font rendering mismatches. If this becomes an issue, add `alchemist` package for platform-independent golden generation.
+**CI status:** Golden tests are tagged `@Tags(['golden'])` and excluded in CI via `--exclude-tags=golden`. Cross-platform font rendering differences between Windows (dev) and Ubuntu (CI) cause pixel mismatches. Tracked in [#48].
+
+### Golden Test Gotchas & Lessons Learned
+
+1. **Cross-platform rendering breaks goldens** — The same font renders differently on Windows (DirectWrite) vs Ubuntu (FreeType). Baselines generated on Windows will always fail on Ubuntu CI. Fix: use `alchemist` package for platform-independent rendering, or generate baselines on the CI platform.
+
+2. **GoogleFonts must be bundled, not downloaded** — `GoogleFonts.inter()` triggers HTTP requests that fail in tests. Solution: bundle Inter TTF files in `assets/fonts/`, register in `pubspec.yaml`, and set `GoogleFonts.config.allowRuntimeFetching = false` in `test/flutter_test_config.dart`.
+
+3. **`testWidgets` only accepts `bool` for `skip`** — Unlike the base `test` package which accepts `String`, `testWidgets` only takes `bool?`. Use `skip: true`, not `skip: 'reason string'`.
+
+4. **Golden PNGs can be large** — Login screen goldens are ~740KB each. Commit them but be aware of repo size. Consider `.gitattributes` with Git LFS if golden count grows significantly.
+
+5. **Animation frames affect goldens** — If you capture during an animation, each run may produce different frames. Always `pump(Duration(seconds: 1))` before capturing to let animations settle.
+
+6. **`goldenWrapper` provides isolated Blocs** — The `test/goldens/golden_test_helper.dart` provides a `goldenWrapper()` function that creates fresh mock Blocs per test. Pass state overrides via parameters like `authState:`, `journalState:`, etc.
 
 ---
 
-## E2E Tests — Web (Playwright)
+## Layer 4: Integration Tests (Patrol)
 
-**Tool:** Playwright v1.50.0
+**Tool:** Patrol 3.13+
 
-**How it works:**
-1. Build web app with emulator flag: `flutter build web --dart-define=USE_EMULATORS=true`
-2. Serve the build: `npx serve build/web -l 5555`
-3. Playwright drives headless Chromium against the served app
-4. Firebase emulators provide backend (Auth :9099, Firestore :8080)
+**Why Patrol over plain `integration_test`:** Dytty uses mic permission (voice notes), notification permission (reminders), and Google Sign-In (native OAuth). All trigger native OS dialogs that only Patrol can interact with.
 
-**Commands:**
-```bash
-npm install                           # Install Playwright
-npx playwright test                   # Run all E2E tests
-npx playwright test --headed          # Run with visible browser
-npx playwright test --debug           # Debug mode (step through)
-```
+**Packages:** `patrol: ^3.13.0`, `patrol_finders: ^2.4.0` in `dev_dependencies`.
 
 **Structure:**
 ```
-e2e/
-├── auth.spec.ts          # Login/sign-out flows
-├── journal.spec.ts       # CRUD operations
-├── home-state.spec.ts    # Dashboard state management
-├── debug.spec.ts         # Debug-specific tests
-└── helpers.ts            # Firebase emulator setup, Flutter DOM helpers
+integration_test/
+├── robots/                        # Robot classes (same vocabulary as widget test robots)
+│   ├── home_screen_robot.dart
+│   ├── journal_screen_robot.dart
+│   └── auth_robot.dart
+├── flows/
+│   ├── auth_flow_test.dart        # Login -> verify home -> logout
+│   ├── journal_crud_test.dart     # Add -> verify -> edit -> delete
+│   └── dashboard_state_test.dart  # Add entries -> verify progress updates
+└── app_test_setup.dart            # Common setup: pump app with emulator config
 ```
 
-**Key helpers:**
-- `clearEmulatorAuth()` / `clearEmulatorFirestore()` — reset emulator state
-- `waitForFlutterReady()` — wait for `flutter-view` + `flt-semantics` elements
-- `signInAnonymously()` — click emulator debug button, wait for navigation
-- `clickByLabel()` / `expectTextVisible()` — accessibility tree queries
+**Commands:**
+```bash
+bash scripts/patrol-test.sh                    # Run all integration tests
+bash scripts/patrol-test.sh --flow auth        # Run specific flow
+bash scripts/patrol-test.sh --skip-build       # Skip APK build
+```
 
-**Flutter semantics tips:**
-- Use `tooltip` on `IconButton` (renders as text content in DOM)
-- Use `Semantics(label:)` for explicit labels on non-button widgets
-- Use `getByRole('button', { name })` for tooltip-based buttons
-- Use `getByLabel()` for `Semantics(label:)` wrappers
+**When to run:** Release candidates only (too slow for every PR).
 
-**Config:** `playwright.config.ts` — timeout 120s per test, 180s server startup, HTML reporter with screenshots on failure.
+**Status:** Scaffold created with commented-out implementations. Patrol packages not yet added to `pubspec.yaml` (waiting for first native-dialog feature to be tested).
+
+### Integration Test Gotchas & Lessons Learned
+
+1. **Patrol requires native build** — Unlike widget tests, Patrol tests compile to a real APK and run on a device/emulator. Build time is ~60s before any test runs.
+
+2. **Permission dialogs are OS-version-specific** — The "Allow microphone" dialog text changes between Android API levels. Use Patrol's `$.native.grantPermissionWhenInUse()` instead of tapping by text.
+
+3. **Firebase emulator setup must happen in-app** — Patrol launches the real app, so emulator config must be in `main.dart` (controlled by `--dart-define=USE_EMULATORS=true`), not in test setup.
+
+4. **Shared Robot vocabulary** — Integration test Robots should use the same method names as widget test Robots (`expectNudgeCardVisible()`, `tapMicFab()`) so the mental model is consistent across layers.
 
 ---
 
-## E2E Tests — Android (Maestro)
+## Layer 5: E2E Tests — Android (Maestro)
 
 **Tool:** Maestro 2.3.0+
 
@@ -225,16 +267,16 @@ maestro studio
 ├── helpers/
 │   └── login.yaml                # Reusable: emulator login (clearState + sign in)
 ├── auth/
-│   ├── login-flow.yaml           # Emulator login → verify home screen
-│   └── logout-flow.yaml          # Login → settings → sign out → verify login screen
+│   ├── login-flow.yaml           # Emulator login -> verify home screen
+│   └── logout-flow.yaml          # Login -> settings -> sign out -> verify login screen
 ├── journal/
 │   ├── add-entry-flow.yaml       # Add entry to Positive Things category
 │   ├── dashboard-flow.yaml       # Verify calendar, progress, nudge card, FAB
 │   └── navigate-days-flow.yaml   # Navigate between days via chevrons
 ├── state/
 │   ├── nudge-disappears-after-entry.yaml   # #21 regression: nudge gone after add
-│   ├── progress-updates-after-entry.yaml   # #22 regression: progress 0→1→2 of 5
-│   ├── all-categories-complete.yaml        # Fill all 5 → "All categories complete!"
+│   ├── progress-updates-after-entry.yaml   # #22 regression: progress 0->1->2 of 5
+│   ├── all-categories-complete.yaml        # Fill all 5 -> "All categories complete!"
 │   └── streak-updates-after-entry.yaml     # Streak shows "1 day" after first entry
 └── screenshots/                  # Git-ignored output directory
 ```
@@ -245,6 +287,7 @@ maestro studio
 |-----|---------|-------------|
 | `smoke` | Core happy paths — login, dashboard, add entry, nudge + progress state | Every PR (CI) |
 | `state` | State management regression tests (cross-screen updates) | Every PR (CI) |
+| `release` | Full regression suite | Release candidates only |
 | `auth` | Authentication flows only | Auth changes |
 | `journal` | Journal CRUD + navigation | Journal changes |
 | `dashboard` | Dashboard element verification | Dashboard/state changes |
@@ -290,8 +333,8 @@ tags:
 | `runFlow` | Compose flows (e.g., reuse login) |
 
 **Element identification (what Maestro sees):**
-- `tooltip` on `IconButton` → text content
-- `Semantics(label:)` → accessibility label
+- `tooltip` on `IconButton` -> text content
+- `Semantics(label:)` -> accessibility label
 - Visible text on widgets
 - Resource IDs (less common in Flutter)
 
@@ -317,7 +360,7 @@ tags:
 
 2. **Curly/smart apostrophes** — Source code may use `\u2019` (right single quote) in strings like "haven't". Maestro can't match literal `'`. Use regex: `"You haven.*journaled today.*"`.
 
-3. **Flutter cold start timing** — `waitForAnimationToEnd` completes instantly if no animation is detected (white screen = no pixel changes). Chain triple `waitForAnimationToEnd` after login to catch route transition → loading spinner → data load animations.
+3. **Flutter cold start timing** — `waitForAnimationToEnd` completes instantly if no animation is detected (white screen = no pixel changes). Chain triple `waitForAnimationToEnd` after login to catch route transition -> loading spinner -> data load animations.
 
 4. **Parallel flow interference** — Flows sharing an emulator with `clearState: true` can interfere with each other. The runner script (`scripts/maestro-test.sh`) runs each flow individually and sequentially to avoid this.
 
@@ -333,53 +376,61 @@ tags:
 
 10. **Settings button accessibility** — The settings `IconButton` with a `?` icon renders as `"?"` in the accessibility tree, not the tooltip text. Tap with: `tapOn: "\\?"`.
 
-### Maestro Tags (updated)
-
-| Tag | Purpose | When to run |
-|-----|---------|-------------|
-| `smoke` | Core happy paths | Every PR (CI) |
-| `state` | State management regression | Every PR (CI) |
-| `release` | Full regression suite | Release candidates only |
-| `auth` | Authentication flows only | Auth changes |
-| `journal` | Journal CRUD + navigation | Journal changes |
-| `dashboard` | Dashboard element verification | Dashboard/state changes |
-
 ---
 
-## Integration Tests — Patrol (Layer 4)
+## E2E Tests — Web (Playwright)
 
-**Tool:** Patrol 3.13+
+**Tool:** Playwright v1.50.0
 
-**Why Patrol over plain `integration_test`:** Dytty uses mic permission (voice notes), notification permission (reminders), and Google Sign-In (native OAuth). All trigger native OS dialogs that only Patrol can interact with.
-
-**Packages:** `patrol: ^3.13.0`, `patrol_finders: ^2.4.0` in `dev_dependencies`.
-
-**Structure:**
-```
-integration_test/
-├── robots/                        # Robot classes (same vocabulary as widget test robots)
-│   ├── home_screen_robot.dart
-│   ├── journal_screen_robot.dart
-│   └── auth_robot.dart
-├── flows/
-│   ├── auth_flow_test.dart        # Login -> verify home -> logout
-│   ├── journal_crud_test.dart     # Add -> verify -> edit -> delete
-│   └── dashboard_state_test.dart  # Add entries -> verify progress updates
-└── app_test_setup.dart            # Common setup: pump app with emulator config
-```
+**How it works:**
+1. Build web app with emulator flag: `flutter build web --dart-define=USE_EMULATORS=true`
+2. Serve the build: `npx serve build/web -l 5555`
+3. Playwright drives headless Chromium against the served app
+4. Firebase emulators provide backend (Auth :9099, Firestore :8080)
 
 **Commands:**
 ```bash
-bash scripts/patrol-test.sh                    # Run all integration tests
-bash scripts/patrol-test.sh --flow auth        # Run specific flow
-bash scripts/patrol-test.sh --skip-build       # Skip APK build
+npm install                           # Install Playwright
+npx playwright test                   # Run all E2E tests
+npx playwright test --headed          # Run with visible browser
+npx playwright test --debug           # Debug mode (step through)
 ```
 
-**When to run:** Release candidates only (too slow for every PR).
+**Structure:**
+```
+e2e/
+├── auth.spec.ts          # Login/sign-out flows
+├── journal.spec.ts       # CRUD operations
+├── home-state.spec.ts    # Dashboard state management
+├── debug.spec.ts         # Debug-specific tests
+└── helpers.ts            # Firebase emulator setup, Flutter DOM helpers
+```
+
+**Key helpers:**
+- `clearEmulatorAuth()` / `clearEmulatorFirestore()` — reset emulator state
+- `waitForFlutterReady()` — wait for `flutter-view` + `flt-semantics` elements
+- `signInAnonymously()` — click emulator debug button, wait for navigation
+- `clickByLabel()` / `expectTextVisible()` — accessibility tree queries
+
+**Config:** `playwright.config.ts` — timeout 120s per test, 180s server startup, HTML reporter with screenshots on failure.
+
+### Playwright Gotchas & Lessons Learned
+
+1. **Flutter web semantics are in shadow DOM** — Flutter renders into a shadow root inside `flutter-view`. Use `page.locator('flt-semantics')` to query the accessibility tree, not regular DOM selectors.
+
+2. **`tooltip` renders as text content** — `IconButton(tooltip: 'Settings')` becomes a clickable element with text "Settings" in the Flutter web accessibility tree. Use `getByRole('button', { name: 'Settings' })`.
+
+3. **`Semantics(label:)` vs visible text** — `Semantics` labels are only visible to the accessibility tree. Visible text on widgets is also exposed. Prefer `Semantics` for test stability (decoupled from UI copy changes).
+
+4. **Firebase emulators must be running** — Playwright tests require `firebase emulators:start` running in a separate terminal. The `webServer` config in `playwright.config.ts` handles serving the built app but not emulators.
+
+5. **Cold start is slow** — Flutter web takes 10-20s to fully initialize (compile shaders, load fonts, hydrate). Use `waitForFlutterReady()` which polls for `flt-semantics` elements before interacting.
+
+6. **Cleartext HTTP for emulators** — Web builds connecting to localhost emulators work fine (no CORS issues), but Android builds need `network_security_config.xml` for cleartext traffic to `10.0.2.2`.
 
 ---
 
-### Screenshot-Driven AI Development Workflow
+## Screenshot-Driven AI Development Workflow
 
 This is the primary workflow for AI-assisted development with Maestro:
 
@@ -393,14 +444,191 @@ This is the primary workflow for AI-assisted development with Maestro:
 **In CI (GitHub Actions):**
 - The `maestro` job runs `smoke`-tagged flows on every PR and main push
 - Screenshots are uploaded as artifacts (14-day retention)
-- Download from: Actions tab → workflow run → Artifacts → `maestro-screenshots`
+- Download from: Actions tab -> workflow run -> Artifacts -> `maestro-screenshots`
 - JUnit XML results included for pass/fail reporting
+
+---
+
+## End-to-End Development Workflow
+
+This walks through fixing a bug from discovery to production, showing exactly **what runs where** at each step.
+
+### Workflow Diagram
+
+```mermaid
+flowchart TD
+    subgraph LOCAL["LOCAL MACHINE"]
+        style LOCAL fill:#dbeafe,stroke:#2563eb
+        A1["Create branch fix/49-nudge-stuck"]
+        A2["Write FAILING test — TDD"]
+        A3["Implement fix"]
+        A4["flutter test — unit + widget"]
+        A5["flutter test test/goldens/ — visual check"]
+        A6{"All pass?"}
+        A7["git commit + git push"]
+        A8["Fix and iterate"]
+
+        A1 --> A2 --> A3 --> A4 --> A5 --> A6
+        A6 -- No --> A8 --> A3
+        A6 -- Yes --> A7
+    end
+
+    subgraph CI["GITHUB ACTIONS — ci.yml"]
+        style CI fill:#dcfce7,stroke:#16a34a
+        B1["flutter analyze"]
+        B2["flutter test --coverage"]
+        B3["Coverage >= 60%"]
+        B4["Build web + APK"]
+        B5["Maestro E2E — smoke + state"]
+        B6{"All green?"}
+        B7["CI BLOCKS merge"]
+        B8["CI passes"]
+
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6
+        B6 -- No --> B7
+        B6 -- Yes --> B8
+    end
+
+    subgraph REVIEW["PULL REQUEST"]
+        style REVIEW fill:#f3e8ff,stroke:#7c3aed
+        C1["Open PR to main"]
+        C2["Code review"]
+        C3{"Approved + CI green?"}
+        C4["Merge to main"]
+        C5["Request changes"]
+
+        C1 --> C2 --> C3
+        C3 -- No --> C5
+        C3 -- Yes --> C4
+    end
+
+    subgraph DEPLOY["GITHUB ACTIONS — deploy.yml"]
+        style DEPLOY fill:#fee2e2,stroke:#dc2626
+        D1["Build web"]
+        D2["Deploy Firebase Hosting"]
+        D3["Git tag vX.Y.Z"]
+
+        D1 --> D2 --> D3
+    end
+
+    A7 --> B1
+    B7 -.-> A8
+    B8 --> C1
+    C4 --> D1
+    C5 -.-> A8
+```
+
+**Colour key:**
+- Blue = Local machine (your laptop)
+- Green = GitHub Actions CI (automatic on push)
+- Purple = Manual human steps (PR review)
+- Red = Production deploy (automatic on main merge)
+
+### Release Candidate Flow (separate from bug fixes)
+
+```mermaid
+flowchart TD
+    subgraph RC["RELEASE CANDIDATE"]
+        style RC fill:#fef3c7,stroke:#d97706
+        E1["LOCAL: bash scripts/release.sh 0.2.0"]
+        E2["LOCAL: git push release/0.2.0"]
+        E3["CI: release-candidate.yml — full test suite + Maestro"]
+        E4["CI: distribute job — APK to Firebase App Distribution"]
+        E5["MANUAL: Dogfooding 2-3 days"]
+        E6{"Bugs found?"}
+        E7["Fix on release branch"]
+        E8["Merge release to main"]
+        E9["deploy.yml — web deploy + git tag"]
+
+        E1 --> E2 --> E3 --> E4 --> E5 --> E6
+        E6 -- Yes --> E7 --> E3
+        E6 -- No --> E8 --> E9
+    end
+```
+
+---
+
+### Phase-by-Phase Detail
+
+#### Phase 1: Local Development (your machine)
+
+| Step | What | Command | Time |
+|------|------|---------|------|
+| 1 | Create branch from main | `git checkout -b fix/49-nudge-stuck` | instant |
+| 2 | Write failing test (TDD) | Write test in `test/`, run `flutter test` — must FAIL | ~2s |
+| 3 | Implement the fix | Edit source code | varies |
+| 4 | Run unit + widget tests | `flutter test` | ~5s |
+| 5 | Run golden tests | `flutter test test/goldens/` | ~5s |
+| 6 | All pass? | If no -> iterate (step 3). If yes -> continue | — |
+| 7 | Commit and push | `git commit`, `git push -u origin fix/49-nudge-stuck` | instant |
+
+**What does NOT run locally:** Maestro E2E, Patrol integration tests, coverage enforcement. You *can* run these locally (`bash scripts/maestro-test.sh`) but they're slow (~90s/flow) so they're not part of the fast TDD loop.
+
+#### Phase 2: CI Pipeline (GitHub Actions — automatic on push)
+
+Two jobs run in parallel:
+
+**Job 1: Analyze, Test & Build** (~2 min)
+
+| Check | What | Blocks merge? |
+|-------|------|---------------|
+| Analyze | `flutter analyze --no-fatal-warnings --no-fatal-infos lib test` | Yes (errors only) |
+| Test | `flutter test --coverage --exclude-tags=golden` | Yes |
+| Coverage | Must be >= 60% | Yes |
+| Build | Web + debug APK | Yes |
+
+**Job 2: Maestro Android E2E** (~5 min)
+
+| Check | What | Blocks merge? |
+|-------|------|---------------|
+| E2E | Boot emulator, install APK, run `smoke` + `state` tagged flows | Yes |
+
+If CI fails, fix locally, push again. CI re-runs automatically.
+
+#### Phase 3: Pull Request (GitHub — manual)
+
+| Step | What | Who |
+|------|------|-----|
+| Open PR | PR to `main` with description | You |
+| Review | Code review | You / reviewer |
+| Merge | When approved + "Analyze, Test & Build" green | You |
+
+Branch protection on `main` requires "Analyze, Test & Build" to pass.
+
+#### Phase 4: Production Deploy (GitHub Actions — automatic on main merge)
+
+| Step | What | Time |
+|------|------|------|
+| Build | Build web app | ~1 min |
+| Deploy | Firebase Hosting (live) | ~30s |
+| Tag | Git tag `vX.Y.Z` from pubspec version | instant |
+
+**Web app is now live.** Android users get the fix in the next release.
+
+---
+
+### When Does `distribute.sh` Run?
+
+`distribute.sh` is for **ad-hoc Android testing** — it runs **locally on your machine**, not in CI.
+
+| Scenario | How | Where |
+|----------|-----|-------|
+| **Quick dogfooding** | `bash scripts/distribute.sh "Fix nudge card bug"` | **Local** — builds debug APK, uploads to Firebase App Distribution |
+| **Release candidate** | Push `release/*` branch -> `release-candidate.yml` -> `distribute` job | **GitHub Actions** — builds release APK, uploads automatically |
+| **Hotfix** | `bash scripts/distribute.sh "Hotfix: ..."` | **Local** |
+
+**distribute.sh does:**
+1. Reads `.env` for API keys
+2. Auto-increments version in `pubspec.yaml`
+3. Builds debug APK (`flutter build apk --debug`)
+4. Uploads to Firebase App Distribution via `firebase appdistribution:distribute`
+5. Sends email to `TESTER_EMAIL` with your release notes
 
 ---
 
 ## CI/CD Pipeline (3 Workflow Files)
 
-### `.github/workflows/ci.yml` — PRs to `develop`
+### `.github/workflows/ci.yml` — PRs to main/develop
 
 | Job | What | Blocks merge? |
 |-----|------|---------------|
@@ -416,7 +644,7 @@ This is the primary workflow for AI-assisted development with Maestro:
 | `maestro` | Full Maestro suite (`smoke,state,release` tags) | Yes |
 | `distribute` | Upload APK to Firebase App Distribution | Automated |
 
-### `.github/workflows/deploy.yml` — Push to `main`
+### `.github/workflows/deploy.yml` — Push to main
 
 | Job | What |
 |-----|------|
@@ -426,246 +654,32 @@ This is the primary workflow for AI-assisted development with Maestro:
 
 ### Required GitHub Secrets
 
-| Secret | Purpose | Status |
-|--------|---------|--------|
-| `FIREBASE_WEB_API_KEY` | Web build dart-define | Needed |
-| `FIREBASE_ANDROID_API_KEY` | Android build dart-define | Needed |
-| `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` | Firebase Hosting deploy + App Distribution | Needed |
+| Secret | Purpose | Set? |
+|--------|---------|------|
+| `FIREBASE_WEB_API_KEY` | Web build dart-define | Yes |
+| `FIREBASE_ANDROID_API_KEY` | Android build dart-define | Yes |
+| `GOOGLE_SERVICES_JSON` | google-services.json for APK builds | Yes |
+| `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` | Firebase Hosting deploy + App Distribution | Yes |
 | `FIREBASE_ANDROID_APP_ID` | App Distribution upload | Needed |
 
-### Quality Gates Summary
+### Quality Gates
 
-| Gate | When | Checks |
-|------|------|--------|
+| Gate | When | What runs |
+|------|------|-----------|
 | **Gate 1: Dev loop** | Every save | `flutter analyze` + `flutter test` (~10s) |
-| **Gate 2: PR to develop** | Every PR | Analyze + test + coverage + build + Maestro smoke |
+| **Gate 2: PR** | Every PR push | Analyze + test + coverage + build + Maestro smoke |
 | **Gate 3: Release candidate** | Release branch push | All Gate 2 + Maestro full suite + App Distribution |
 | **Gate 4: Dogfooding** | 2-3 day window | Internal testers via Firebase App Distribution |
 | **Gate 5: Production** | Merge to main | Auto deploy web + tag release |
 
----
+### What Runs Where — Summary
 
-## End-to-End Development Workflow — Bug Fix Scenario
-
-This walks through fixing a real bug from discovery to production, showing exactly **what runs where** at each step.
-
-### Scenario: "Nudge card still shows after adding an entry"
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {
-  'primaryColor': '#2563eb',
-  'primaryTextColor': '#ffffff',
-  'primaryBorderColor': '#1d4ed8',
-  'secondaryColor': '#16a34a',
-  'secondaryTextColor': '#ffffff',
-  'secondaryBorderColor': '#15803d',
-  'tertiaryColor': '#d97706',
-  'tertiaryTextColor': '#ffffff',
-  'tertiaryBorderColor': '#b45309',
-  'noteTextColor': '#1e293b',
-  'noteBkgColor': '#f1f5f9',
-  'noteBorderColor': '#94a3b8'
-}}}%%
-
-flowchart TD
-    classDef local fill:#2563eb,stroke:#1d4ed8,color:#fff
-    classDef ci fill:#16a34a,stroke:#15803d,color:#fff
-    classDef release fill:#d97706,stroke:#b45309,color:#fff
-    classDef prod fill:#dc2626,stroke:#b91c1c,color:#fff
-    classDef manual fill:#7c3aed,stroke:#6d28d9,color:#fff
-    classDef decision fill:#64748b,stroke:#475569,color:#fff
-
-    subgraph LOCAL ["LOCAL MACHINE (your dev environment)"]
-        direction TB
-        A1[1. Create branch<br/>fix/49-nudge-stuck]:::local
-        A2[2. Write failing test<br/>flutter test]:::local
-        A3[3. Implement fix]:::local
-        A4[4. Run unit tests<br/>flutter test]:::local
-        A5[5. Run widget tests<br/>flutter test test/widgets/]:::local
-        A6[6. Run golden tests<br/>flutter test test/goldens/]:::local
-        A7{All pass?}:::decision
-        A8[7. Commit + push branch]:::local
-        A9[Fix and iterate]:::local
-
-        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7
-        A7 -- No --> A9 --> A3
-        A7 -- Yes --> A8
-    end
-
-    subgraph CICD ["GITHUB ACTIONS (ci.yml — automatic on PR)"]
-        direction TB
-        B1[8. flutter analyze]:::ci
-        B2[9. flutter test --coverage<br/>unit + widget, excl. golden]:::ci
-        B3[10. Coverage check >= 60%]:::ci
-        B4[11. Build web + APK]:::ci
-        B5[12. Maestro E2E<br/>smoke + state tags<br/>on Android emulator]:::ci
-        B6{All green?}:::decision
-        B7[CI blocks merge]:::ci
-        B8[PR ready for review]:::ci
-
-        B1 --> B2 --> B3 --> B4 --> B5 --> B6
-        B6 -- No --> B7
-        B6 -- Yes --> B8
-    end
-
-    subgraph PR ["PULL REQUEST (GitHub)"]
-        direction TB
-        C1[13. Open PR to main]:::manual
-        C2[14. Code review]:::manual
-        C3{Approved +<br/>CI green?}:::decision
-        C4[15. Merge to main]:::manual
-        C5[Request changes]:::manual
-
-        C1 --> C2 --> C3
-        C3 -- No --> C5
-        C3 -- Yes --> C4
-    end
-
-    subgraph DEPLOY ["GITHUB ACTIONS (deploy.yml — automatic on main push)"]
-        direction TB
-        D1[16. Build web]:::prod
-        D2[17. Deploy to<br/>Firebase Hosting]:::prod
-        D3[18. Git tag vX.Y.Z]:::prod
-        D1 --> D2 --> D3
-    end
-
-    subgraph RELEASE_FLOW ["RELEASE CANDIDATE (when cutting a release)"]
-        direction TB
-        E1[Run scripts/release.sh 0.2.0<br/>LOCAL — creates release branch]:::release
-        E2[Push release branch]:::release
-        E3[release-candidate.yml<br/>analyze + test + full Maestro<br/>+ build release APK]:::release
-        E4[distribute job<br/>uploads APK to<br/>Firebase App Distribution<br/>GITHUB ACTIONS]:::release
-        E5[Dogfooding<br/>2-3 days internal testing<br/>MANUAL — testers on phones]:::manual
-        E6{Bugs found?}:::decision
-        E7[Fix on release branch<br/>cherry-pick to develop]:::release
-        E8[Merge release to main]:::release
-
-        E1 --> E2 --> E3 --> E4 --> E5 --> E6
-        E6 -- Yes --> E7 --> E3
-        E6 -- No --> E8
-    end
-
-    A8 --> B1
-    B7 -.->|fix locally| A9
-    B8 --> C1
-    C4 --> D1
-    C5 -.->|fix locally| A9
-    E8 --> D1
-```
-
-**Colour key:**
-- **Blue** = Local machine (your laptop)
-- **Green** = GitHub Actions CI (automatic)
-- **Orange** = Release candidate pipeline
-- **Red** = Production deploy
-- **Purple** = Manual human steps
-
----
-
-### Step-by-Step Walkthrough
-
-#### Phase 1: Local Development (your machine)
-
-| Step | What | Where | Command | Time |
-|------|------|-------|---------|------|
-| 1 | Create branch from main | Local | `git checkout -b fix/49-nudge-stuck` | instant |
-| 2 | Write failing test (TDD) | Local | Write test in `test/`, run `flutter test` — must FAIL | ~2s |
-| 3 | Implement the fix | Local | Edit source code | varies |
-| 4 | Run unit tests | Local | `flutter test` | ~3s |
-| 5 | Run widget tests | Local | `flutter test test/widgets/` | ~3s |
-| 6 | Run golden tests | Local | `flutter test test/goldens/` | ~5s |
-| 7 | All pass? | Local | If no — iterate (back to step 3). If yes — continue | — |
-| 8 | Commit and push | Local | `git commit`, `git push -u origin fix/49-nudge-stuck` | instant |
-
-**What does NOT run locally:** Maestro E2E, Patrol integration tests, APK builds, coverage enforcement. You *can* run these locally (`bash scripts/maestro-test.sh`) but they're slow (~90s per flow) so they're not part of the fast TDD loop.
-
-#### Phase 2: CI Pipeline (GitHub Actions — automatic)
-
-Pushing the branch triggers `ci.yml` automatically. Two jobs run in parallel:
-
-**Job 1: Analyze, Test & Build** (~2 min)
-| Step | What | Blocks merge? |
-|------|------|---------------|
-| 8 | `flutter analyze` — static analysis on `lib/` and `test/` | Yes (errors only) |
-| 9 | `flutter test --coverage --exclude-tags=golden` — unit + widget tests | Yes |
-| 10 | Coverage check — must be >= 60% | Yes |
-| 11 | Build web (Firebase Hosting) + Build debug APK | Yes |
-
-**Job 2: Maestro Android E2E** (~5 min)
-| Step | What | Blocks merge? |
-|------|------|---------------|
-| 12 | Boot Android emulator, install APK, run Maestro flows tagged `smoke` + `state` | Yes |
-
-If CI fails, you go back to step 3 locally, fix, push again. CI re-runs automatically.
-
-#### Phase 3: Pull Request (GitHub — manual)
-
-| Step | What | Who |
-|------|------|-----|
-| 13 | Open PR to `main` with description | You |
-| 14 | Code review | You / reviewer |
-| 15 | Merge when approved + CI green | You |
-
-Branch protection enforces: "Analyze, Test & Build" must pass before merge is allowed.
-
-#### Phase 4: Production Deploy (GitHub Actions — automatic)
-
-Merging to `main` triggers `deploy.yml` automatically:
-
-| Step | What | Time |
-|------|------|------|
-| 16 | Build web app | ~1 min |
-| 17 | Deploy to Firebase Hosting (live) | ~30s |
-| 18 | Create git tag `vX.Y.Z` from pubspec version | instant |
-
-**Web app is now live.** Android users get the fix in the next release.
-
----
-
-### When Does `distribute.sh` Run?
-
-`distribute.sh` is for **ad-hoc Android testing** — it runs **locally on your machine**, not in CI.
-
-| Scenario | How distribute happens | Where |
-|----------|----------------------|-------|
-| **Quick dogfooding** (any time) | `bash scripts/distribute.sh "Fix nudge card bug"` | **Local** — builds debug APK, uploads to Firebase App Distribution, emails testers |
-| **Release candidate** | Push `release/*` branch → `release-candidate.yml` runs → `distribute` job uploads APK automatically | **GitHub Actions** — builds release APK, uploads to App Distribution |
-| **Hotfix** | Same as quick dogfooding — run `distribute.sh` locally | **Local** |
-
-**distribute.sh does:**
-1. Reads `.env` for API keys
-2. Auto-increments version in `pubspec.yaml`
-3. Builds debug APK (`flutter build apk --debug`)
-4. Uploads to Firebase App Distribution via `firebase appdistribution:distribute`
-5. Sends email to `TESTER_EMAIL` with your release notes
-
----
-
-### Release Candidate Flow (Cutting a Release)
-
-This is a separate, heavier process for when you're ready to ship a batch of work:
-
-| Step | What | Where | Command |
-|------|------|-------|---------|
-| 1 | Cut release branch | Local | `bash scripts/release.sh 0.2.0` |
-| 2 | Push release branch | Local | `git push -u origin release/0.2.0` |
-| 3 | Full CI runs | GitHub Actions | `release-candidate.yml` — analyze, test, full Maestro, build release APK |
-| 4 | APK distributed | GitHub Actions | `distribute` job → Firebase App Distribution → testers get email |
-| 5 | Dogfooding | Testers' phones | 2-3 days of manual testing |
-| 6 | Fix P0/P1 bugs | Local + GitHub | Fix on release branch, cherry-pick to develop |
-| 7 | Merge to main | GitHub | PR from `release/0.2.0` → `main` |
-| 8 | Production deploy | GitHub Actions | `deploy.yml` auto-deploys web + tags |
-
----
-
-### Summary: What Runs Where
-
-| Test Layer | Local Dev Loop | CI (PR) | Release Candidate | Production |
-|------------|:-:|:-:|:-:|:-:|
+| Layer | Local | CI (PR) | Release Candidate | Production |
+|-------|:-----:|:-------:|:-----------------:|:----------:|
 | Unit tests | Y | Y | Y | — |
 | Widget tests | Y | Y | Y | — |
-| Golden tests | Y | — (skipped, [#48](https://github.com/Chitiiran/dytty/issues/48)) | — | — |
-| Coverage check | — | Y (>= 60%) | Y (>= 60%) | — |
+| Golden tests | Y | — ([#48]) | — | — |
+| Coverage >= 60% | — | Y | Y | — |
 | Static analysis | Y | Y | Y | — |
 | Maestro smoke | optional | Y | Y (full suite) | — |
 | Build web | — | Y | Y | Y |
