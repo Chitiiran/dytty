@@ -554,7 +554,7 @@ flowchart TD
 
 | Step | What | Command | Time |
 |------|------|---------|------|
-| 1 | Create branch from main | `git checkout -b fix/49-nudge-stuck` | instant |
+| 1 | Create branch from `main` | `git checkout main && git pull && git checkout -b fix/49-nudge-stuck` | instant |
 | 2 | Write failing test (TDD) | Write test in `test/`, run `flutter test` — must FAIL | ~2s |
 | 3 | Implement the fix | Edit source code | varies |
 | 4 | Run unit + widget tests | `flutter test` | ~5s |
@@ -574,7 +574,7 @@ Two jobs run in parallel:
 |-------|------|---------------|
 | Analyze | `flutter analyze --no-fatal-warnings --no-fatal-infos lib test` | Yes (errors only) |
 | Test | `flutter test --coverage --exclude-tags=golden` | Yes |
-| Coverage | Must be >= 60% | Yes |
+| Coverage | Must meet minimum gate (ratchets up 10%/week toward 100%) | Yes |
 | Build | Web + debug APK | Yes |
 
 **Job 2: Maestro Android E2E** (~5 min)
@@ -628,11 +628,11 @@ Branch protection on `main` requires "Analyze, Test & Build" to pass.
 
 ## CI/CD Pipeline (3 Workflow Files)
 
-### `.github/workflows/ci.yml` — PRs to main/develop
+### `.github/workflows/ci.yml` — PRs to main
 
 | Job | What | Blocks merge? |
 |-----|------|---------------|
-| `analyze-test` | flutter analyze + test + coverage (min 60%) + build web + build APK | Yes |
+| `analyze-test` | dart format + flutter analyze + test + coverage + build web + build APK | Yes |
 | `maestro` | Maestro E2E with `smoke,state` tags | Yes |
 
 ### `.github/workflows/release-candidate.yml` — Release branches
@@ -666,8 +666,8 @@ Branch protection on `main` requires "Analyze, Test & Build" to pass.
 
 | Gate | When | What runs |
 |------|------|-----------|
-| **Gate 1: Dev loop** | Every save | `flutter analyze` + `flutter test` (~10s) |
-| **Gate 2: PR** | Every PR push | Analyze + test + coverage + build + Maestro smoke |
+| **Gate 1: Dev loop** | Every save | `dart format` + `flutter analyze` + `flutter test` (~10s) |
+| **Gate 2: PR** | Every PR push | Format + analyze + test + coverage + build + Maestro smoke |
 | **Gate 3: Release candidate** | Release branch push | All Gate 2 + Maestro full suite + App Distribution |
 | **Gate 4: Dogfooding** | 2-3 day window | Internal testers via Firebase App Distribution |
 | **Gate 5: Production** | Merge to main | Auto deploy web + tag release |

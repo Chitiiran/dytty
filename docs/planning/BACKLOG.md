@@ -17,14 +17,12 @@
 
 | GH# | Priority | Summary | Labels | Status |
 |-----|----------|---------|--------|--------|
-| [#20](https://github.com/Chitiiran/dytty/issues/20) | P0 | Calendar minidot not updating for today's entry in real-time | bug, state-management | Fixed (#44) |
-| [#23](https://github.com/Chitiiran/dytty/issues/23) | P0 | Voice note from CTA not saved to journal correctly | bug | Open |
+| [#50](https://github.com/Chitiiran/dytty/issues/50) | P0 | Voice note with no clear category hangs on LLM categorization | bug | Open |
 | [#24](https://github.com/Chitiiran/dytty/issues/24) | P0 | Voice call stuck at "ready to connect" with no active call feedback | bug | Open |
 | [#25](https://github.com/Chitiiran/dytty/issues/25) | P0 | End-call button has no clear affordance — user unknowingly hangs up | bug, ux-ui | Open |
 | [#26](https://github.com/Chitiiran/dytty/issues/26) | P0 | Push notifications not delivered when app is closed | bug, ux-ui | Open |
 | [#35](https://github.com/Chitiiran/dytty/issues/35) | P0 | STT cuts off mid-speech due to short silence timeout | bug | Open |
-| [#21](https://github.com/Chitiiran/dytty/issues/21) | P1 | "You haven't journaled today" CTA persists after entry is added | bug, state-management | Fixed (#44) |
-| [#22](https://github.com/Chitiiran/dytty/issues/22) | P1 | Category completion symbols stale after entry is added | bug, state-management, ux-ui | Fixed (#44) |
+| [#49](https://github.com/Chitiiran/dytty/issues/49) | P1 | Category icons greyed out on app restart until interaction | bug, state-management | Open |
 | [#27](https://github.com/Chitiiran/dytty/issues/27) | P2 | App version stuck at 0.1.0, not incrementing across releases | bug | Open |
 | [#28](https://github.com/Chitiiran/dytty/issues/28) | P2 | Emulator toggle visible in production build | bug | Open |
 | [#29](https://github.com/Chitiiran/dytty/issues/29) | P2 | Re-signing in with Google does not show account picker | bug | Open |
@@ -54,7 +52,6 @@
 
 | GH# | Priority | Summary | Labels | Status |
 |-----|----------|---------|--------|--------|
-| [#42](https://github.com/Chitiiran/dytty/issues/42) | P0 | Audit JournalBloc state emissions for real-time UI refresh | chore, state-management | Done (#44) |
 | [#43](https://github.com/Chitiiran/dytty/issues/43) | P2 | Investigate and reduce app bundle size | chore | Open |
 
 ---
@@ -63,6 +60,11 @@
 
 | GH# | Summary | Resolved |
 |-----|---------|----------|
+| #20 | Calendar minidot not updating for today's entry in real-time | 2026-03-15 (#44) |
+| #21 | "You haven't journaled today" CTA persists after entry is added | 2026-03-15 (#44) |
+| #22 | Category completion symbols stale after entry is added | 2026-03-15 (#44) |
+| #23 | Voice note from CTA not saved to journal correctly | 2026-03-15 (#44) |
+| #42 | Audit JournalBloc state emissions for real-time UI refresh | 2026-03-15 (#44) |
 | B-001 | Journal entry not visible until page re-entry | 2026-03-12 |
 | F-001 | Fixed-time daily notification | 2026-03-12 |
 | F-002 | Home screen CTA nudge (always-on) | 2026-03-12 |

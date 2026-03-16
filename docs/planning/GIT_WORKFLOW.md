@@ -35,31 +35,21 @@ gh issue create --title "Short description" \
 
 ## 2. Branching
 
-### Branch model: `develop` + `release/*` + `main`
+### Branch model: Trunk-based development
 
 ```
-main ──────────────────────────── (stable, every commit = release)
-  ^                          ^
-  |  merge after gates pass  |
-  |                          |
-release/0.2.0 ── fix ──    release/0.3.0
-  ^                          ^
-  |  branch when ready       |
-  |                          |
-develop ── feat ── feat ── feat ── (integration branch, all PRs land here)
+main ──────────────────────────── (stable, CI-gated, auto-deploys)
   ^    ^    ^
   |    |    |
-feat/ fix/ chore/              (feature branches, short-lived)
+feat/ fix/ chore/              (feature branches, short-lived, PR to main)
 ```
 
 | Branch | Purpose | Protection | Merge target |
 |--------|---------|------------|--------------|
-| `main` | Production-ready. Every commit is a release. | PR required, all CI green | — |
-| `develop` | Integration. All feature PRs target this. | PR required, CI green | `main` (via release branch) |
-| `release/X.Y.Z` | Release candidate. Only bug fixes allowed. | PR required | `main` + back-merge to `develop` |
-| `feat/*`, `fix/*` | Feature work. Short-lived. | None | `develop` |
+| `main` | Production-ready. Every merge triggers deploy. | PR required, all CI green | — |
+| `feat/*`, `fix/*` | Feature work. Short-lived. | None | `main` |
 
-One branch per issue.
+One branch per issue. All PRs target `main`.
 
 ### Naming convention
 ```
@@ -76,23 +66,21 @@ Examples:
 
 ### Creating a branch (CLI)
 ```bash
-git checkout develop
-git pull origin develop
+git checkout main
+git pull origin main
 git checkout -b feat/14-voice-recording-sheet
 ```
 
-### Release branches
-```bash
-# Automated:
-bash scripts/release.sh 0.2.0
+### Future: Release candidate flow (nice-to-have)
 
-# Manual:
-git checkout develop && git pull origin develop
-git checkout -b release/0.2.0
-# bump version in pubspec.yaml, commit, push
-```
+When the team grows or a QA gate is needed, adopt `develop` + `release/*` branches:
+- `develop` as integration branch (all PRs land here)
+- `release/X.Y.Z` branches cut from `develop` for dogfooding (2-3 days)
+- Release branch merges to `main` after QA, back-merges to `develop`
+- Use `bash scripts/release.sh X.Y.Z` to automate
+- See `docs/planning/RELEASE.md` for the full release process
 
-See `docs/planning/RELEASE.md` for full release process.
+This adds value when there are multiple contributors, external testers, or compliance requirements. For solo/small-team development, trunk-based with CI gates is sufficient.
 
 ---
 
@@ -172,8 +160,8 @@ Multiple commits per branch is normal and encouraged.
 
 ## 4. Pull Requests
 
-Every feature branch merges via a **Pull Request** to `develop`.
-Release branches merge to `main` after all quality gates pass.
+Every feature branch merges via a **Pull Request** to `main`.
+CI gates must pass before merge.
 
 ### PR title
 Short, imperative. Same style as commit subject:
@@ -193,7 +181,7 @@ The repo has a PR template (`.github/pull_request_template.md`). Fill it in:
 ```bash
 git push -u origin feat/14-voice-recording-sheet
 
-gh pr create \
+gh pr create --base main \
   --title "feat(voice): add recording bottom sheet (#14)" \
   --body "$(cat <<'EOF'
 ## Summary
@@ -245,14 +233,13 @@ View milestone progress on GitHub: **Issues > Milestones** tab.
 
 ```
 1. Create/find GitHub Issue (#14)
-2. Branch from develop:  git checkout -b feat/14-voice-recording-sheet
+2. Branch from main:  git checkout -b feat/14-voice-recording-sheet
 3. Code + commit (conventional commits, reference #14)
 4. Push:    git push -u origin feat/14-voice-recording-sheet
-5. PR:      gh pr create --base develop (use template, include Fixes #14)
-6. CI passes → squash merge to develop
+5. PR:      gh pr create --base main (use template, include Fixes #14)
+6. CI passes (format + analyze + test + coverage + Maestro) → squash merge to main
 7. Issue #14 auto-closes
-8. When ready for release: bash scripts/release.sh X.Y.Z
-9. Release branch → dogfooding → merge to main
+8. Deploy triggers automatically on main merge
 ```
 
 ---

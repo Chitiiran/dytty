@@ -1,57 +1,53 @@
 # Dytty Progress
 
 ## Current Status
-**M0–M4 merged to main. M6 configurable categories merged. #42 state audit complete. All PRs cleared.**
+**Voice note UX fixes in progress (#35, #50, #30). Pipeline aligned to trunk-based development.**
 
-**Merged to main:**
-- **#42 State audit** — PR #44 merged: optimistic state updates in JournalBloc, Semantics labels for E2E, emulator auth support
-- **M6: Configurable Categories** — PR #16 merged: CategoryConfig model, CategoryRepository, CategoryCubit, string-based categoryId throughout
-- **M4: Daily Call** — PR #15 merged: call UI, Firestore persistence, notifications, audio storage, post-session summary
-- **M3: Gemini Live Prototype** — PR #13 merged, review feedback addressed (#17)
-- **M2: Dashboard + Daily Experience** — dashboard, streaks, nudge card, progress tracking
-- **M1: Anytime Voice Notes** — mic FAB, STT, LLM categorization, review/edit/save
-- **M0: Foundation** — Bloc state management, CI/CD, swappable LLM interface, data model
-- Bug fix: entry refresh (#6), daily reminders (#7), always-on nudge (#8) — PR #9
-- API keys removed from source, Firebase App Distribution for Android dogfooding
+**In progress (uncommitted on main):**
+- **#35 Voice note UX** — red mic, JSON parse fix, transcript review state before LLM categorization
+- **#50 LLM timeout** — 10s timeout on categorization, falls back to manual category picker
+- **#30 FAB overlap** — bottom bar layout: Write | Mic FAB | Call (no overlap)
+- **Firebase duplicate-app fix** — `main.dart` handles `google-services.json` auto-init on Android
+- **Pipeline: trunk-based** — removed `develop` branch model, PRs target `main`, added `dart format` CI gate
 
-**Open PRs:** None
+**Merged to main (prior sessions):**
+- #42 State audit (PR #44), M6 categories (PR #16), M4 daily call (PR #15), M3 Gemini (PR #13), M2 dashboard, M1 voice notes, M0 foundation
 
-**Test status:** 100 unit tests, 15 Playwright E2E tests, 9 Maestro Android flows (4 state mgmt) — all 9/9 passing
+**Open PRs:** None (changes pending commit + PR)
+
+**Test status:** 138 unit/widget tests, 5 JSON extraction tests, 9 Maestro flows — all passing. Coverage: 38.4%
+
+**Coverage ratchet plan:**
+| Week | Date | Target | CI `min_coverage` |
+|------|------|--------|-------------------|
+| 0 | 2026-03-15 | 40% | 40 |
+| 1 | 2026-03-22 | 50% | 50 |
+| 2 | 2026-03-29 | 60% | 60 |
+| 3 | 2026-04-05 | 70% | 70 |
+| 4 | 2026-04-12 | 80% | 80 |
+| 5 | 2026-04-19 | 90% | 90 |
+| 6 | 2026-04-26 | 100% | 100 |
+
+Update `min_coverage` in `.github/workflows/ci.yml` each week.
 
 **Milestone status:**
 | Milestone | Status |
 |-----------|--------|
-| M0: Foundation | Done |
-| M1: Anytime Voice Notes | Done |
-| M2: Dashboard + Daily Experience | Done |
-| M3: Voice Call Prototypes | Done (#10 merged). #11 Deepgram, #12 VAD deferred (P2) |
-| M4: Daily Call | Done (PR #15 merged) |
+| M0–M4 | Done |
 | M5: Weekly Review | Not started |
-| M6: Configurable Categories + Polish | Data model done (PR #16 merged). UI settings page pending |
+| M6: Categories + Polish | Data model done. UI settings page pending |
 | M7: Launch Prep | Not started |
-
-**Maestro Android E2E setup:**
-- Maestro 2.3.0 installed locally
-- 9 flows: login, logout, add-entry, dashboard, navigate-days + 4 state management regression tests (nudge #21, progress #22, all-complete, streak)
-- CI job added to `.github/workflows/ci.yml` (runs smoke flows, uploads screenshots)
-- Runner script: `scripts/maestro-test.sh`
-- Full testing docs: `docs/planning/TESTING.md`
 
 ## Blockers
 - CI/CD deploy: needs `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` GitHub secret
-- CI/CD web build: needs `FIREBASE_WEB_API_KEY` GitHub secret
-- CI/CD analyze: `playground/` sub-project breaks `flutter analyze` (missing genui deps). Tracked in #19, blocked by #18.
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
-- Maestro CI: flows that need Firebase emulators will fail until emulator setup added to workflow
 
 ## Up Next
+- Commit current voice note fixes, create PR to main
 - **#24, #25, #33**: Voice call active state + UI fixes
 - **#26**: Push notification delivery investigation
-- **#32**: Voice note review & edit screen
-- **#35**: STT silence timeout fix
-- **#18**: Integrate GenUI SDK into main app
-- **#19**: Delete `playground/` after GenUI integration (unblocks CI)
-- Open backlog: #1 onboarding, #2 app logo, #34 completion ring, #36 category settings page
+- **#49**: Category icons greyed out on restart
+- Coverage: write tests to hit 50% by 2026-03-22
 
 ---
 

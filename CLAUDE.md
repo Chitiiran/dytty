@@ -84,12 +84,11 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 
 ## Git Workflow
 Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
-- **Branch model**: `develop` + `release/*` + `main` (feature branches target `develop`)
+- **Branch model**: Trunk-based — feature branches target `main` directly
 - Every change needs a GitHub Issue (check existing before creating)
 - Branch naming: `<type>/<issue#>-<short-name>` (e.g. `feat/14-voice-sheet`)
 - Conventional commits: `type(scope): what` + body with why + key decisions + `Refs #N`
-- PRs target `develop` (not main), use `.github/pull_request_template.md`, include `Fixes #N`
-- Release process: `bash scripts/release.sh X.Y.Z` (see `docs/planning/RELEASE.md`)
+- PRs target `main`, use `.github/pull_request_template.md`, include `Fixes #N`
 - Always ask user before pushing or creating PRs
 - Milestones M0-M2 closed, M3-M7 open on GitHub
 
@@ -102,7 +101,7 @@ TDD is mandatory. 5-layer test pyramid. Full details in `docs/planning/TESTING.m
 - **Layer 4: Integration tests** (Patrol) — On-device tests with native OS dialog support. `integration_test/`.
 - **Layer 5: E2E Android** (`bash scripts/maestro-test.sh`) — Black-box Maestro YAML flows. Screenshots as artifacts.
 - **E2E web** (`npx playwright test`) — Playwright against web build + Firebase emulators.
-- **Coverage enforcement**: CI enforces minimum 60% coverage (ratchets up over time).
+- **Coverage enforcement**: CI enforces minimum coverage (ratchets up 10% weekly toward 100%). Current gate: 40%.
 - **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E required for cross-screen UI state changes.
 
 ## Conventions

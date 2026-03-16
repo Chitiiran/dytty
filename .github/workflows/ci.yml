@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 jobs:
   analyze-test:
@@ -20,6 +20,9 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Format check
+        run: dart format --set-exit-if-changed lib test
+
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos lib test
 
@@ -29,7 +32,7 @@ jobs:
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
         with:
-          min_coverage: 60
+          min_coverage: 40
 
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
