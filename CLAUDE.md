@@ -2,10 +2,12 @@
 
 > **Start of session:**
 > 1. Read `PROGRESS.md` — only the top section (above the `## Log` heading).
-> 2. Read `docs/planning/BACKLOG.md` — open bugs and feature requests.
+> 2. Run `gh issue list --limit 50` — open bugs and feature requests (GitHub Issues is the single source of truth).
 > 3. Brief the user: where we are (current milestone status, any blockers), and where we can go next (top-priority backlog items, next milestone work). Keep it to a few sentences.
 >
-> **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section. Update `BACKLOG.md` if any bugs were fixed or features completed.
+> **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section.
+>
+> **Feedback process:** See `docs/planning/FEEDBACK_PROCESS.md` for converting user/tester feedback into GitHub Issues.
 
 ## Project Overview
 Daily journaling app with 5 structured categories. Cross-platform Flutter app backed by Firebase (Auth + Firestore). First target: web app with Playwright E2E tests.
