@@ -13,6 +13,7 @@ import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
 
+import '../fakes/fake_audio_playback_service.dart';
 import '../robots/voice_call_screen_robot.dart';
 
 // --- Mocks ---
@@ -65,7 +66,11 @@ Future<void> pumpVoiceCallScreen(
           RepositoryProvider<LlmService>.value(value: mockLlm),
           RepositoryProvider<AudioStorageService>.value(value: mockStorage),
         ],
-        child: const MaterialApp(home: VoiceCallScreen()),
+        child: MaterialApp(
+          home: VoiceCallScreen(
+            playbackService: FakeAudioPlaybackService(),
+          ),
+        ),
       ),
     ),
   );
@@ -74,18 +79,13 @@ Future<void> pumpVoiceCallScreen(
 void main() {
   GoogleFonts.config.allowRuntimeFetching = false;
 
-  // Stub platform channels for record and just_audio plugins.
-  // These plugins are instantiated in VoiceCallScreen's field initializers
+  // Stub platform channel for record plugin.
+  // The plugin is instantiated in VoiceCallScreen's field initializers
   // but no platform calls are made until the user taps "Start Call".
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('com.llfbandit.record/messages'),
-          (MethodCall methodCall) async => null,
-        );
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('com.ryanheise.just_audio.methods'),
           (MethodCall methodCall) async => null,
         );
   });
@@ -94,11 +94,6 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('com.llfbandit.record/messages'),
-          null,
-        );
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('com.ryanheise.just_audio.methods'),
           null,
         );
   });

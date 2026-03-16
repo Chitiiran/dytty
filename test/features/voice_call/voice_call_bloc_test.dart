@@ -337,6 +337,150 @@ void main() {
     );
   });
 
+  group('TranscriptReceived with aggregation', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'partial from same speaker replaces last bubble (length stays 1)',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(speaker: Speaker.user, text: 'Hel', isFinal: false),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(speaker: Speaker.user, text: 'Hello', isFinal: false),
+          ),
+        );
+      },
+      expect: () => [
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having((s) => s.transcripts.last.text, 'text', 'Hel'),
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having((s) => s.transcripts.last.text, 'text', 'Hello'),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'final from same speaker locks it; next partial creates new bubble',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(speaker: Speaker.user, text: 'Hello', isFinal: true),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: 'How are you',
+              isFinal: false,
+            ),
+          ),
+        );
+      },
+      expect: () => [
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having((s) => s.transcripts.last.text, 'text', 'Hello'),
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 2)
+            .having((s) => s.transcripts.last.text, 'text', 'How are you'),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'speaker change always creates new bubble even if previous was partial',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: 'Hello',
+              isFinal: false,
+            ),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(speaker: Speaker.ai, text: 'Hi', isFinal: false),
+          ),
+        );
+      },
+      expect: () => [
+        isA<VoiceCallState>().having((s) => s.transcripts.length, 'length', 1),
+        isA<VoiceCallState>().having((s) => s.transcripts.length, 'length', 2),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'first transcript always creates a bubble',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.ai,
+              text: 'Welcome',
+              isFinal: false,
+            ),
+          ),
+        );
+      },
+      expect: () => [
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having((s) => s.transcripts.first.text, 'text', 'Welcome'),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'two finals from same speaker create two separate entries',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: 'First sentence.',
+              isFinal: true,
+            ),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: 'Second sentence.',
+              isFinal: true,
+            ),
+          ),
+        );
+      },
+      expect: () => [
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having((s) => s.transcripts.last.text, 'text', 'First sentence.'),
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 2)
+            .having(
+              (s) => s.transcripts.last.text,
+              'text',
+              'Second sentence.',
+            ),
+      ],
+    );
+  });
+
   group('ToolCallReceived', () {
     blocTest<VoiceCallBloc, VoiceCallState>(
       'save_entry tool call creates SavedEntry and dispatches to JournalBloc',

@@ -1,7 +1,7 @@
 name: dytty
 description: "Voice-first daily journaling app"
 publish_to: 'none'
-version: 0.1.4+6
+version: 0.1.6+8
 
 environment:
   sdk: ^3.11.0
@@ -30,7 +30,7 @@ dependencies:
   timezone: ^0.11.0
   firebase_ai: 3.9.0
   record: ^6.2.0
-  just_audio: ^0.10.5
+  flutter_pcm_sound: ^3.3.3
   firebase_storage: ^13.1.0
 
 dev_dependencies:

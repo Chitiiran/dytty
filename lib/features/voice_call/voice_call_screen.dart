@@ -5,30 +5,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
+import 'package:dytty/services/audio/audio_playback_service.dart';
+import 'package:dytty/services/audio/pcm_sound_playback_service.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
 import 'package:dytty/data/models/category_config.dart';
 
 class VoiceCallScreen extends StatefulWidget {
-  const VoiceCallScreen({super.key});
+  final AudioPlaybackService? playbackService;
+
+  const VoiceCallScreen({super.key, this.playbackService});
 
   @override
   State<VoiceCallScreen> createState() => _VoiceCallScreenState();
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
-  /// ~0.5s of audio at 24kHz 16-bit mono before triggering playback.
-  static const _audioPlaybackThreshold = 24000;
-
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Uint8List>? _audioOutputSub;
-  final AudioPlayer _player = AudioPlayer();
-  final List<int> _audioBuffer = [];
+  late final AudioPlaybackService _playback;
 
   late final GeminiLiveService _service;
   late final VoiceCallBloc _bloc;
@@ -37,6 +36,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   void initState() {
     super.initState();
     _service = GeminiLiveService();
+    _playback = widget.playbackService ?? PcmSoundPlaybackService();
   }
 
   @override
@@ -59,7 +59,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   void dispose() {
     _audioOutputSub?.cancel();
     _recorder.dispose();
-    _player.dispose();
+    _playback.dispose();
     _bloc.close();
     super.dispose();
   }
@@ -69,10 +69,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
     _bloc.add(const StartCall());
 
+    await _playback.init(sampleRate: 24000, channels: 1);
+
     _audioOutputSub = _bloc.audioOutputStream.listen((audioData) {
-      _audioBuffer.addAll(audioData);
-      if (_audioBuffer.length > _audioPlaybackThreshold) {
-        _playAudioBuffer();
+      try {
+        _playback.feed(audioData);
+      } catch (e) {
+        debugPrint('Audio playback feed error: $e');
       }
     });
 
@@ -92,42 +95,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     await _recorder.stop();
     _audioOutputSub?.cancel();
     _audioOutputSub = null;
-    _audioBuffer.clear();
+    await _playback.stop();
     _bloc.add(const EndCall());
-  }
-
-  void _playAudioBuffer() {
-    final bytes = Uint8List.fromList(_audioBuffer);
-    _audioBuffer.clear();
-    final wav = _createWavFromPcm(bytes, sampleRate: 24000);
-    _player.setAudioSource(_InMemoryAudioSource(wav, 'audio/wav'));
-    _player.play();
-  }
-
-  Uint8List _createWavFromPcm(Uint8List pcmData, {required int sampleRate}) {
-    final byteRate = sampleRate * 2;
-    final dataSize = pcmData.length;
-    final fileSize = 36 + dataSize;
-
-    final header = ByteData(44);
-    // RIFF header
-    header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
-    header.setUint32(4, fileSize, Endian.little);
-    header.setUint32(8, 0x57415645, Endian.big); // "WAVE"
-    // fmt sub-chunk
-    header.setUint32(12, 0x666D7420, Endian.big); // "fmt "
-    header.setUint32(16, 16, Endian.little); // sub-chunk size
-    header.setUint16(20, 1, Endian.little); // PCM format
-    header.setUint16(22, 1, Endian.little); // mono
-    header.setUint32(24, sampleRate, Endian.little);
-    header.setUint32(28, byteRate, Endian.little);
-    header.setUint16(32, 2, Endian.little); // block align
-    header.setUint16(34, 16, Endian.little); // bits per sample
-    // data sub-chunk
-    header.setUint32(36, 0x64617461, Endian.big); // "data"
-    header.setUint32(40, dataSize, Endian.little);
-
-    return Uint8List.fromList([...header.buffer.asUint8List(), ...pcmData]);
   }
 
   String _formatDuration(Duration d) {
@@ -859,23 +828,3 @@ class _CallControls extends StatelessWidget {
   }
 }
 
-/// In-memory audio source for just_audio.
-class _InMemoryAudioSource extends StreamAudioSource {
-  final Uint8List _data;
-  final String _contentType;
-
-  _InMemoryAudioSource(this._data, this._contentType);
-
-  @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    start ??= 0;
-    end ??= _data.length;
-    return StreamAudioResponse(
-      sourceLength: _data.length,
-      contentLength: end - start,
-      offset: start,
-      stream: Stream.value(_data.sublist(start, end)),
-      contentType: _contentType,
-    );
-  }
-}
