@@ -27,12 +27,29 @@ jobs:
         run: flutter analyze --no-fatal-warnings --no-fatal-infos lib test
 
       - name: Test with coverage
-        run: flutter test --coverage --exclude-tags=golden
+        run: flutter test --coverage --exclude-tags=golden --machine > test-results.json
 
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
         with:
           min_coverage: 50
+
+      - name: Generate test report
+        if: always()
+        run: |
+          sudo apt-get install -y lcov > /dev/null 2>&1
+          genhtml coverage/lcov.info -o coverage/html --quiet
+          dart run tool/test_report.dart
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            coverage/html/
+            test-report.html
+          retention-days: 14
 
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
