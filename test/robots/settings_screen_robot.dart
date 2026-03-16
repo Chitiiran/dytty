@@ -46,10 +46,7 @@ class SettingsScreenRobot {
     );
     expect(tile, findsOneWidget);
     expect(
-      find.descendant(
-        of: tile,
-        matching: find.byIcon(Icons.check_rounded),
-      ),
+      find.descendant(of: tile, matching: find.byIcon(Icons.check_rounded)),
       findsOneWidget,
     );
   }
@@ -61,10 +58,7 @@ class SettingsScreenRobot {
     );
     expect(tile, findsOneWidget);
     expect(
-      find.descendant(
-        of: tile,
-        matching: find.byIcon(Icons.check_rounded),
-      ),
+      find.descendant(of: tile, matching: find.byIcon(Icons.check_rounded)),
       findsNothing,
     );
   }

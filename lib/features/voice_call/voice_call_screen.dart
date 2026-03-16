@@ -812,9 +812,7 @@ class _CallControls extends StatelessWidget {
             style: IconButton.styleFrom(
               backgroundColor: isMuted
                   ? Theme.of(context).colorScheme.errorContainer
-                  : Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               foregroundColor: isMuted
                   ? Theme.of(context).colorScheme.onErrorContainer
                   : Theme.of(context).colorScheme.onSurface,
@@ -848,9 +846,7 @@ class _CallControls extends StatelessWidget {
             style: IconButton.styleFrom(
               backgroundColor: isSpeakerOn
                   ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               foregroundColor: isSpeakerOn
                   ? Theme.of(context).colorScheme.onPrimaryContainer
                   : Theme.of(context).colorScheme.onSurface,

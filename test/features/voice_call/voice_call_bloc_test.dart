@@ -636,10 +636,8 @@ void main() {
     blocTest<VoiceCallBloc, VoiceCallState>(
       'flips isMuted from false to true',
       build: () => buildBloc(),
-      seed: () => const VoiceCallState(
-        status: VoiceCallStatus.active,
-        isMuted: false,
-      ),
+      seed: () =>
+          const VoiceCallState(status: VoiceCallStatus.active, isMuted: false),
       act: (bloc) => bloc.add(const ToggleMute()),
       expect: () => [
         isA<VoiceCallState>().having((s) => s.isMuted, 'isMuted', true),
@@ -649,10 +647,8 @@ void main() {
     blocTest<VoiceCallBloc, VoiceCallState>(
       'flips isMuted from true to false',
       build: () => buildBloc(),
-      seed: () => const VoiceCallState(
-        status: VoiceCallStatus.active,
-        isMuted: true,
-      ),
+      seed: () =>
+          const VoiceCallState(status: VoiceCallStatus.active, isMuted: true),
       act: (bloc) => bloc.add(const ToggleMute()),
       expect: () => [
         isA<VoiceCallState>().having((s) => s.isMuted, 'isMuted', false),
@@ -687,11 +683,7 @@ void main() {
       ),
       act: (bloc) => bloc.add(const ToggleSpeaker()),
       expect: () => [
-        isA<VoiceCallState>().having(
-          (s) => s.isSpeakerOn,
-          'isSpeakerOn',
-          true,
-        ),
+        isA<VoiceCallState>().having((s) => s.isSpeakerOn, 'isSpeakerOn', true),
       ],
     );
   });

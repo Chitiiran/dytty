@@ -6,9 +6,7 @@ void main() {
   group('ShimmerCategoryCard', () {
     testWidgets('renders in light theme', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: ShimmerCategoryCard()),
-        ),
+        const MaterialApp(home: Scaffold(body: ShimmerCategoryCard())),
       );
 
       expect(find.byType(ShimmerCategoryCard), findsOneWidget);
@@ -31,9 +29,7 @@ void main() {
   group('ShimmerJournalLoading', () {
     testWidgets('renders 5 shimmer category cards', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: ShimmerJournalLoading()),
-        ),
+        const MaterialApp(home: Scaffold(body: ShimmerJournalLoading())),
       );
 
       expect(find.byType(ShimmerCategoryCard), findsNWidgets(5));
@@ -43,9 +39,7 @@ void main() {
   group('ShimmerProgressCard', () {
     testWidgets('renders in light theme', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: ShimmerProgressCard()),
-        ),
+        const MaterialApp(home: Scaffold(body: ShimmerProgressCard())),
       );
 
       expect(find.byType(ShimmerProgressCard), findsOneWidget);

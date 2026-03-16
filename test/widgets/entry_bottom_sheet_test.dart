@@ -59,16 +59,14 @@ void main() {
       expect(button.onPressed, isNotNull);
     });
 
-    testWidgets('shows Edit title and Update button with initialText',
-        (tester) async {
+    testWidgets('shows Edit title and Update button with initialText', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildApp(initialText: 'Existing text'));
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Edit ${testCategory.displayName}'),
-        findsOneWidget,
-      );
+      expect(find.text('Edit ${testCategory.displayName}'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Update'), findsOneWidget);
     });
 

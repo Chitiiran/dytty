@@ -80,27 +80,27 @@ void main() {
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.llfbandit.record/messages'),
-      (MethodCall methodCall) async => null,
-    );
+          const MethodChannel('com.llfbandit.record/messages'),
+          (MethodCall methodCall) async => null,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.ryanheise.just_audio.methods'),
-      (MethodCall methodCall) async => null,
-    );
+          const MethodChannel('com.ryanheise.just_audio.methods'),
+          (MethodCall methodCall) async => null,
+        );
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.llfbandit.record/messages'),
-      null,
-    );
+          const MethodChannel('com.llfbandit.record/messages'),
+          null,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.ryanheise.just_audio.methods'),
-      null,
-    );
+          const MethodChannel('com.ryanheise.just_audio.methods'),
+          null,
+        );
   });
 
   group('VoiceCallScreen - idle state', () {
@@ -129,8 +129,9 @@ void main() {
       robot.expectStartCallButtonVisible();
     });
 
-    testWidgets('does not show active call controls in idle state',
-        (tester) async {
+    testWidgets('does not show active call controls in idle state', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -138,8 +139,9 @@ void main() {
       robot.expectNoActiveControls();
     });
 
-    testWidgets('does not show saved entries indicator in idle state',
-        (tester) async {
+    testWidgets('does not show saved entries indicator in idle state', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -147,8 +149,9 @@ void main() {
       robot.expectNoSavedEntriesIndicator();
     });
 
-    testWidgets('does not show latency indicator in idle state',
-        (tester) async {
+    testWidgets('does not show latency indicator in idle state', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -168,8 +171,9 @@ void main() {
   group('VoiceCallScreen - post-call summary (ended state)', () {
     late VoiceCallScreenRobot robot;
 
-    testWidgets('shows "Call Summary" AppBar and hides "Daily Call"',
-        (tester) async {
+    testWidgets('shows "Call Summary" AppBar and hides "Daily Call"', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -201,8 +205,7 @@ void main() {
       expect(find.text('Done'), findsOneWidget);
     });
 
-    testWidgets('shows empty message when no entries captured',
-        (tester) async {
+    testWidgets('shows empty message when no entries captured', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -212,8 +215,9 @@ void main() {
       robot.expectNoEntriesCapturedMessage();
     });
 
-    testWidgets('does not show Latency stat when no latency measured',
-        (tester) async {
+    testWidgets('does not show Latency stat when no latency measured', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -223,8 +227,9 @@ void main() {
       robot.expectNoLatencyStat();
     });
 
-    testWidgets('does not show "Generate Summary" when no transcripts',
-        (tester) async {
+    testWidgets('does not show "Generate Summary" when no transcripts', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -234,9 +239,9 @@ void main() {
       robot.expectNoGenerateSummaryButton();
     });
 
-    testWidgets(
-        'shows "Generate Summary" button when transcripts exist',
-        (tester) async {
+    testWidgets('shows "Generate Summary" button when transcripts exist', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -249,8 +254,9 @@ void main() {
       robot.expectGenerateSummaryButton();
     });
 
-    testWidgets('shows Latency stat chip when latency was measured',
-        (tester) async {
+    testWidgets('shows Latency stat chip when latency was measured', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -264,8 +270,9 @@ void main() {
       robot.expectLatencyStat(150);
     });
 
-    testWidgets('shows "Captured entries" header when entries exist',
-        (tester) async {
+    testWidgets('shows "Captured entries" header when entries exist', (
+      tester,
+    ) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -316,10 +323,7 @@ void main() {
       await robot.addTranscript(Speaker.user, 'Really well actually');
 
       expect(find.text('Good morning'), findsOneWidget);
-      expect(
-        find.text('Good morning! How did you sleep?'),
-        findsOneWidget,
-      );
+      expect(find.text('Good morning! How did you sleep?'), findsOneWidget);
       expect(find.text('Really well actually'), findsOneWidget);
     });
   });

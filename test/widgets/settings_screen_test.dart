@@ -81,10 +81,7 @@ void main() {
     });
 
     testWidgets('marks system theme as selected by default', (tester) async {
-      await tester.pumpApp(
-        const SettingsScreen(),
-        themeMode: ThemeMode.system,
-      );
+      await tester.pumpApp(const SettingsScreen(), themeMode: ThemeMode.system);
       await tester.pump(const Duration(seconds: 1));
 
       robot = SettingsScreenRobot(tester);
@@ -94,10 +91,7 @@ void main() {
     });
 
     testWidgets('marks dark theme as selected when dark mode', (tester) async {
-      await tester.pumpApp(
-        const SettingsScreen(),
-        themeMode: ThemeMode.dark,
-      );
+      await tester.pumpApp(const SettingsScreen(), themeMode: ThemeMode.dark);
       await tester.pump(const Duration(seconds: 1));
 
       robot = SettingsScreenRobot(tester);
@@ -203,14 +197,11 @@ void main() {
 
     testWidgets('tapping sign out dispatches SignOut event', (tester) async {
       final mockAuthBloc = MockAuthBloc();
-      when(() => mockAuthBloc.state).thenReturn(
-        const Authenticated(uid: 'uid-1', displayName: 'Test'),
-      );
+      when(
+        () => mockAuthBloc.state,
+      ).thenReturn(const Authenticated(uid: 'uid-1', displayName: 'Test'));
 
-      await tester.pumpApp(
-        const SettingsScreen(),
-        authBloc: mockAuthBloc,
-      );
+      await tester.pumpApp(const SettingsScreen(), authBloc: mockAuthBloc);
       await tester.pump(const Duration(seconds: 1));
 
       robot = SettingsScreenRobot(tester);
@@ -224,10 +215,7 @@ void main() {
       final mockThemeCubit = MockThemeCubit();
       when(() => mockThemeCubit.state).thenReturn(ThemeMode.system);
 
-      await tester.pumpApp(
-        const SettingsScreen(),
-        themeCubit: mockThemeCubit,
-      );
+      await tester.pumpApp(const SettingsScreen(), themeCubit: mockThemeCubit);
       await tester.pump(const Duration(seconds: 1));
 
       robot = SettingsScreenRobot(tester);
@@ -314,11 +302,12 @@ void main() {
 
     testWidgets('toggles hide entries calls cubit', (tester) async {
       final mockSettingsCubit = MockSettingsCubit();
-      when(() => mockSettingsCubit.state).thenReturn(
-        const SettingsState(loaded: true),
-      );
-      when(() => mockSettingsCubit.toggleHideEntries())
-          .thenAnswer((_) async {});
+      when(
+        () => mockSettingsCubit.state,
+      ).thenReturn(const SettingsState(loaded: true));
+      when(
+        () => mockSettingsCubit.toggleHideEntries(),
+      ).thenAnswer((_) async {});
 
       await tester.pumpApp(
         const SettingsScreen(),
@@ -334,11 +323,10 @@ void main() {
 
     testWidgets('toggles daily reminder calls cubit', (tester) async {
       final mockSettingsCubit = MockSettingsCubit();
-      when(() => mockSettingsCubit.state).thenReturn(
-        const SettingsState(loaded: true),
-      );
-      when(() => mockSettingsCubit.toggleReminder())
-          .thenAnswer((_) async {});
+      when(
+        () => mockSettingsCubit.state,
+      ).thenReturn(const SettingsState(loaded: true));
+      when(() => mockSettingsCubit.toggleReminder()).thenAnswer((_) async {});
 
       await tester.pumpApp(
         const SettingsScreen(),
@@ -356,11 +344,10 @@ void main() {
 
     testWidgets('toggles daily call calls cubit', (tester) async {
       final mockSettingsCubit = MockSettingsCubit();
-      when(() => mockSettingsCubit.state).thenReturn(
-        const SettingsState(loaded: true),
-      );
-      when(() => mockSettingsCubit.toggleDailyCall())
-          .thenAnswer((_) async {});
+      when(
+        () => mockSettingsCubit.state,
+      ).thenReturn(const SettingsState(loaded: true));
+      when(() => mockSettingsCubit.toggleDailyCall()).thenAnswer((_) async {});
 
       await tester.pumpApp(
         const SettingsScreen(),
