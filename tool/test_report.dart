@@ -1,7 +1,8 @@
-// Converts flutter test --machine JSON output to an HTML report.
+// Converts flutter test --machine JSON output + lcov.info to an HTML report.
 // Usage: dart run tool/test_report.dart [input] [output]
 //   input  defaults to test-results.json
 //   output defaults to test-report.html
+// Also reads coverage/lcov.info if present.
 
 import 'dart:convert';
 import 'dart:io';
@@ -102,6 +103,14 @@ void main(List<String> args) {
     .card.fail .num { color: #c62828; }
     .card.skip .num { color: #f57f17; }
     .card.total .num { color: #1565c0; }
+    h2 { font-size: 20px; margin: 32px 0 16px; }
+    .coverage-bar { background: #e0e0e0; border-radius: 4px; height: 8px; flex: 1; }
+    .coverage-bar .fill { height: 100%; border-radius: 4px; }
+    .cov-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .cov-row:last-child { border-bottom: none; }
+    .cov-row .file { flex: 2; font-family: monospace; font-size: 12px; }
+    .cov-row .pct { width: 50px; text-align: right; font-weight: 600; font-size: 13px; }
+    .cov-row .ratio { width: 80px; text-align: right; color: #999; font-size: 12px; }
     .suite { background: white; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
     .suite-header { padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee; font-weight: 600; font-size: 13px; color: #555; cursor: pointer; display: flex; justify-content: space-between; }
     .suite-header:hover { background: #f0f0f0; }
@@ -175,10 +184,62 @@ void main(List<String> args) {
     buf.writeln('</details>');
   }
 
+  // Coverage section
+  final covFiles = _parseLcov('coverage/lcov.info');
+  if (covFiles.isNotEmpty) {
+    var covHit = 0;
+    var covTotal = 0;
+    for (final f in covFiles) {
+      covHit += f.hit;
+      covTotal += f.total;
+    }
+    final covPct = covTotal > 0 ? (covHit / covTotal * 100) : 0.0;
+    final covColor = covPct >= 80
+        ? '#2e7d32'
+        : covPct >= 50
+        ? '#f57f17'
+        : '#c62828';
+
+    buf.writeln('<h2>Coverage: ${covPct.toStringAsFixed(1)}%</h2>');
+    buf.writeln('<div class="summary">');
+    buf.writeln(
+      '<div class="card" style="flex:1;max-width:400px"><div class="num" style="color:$covColor">${covPct.toStringAsFixed(1)}%</div><div class="label">$covHit / $covTotal lines</div></div>',
+    );
+    buf.writeln('</div>');
+
+    // Sort by coverage ascending (worst first)
+    covFiles.sort((a, b) => a.pct.compareTo(b.pct));
+
+    buf.writeln('<details class="suite" open>');
+    buf.writeln(
+      '<summary class="suite-header"><span>Coverage by file</span><span class="counts">${covFiles.length} files</span></summary>',
+    );
+    for (final f in covFiles) {
+      final pctStr = f.pct.toStringAsFixed(0);
+      final barColor = f.pct >= 80
+          ? '#2e7d32'
+          : f.pct >= 50
+          ? '#f57f17'
+          : '#c62828';
+      buf.writeln('<div class="cov-row">');
+      buf.writeln('<span class="file">${_escapeHtml(f.path)}</span>');
+      buf.writeln(
+        '<div class="coverage-bar"><div class="fill" style="width:${f.pct.clamp(0, 100)}%;background:$barColor"></div></div>',
+      );
+      buf.writeln('<span class="pct" style="color:$barColor">$pctStr%</span>');
+      buf.writeln('<span class="ratio">${f.hit}/${f.total}</span>');
+      buf.writeln('</div>');
+    }
+    buf.writeln('</details>');
+  }
+
   buf.writeln('</body></html>');
 
   File(outputPath).writeAsStringSync(buf.toString());
-  print('Test report: $outputPath ($passed/$total passed, $failed failed)');
+  final covMsg = covFiles.isNotEmpty ? ', coverage included' : '';
+  print(
+    'Test report: $outputPath ($passed/$total passed, $failed failed$covMsg)',
+  );
 }
 
 String _escapeHtml(String s) =>
@@ -195,4 +256,47 @@ class _Test {
   int time = 0;
   String? error;
   String? stackTrace;
+}
+
+class _CovFile {
+  _CovFile(this.path, this.hit, this.total);
+
+  final String path;
+  final int hit;
+  final int total;
+  double get pct => total > 0 ? (hit / total * 100) : 0;
+}
+
+List<_CovFile> _parseLcov(String path) {
+  final file = File(path);
+  if (!file.existsSync()) return [];
+
+  final results = <_CovFile>[];
+  String? currentFile;
+  var hit = 0;
+  var total = 0;
+
+  for (final line in file.readAsLinesSync()) {
+    if (line.startsWith('SF:')) {
+      currentFile = line
+          .substring(3)
+          .replaceAll(RegExp(r'^.*[/\\]lib[/\\]'), 'lib/');
+    } else if (line.startsWith('DA:')) {
+      final parts = line.substring(3).split(',');
+      if (parts.length >= 2) {
+        total++;
+        if (int.tryParse(parts[1]) case final count? when count > 0) {
+          hit++;
+        }
+      }
+    } else if (line == 'end_of_record') {
+      if (currentFile != null && total > 0) {
+        results.add(_CovFile(currentFile, hit, total));
+      }
+      currentFile = null;
+      hit = 0;
+      total = 0;
+    }
+  }
+  return results;
 }

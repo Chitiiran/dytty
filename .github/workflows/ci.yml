@@ -36,19 +36,14 @@ jobs:
 
       - name: Generate test report
         if: always()
-        run: |
-          sudo apt-get install -y lcov > /dev/null 2>&1
-          genhtml coverage/lcov.info -o coverage/html --quiet
-          dart run tool/test_report.dart
+        run: dart run tool/test_report.dart
 
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: |
-            coverage/html/
-            test-report.html
+          path: test-report.html
           retention-days: 14
 
       - name: Build web
