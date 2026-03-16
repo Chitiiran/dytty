@@ -20,8 +20,10 @@ class Transcript {
 class GeminiLiveService {
   static const _model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
+  /// Connection timeout for the initial Gemini Live session.
+  static const connectionTimeout = Duration(seconds: 15);
+
   LiveSession? _session;
-  StreamSubscription<LiveServerResponse>? _responseSubscription;
 
   final _audioController = StreamController<Uint8List>.broadcast();
   final _transcriptController = StreamController<Transcript>.broadcast();
@@ -70,7 +72,13 @@ class GeminiLiveService {
         ],
       );
 
-      _session = await liveModel.connect();
+      _session = await liveModel.connect().timeout(
+        connectionTimeout,
+        onTimeout: () => throw TimeoutException(
+          'Gemini Live connection timed out',
+          connectionTimeout,
+        ),
+      );
       _listenToResponses();
       _stateController.add(GeminiLiveState.active);
     } catch (e) {
@@ -110,10 +118,9 @@ class GeminiLiveService {
   /// Disconnect and clean up.
   Future<void> disconnect() async {
     _stateController.add(GeminiLiveState.disconnecting);
-    await _responseSubscription?.cancel();
-    _responseSubscription = null;
-    await _session?.close();
-    _session = null;
+    final session = _session;
+    _session = null; // Break receive loop before closing
+    await session?.close();
     _stateController.add(GeminiLiveState.idle);
   }
 
@@ -124,31 +131,40 @@ class GeminiLiveService {
     _stateController.close();
   }
 
+  /// Start the receive loop for multi-turn conversations.
+  ///
+  /// `receive()` is an async* generator that yields responses until
+  /// `turnComplete: true`, then the stream ends. We loop to re-call
+  /// `receive()` for subsequent turns, keeping the session alive.
   void _listenToResponses() {
-    // Listen on the broadcast stream from the session's message controller
-    // rather than receive() which stops at turnComplete.
-    _responseSubscription = _session!.receive().listen(
-      (response) {
-        final message = response.message;
+    _receiveLoop();
+  }
 
-        if (message is LiveServerContent) {
-          _handleContent(message);
-        } else if (message is LiveServerToolCall) {
-          _handleToolCall(message);
-        } else if (message is GoingAwayNotice) {
-          debugPrint(
-            'Gemini session ending soon: ${message.timeLeft} remaining',
-          );
+  Future<void> _receiveLoop() async {
+    try {
+      while (_session != null) {
+        await for (final response in _session!.receive()) {
+          final message = response.message;
+
+          if (message is LiveServerContent) {
+            _handleContent(message);
+          } else if (message is LiveServerToolCall) {
+            _handleToolCall(message);
+          } else if (message is GoingAwayNotice) {
+            debugPrint(
+              'Gemini session ending soon: ${message.timeLeft} remaining',
+            );
+          }
         }
-      },
-      onError: (error) {
-        debugPrint('Gemini Live stream error: $error');
-        _stateController.add(GeminiLiveState.error);
-      },
-      onDone: () {
-        _stateController.add(GeminiLiveState.idle);
-      },
-    );
+        // receive() returned (turnComplete) — loop to listen for next turn
+      }
+    } catch (e) {
+      debugPrint('Gemini Live stream error: $e');
+      _stateController.add(GeminiLiveState.error);
+      return;
+    }
+    // If we exit the while loop, session was set to null (graceful disconnect)
+    // Don't emit idle here — disconnect() already handles that
   }
 
   void _handleContent(LiveServerContent content) {
