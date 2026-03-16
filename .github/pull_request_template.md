@@ -13,5 +13,11 @@ Fixes #
 
 - [ ]
 
+## Tester Checklist
+<!-- User-facing testing steps sent to testers via Firebase App Distribution.
+     Write for the end user, not the developer. Keep it simple and actionable. -->
+
+- [ ]
+
 ## Screenshots
 <!-- UI changes only. Delete if not applicable. -->
