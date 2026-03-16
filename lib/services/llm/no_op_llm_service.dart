@@ -24,6 +24,12 @@ class NoOpLlmService implements LlmService {
   Future<String> summarizeEntry(String text) async => text;
 
   @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async => editedTranscript;
+
+  @override
   Future<String> generateWeeklySummary(List<String> entries) async => '';
 
   @override

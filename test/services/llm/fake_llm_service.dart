@@ -35,6 +35,15 @@ class FakeLlmService implements LlmService {
   }
 
   @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async {
+    callCount++;
+    return 'Reconciled summary of edited transcript';
+  }
+
+  @override
   Future<String> generateWeeklySummary(List<String> entries) async {
     callCount++;
     return 'Fake weekly summary of ${entries.length} entries.';

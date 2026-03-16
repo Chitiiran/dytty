@@ -306,6 +306,101 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'UpdateTranscript changes transcript text',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        transcript: 'Original transcript from STT',
+        summary: 'Original summary',
+      ),
+      act: (bloc) => bloc.add(
+        const UpdateTranscript('Original transcript from STT, plus edits'),
+      ),
+      expect: () => [
+        isA<VoiceNoteState>()
+            .having(
+              (s) => s.transcript,
+              'transcript',
+              'Original transcript from STT, plus edits',
+            )
+            .having((s) => s.transcriptEdited, 'transcriptEdited', true),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'ReconcileSummary calls LLM with original and edited transcript',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        originalTranscript: 'I had a great day at the park',
+        transcript: 'I had a great day at the park with my dog',
+        summary: 'Old summary',
+        transcriptEdited: true,
+      ),
+      act: (bloc) => bloc.add(const ReconcileSummary()),
+      expect: () => [
+        // reconciling state
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.reconciling,
+        ),
+        // back to reviewing with reconciled summary
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', isNotEmpty),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'ReconcileSummary times out and falls back to edited transcript',
+      build: () {
+        final slowLlm = _SlowLlmService();
+        return VoiceNoteBloc(
+          speechService: speechService,
+          llmService: slowLlm,
+          categorizationTimeout: const Duration(milliseconds: 50),
+        );
+      },
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        originalTranscript: 'Original text',
+        transcript: 'Edited text by user',
+        summary: 'Old summary',
+        transcriptEdited: true,
+      ),
+      act: (bloc) => bloc.add(const ReconcileSummary()),
+      wait: const Duration(milliseconds: 200),
+      expect: () => [
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.reconciling,
+        ),
+        // Falls back to edited transcript as summary
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', 'Edited text by user'),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'ReconcileSummary skipped when transcript not edited',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        transcript: 'I had a great day',
+        summary: 'Great day',
+        transcriptEdited: false,
+      ),
+      act: (bloc) => bloc.add(const ReconcileSummary()),
+      expect: () => [],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
       'ResetVoiceNote returns to ready',
       build: () =>
           VoiceNoteBloc(speechService: speechService, llmService: llmService),
@@ -342,6 +437,14 @@ class _SlowLlmService implements LlmService {
 
   @override
   Future<String> summarizeEntry(String text) async => '';
+
+  @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) {
+    return Completer<String>().future; // never completes
+  }
 
   @override
   Future<String> generateWeeklySummary(List<String> entries) async => '';

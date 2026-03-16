@@ -75,6 +75,28 @@ Respond with valid JSON only, no markdown:
   }
 
   @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async {
+    final prompt =
+        '''
+You are summarizing a journal voice note. The user spoke the original transcript, then edited it before saving.
+
+Original transcript (what the user said):
+"$originalTranscript"
+
+Edited transcript (what the user wants saved):
+"$editedTranscript"
+
+Write a concise 1-sentence summary that reflects the user's intent in the edited version. If content was removed, do not include it. If content was added, incorporate it.
+''';
+
+    final response = await _model.generateContent([Content.text(prompt)]);
+    return response.text ?? editedTranscript;
+  }
+
+  @override
   Future<String> generateWeeklySummary(List<String> entries) async {
     final entriesText = entries
         .asMap()

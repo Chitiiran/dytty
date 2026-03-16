@@ -62,6 +62,19 @@ class RequestCategorization extends VoiceNoteEvent {
   const RequestCategorization();
 }
 
+class UpdateTranscript extends VoiceNoteEvent {
+  final String text;
+
+  const UpdateTranscript(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
+class ReconcileSummary extends VoiceNoteEvent {
+  const ReconcileSummary();
+}
+
 class ResetVoiceNote extends VoiceNoteEvent {
   const ResetVoiceNote();
 }
@@ -75,6 +88,7 @@ enum VoiceNoteStatus {
   transcriptReview,
   processing,
   reviewing,
+  reconciling,
   error,
   unavailable,
 }
@@ -82,38 +96,46 @@ enum VoiceNoteStatus {
 class VoiceNoteState extends Equatable {
   final VoiceNoteStatus status;
   final String transcript;
+  final String originalTranscript;
   final String summary;
   final String? suggestedCategory;
   final List<String> suggestedTags;
   final double confidence;
+  final bool transcriptEdited;
   final String? error;
 
   const VoiceNoteState({
     this.status = VoiceNoteStatus.initial,
     this.transcript = '',
+    this.originalTranscript = '',
     this.summary = '',
     this.suggestedCategory,
     this.suggestedTags = const [],
     this.confidence = 0.0,
+    this.transcriptEdited = false,
     this.error,
   });
 
   VoiceNoteState copyWith({
     VoiceNoteStatus? status,
     String? transcript,
+    String? originalTranscript,
     String? summary,
     String? suggestedCategory,
     List<String>? suggestedTags,
     double? confidence,
+    bool? transcriptEdited,
     String? error,
   }) {
     return VoiceNoteState(
       status: status ?? this.status,
       transcript: transcript ?? this.transcript,
+      originalTranscript: originalTranscript ?? this.originalTranscript,
       summary: summary ?? this.summary,
       suggestedCategory: suggestedCategory ?? this.suggestedCategory,
       suggestedTags: suggestedTags ?? this.suggestedTags,
       confidence: confidence ?? this.confidence,
+      transcriptEdited: transcriptEdited ?? this.transcriptEdited,
       error: error,
     );
   }
@@ -122,10 +144,12 @@ class VoiceNoteState extends Equatable {
   List<Object?> get props => [
     status,
     transcript,
+    originalTranscript,
     summary,
     suggestedCategory,
     suggestedTags,
     confidence,
+    transcriptEdited,
     error,
   ];
 }
@@ -153,6 +177,8 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     on<CategorizeTranscript>(_onCategorizeTranscript);
     on<UpdateCategory>(_onUpdateCategory);
     on<UpdateText>(_onUpdateText);
+    on<UpdateTranscript>(_onUpdateTranscript);
+    on<ReconcileSummary>(_onReconcileSummary);
     on<ResetVoiceNote>(_onResetVoiceNote);
   }
 
@@ -237,6 +263,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
       emit(
         state.copyWith(
           status: VoiceNoteStatus.reviewing,
+          originalTranscript: state.transcript,
           summary: result.summary.isNotEmpty
               ? result.summary
               : state.transcript,
@@ -251,6 +278,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
         VoiceNoteState(
           status: VoiceNoteStatus.reviewing,
           transcript: state.transcript,
+          originalTranscript: state.transcript,
           summary: state.transcript,
         ),
       );
@@ -270,6 +298,45 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
 
   void _onUpdateText(UpdateText event, Emitter<VoiceNoteState> emit) {
     emit(state.copyWith(summary: event.text));
+  }
+
+  void _onUpdateTranscript(
+    UpdateTranscript event,
+    Emitter<VoiceNoteState> emit,
+  ) {
+    emit(state.copyWith(transcript: event.text, transcriptEdited: true));
+  }
+
+  Future<void> _onReconcileSummary(
+    ReconcileSummary event,
+    Emitter<VoiceNoteState> emit,
+  ) async {
+    if (!state.transcriptEdited) return;
+
+    emit(state.copyWith(status: VoiceNoteStatus.reconciling));
+    try {
+      final reconciled = await _llmService
+          .reconcileSummary(state.originalTranscript, state.transcript)
+          .timeout(_categorizationTimeout);
+      emit(
+        state.copyWith(status: VoiceNoteStatus.reviewing, summary: reconciled),
+      );
+    } on TimeoutException {
+      // Fall back to edited transcript as summary
+      emit(
+        state.copyWith(
+          status: VoiceNoteStatus.reviewing,
+          summary: state.transcript,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          status: VoiceNoteStatus.reviewing,
+          summary: state.transcript,
+        ),
+      );
+    }
   }
 
   void _onResetVoiceNote(ResetVoiceNote event, Emitter<VoiceNoteState> emit) {
