@@ -285,7 +285,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('VoiceCallBloc: connect failed: $e');
+      debugPrint('VoiceCallBloc: stack trace: $stackTrace');
       emit(state.copyWith(status: VoiceCallStatus.error, error: e.toString()));
     }
   }
@@ -390,7 +392,20 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     TranscriptReceived event,
     Emitter<VoiceCallState> emit,
   ) {
-    emit(state.copyWith(transcripts: [...state.transcripts, event.transcript]));
+    final current = state.transcripts;
+    final incoming = event.transcript;
+
+    // Append new bubble when: list is empty, speaker changed, or last was final
+    if (current.isEmpty ||
+        current.last.speaker != incoming.speaker ||
+        current.last.isFinal) {
+      emit(state.copyWith(transcripts: [...current, incoming]));
+    } else {
+      // Replace last partial with updated partial/final from same speaker
+      final updated = List<Transcript>.of(current);
+      updated[updated.length - 1] = incoming;
+      emit(state.copyWith(transcripts: updated));
+    }
   }
 
   Future<void> _onToolCallReceived(

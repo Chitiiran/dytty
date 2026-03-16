@@ -1,21 +1,21 @@
 # Dytty Progress
 
 ## Current Status
-**Voice note UX fixes in progress (#35, #50, #30). Pipeline aligned to trunk-based development.**
+**Daily call audio playback fix planned (#94). Google Sign-In fix applied. Distribution pipeline improved.**
 
-**In progress (uncommitted on main):**
-- **#35 Voice note UX** — red mic, JSON parse fix, transcript review state before LLM categorization
-- **#50 LLM timeout** — 10s timeout on categorization, falls back to manual category picker
-- **#30 FAB overlap** — bottom bar layout: Write | Mic FAB | Call (no overlap)
-- **Firebase duplicate-app fix** — `main.dart` handles `google-services.json` auto-init on Android
-- **Pipeline: trunk-based** — removed `develop` branch model, PRs target `main`, added `dart format` CI gate
+**Committed on main (uncommitted sign-in fix pending):**
+- `serverClientId` fix for Google Sign-In (`auth_service.dart`) — resolves ApiException: 10 since March 12
+- Debug logging added to `GeminiLiveService.connect()` and `VoiceCallBloc._onStartCall`
+- Version bumped to 0.1.5+7 (distributed to testers)
 
-**Merged to main (prior sessions):**
-- #42 State audit (PR #44), M6 categories (PR #16), M4 daily call (PR #15), M3 Gemini (PR #13), M2 dashboard, M1 voice notes, M0 foundation
+**Recent merges:**
+- PR #87: M4 daily call polish — mute/speaker/end controls, multi-turn fix, CI shared keystore, 65.8% coverage
+- CI tester checklist: distribution emails now send only `## Tester Checklist` section from PR body
+- PR template updated with Tester Checklist section
 
-**Open PRs:** None (changes pending commit + PR)
+**Open PRs:** None
 
-**Test status:** 138 unit/widget tests, 5 JSON extraction tests, 9 Maestro flows — all passing. Coverage: 38.4%
+**Test status:** ~200 unit/widget tests, 9 Maestro flows. Coverage: 65.8% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -39,19 +39,32 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 | M7: Launch Prep | Not started |
 
 ## Blockers
-- CI/CD deploy: needs `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` GitHub secret
+- **#94 Daily call audio broken** — `just_audio` crashes on streaming PCM, transcripts render word-by-word. Plan ready: `docs/planning/PLAN-094-audio-playback-fix.md`
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
 
 ## Up Next
-- Commit current voice note fixes, create PR to main
-- **#24, #25, #33**: Voice call active state + UI fixes
-- **#26**: Push notification delivery investigation
-- **#49**: Category icons greyed out on restart
-- Coverage: write tests to hit 50% by 2026-03-22
+- **#94**: Fix daily call audio playback (replace `just_audio` with `flutter_pcm_sound`, transcript aggregation) — plan at `docs/planning/PLAN-094-audio-playback-fix.md`
+- Commit sign-in fix + debug logging, create PR
+- **#90**: Error state flash on call start (race condition)
+- **#91**: Speaker toggle icon UX
+- **#92**: Gemini model retirement check (deadline: 1 June 2026)
+- **#93**: Firebase App Check
+- Coverage: maintain 50%+ gate, push toward 60% by 2026-03-22
 
 ---
 
 ## Log
+
+### 2026-03-16 (session 21)
+- **Google Sign-In fix** — `google_sign_in_android 6.2+` migrated to Credential Manager which requires explicit `serverClientId`. Added web client ID to `GoogleSignIn()` constructor. Documented in ADR-006.
+- **Firebase AI Logic enabled** — daily call was failing because Gemini Developer API wasn't enabled. Enabled via Firebase Console > AI services > Gemini Developer API. Closed #89.
+- **Daily call audio diagnosed** — connection works (158ms latency) but `just_audio` crashes on streaming PCM ("Source error", "Connection aborted"). Transcripts render word-by-word. Created #94.
+- **CI distribution improved** — tester emails now send only `## Tester Checklist` from PR body (not full Summary/Key Decisions/Claude footer). Updated PR template with Tester Checklist section.
+- **Issues created**: #89 (closed — API enablement), #90 (error flash race), #91 (speaker icon UX), #92 (Gemini model retirement), #93 (App Check), #94 (audio playback + transcripts)
+- **Distributed 0.1.5+7** to testers with sign-in fix + tester-facing release notes
+- **Plan written** for #94: replace `just_audio` with `flutter_pcm_sound`, aggregate partial transcripts using `Transcription.finished` flag, abstract playback behind testable interface. See `docs/planning/PLAN-094-audio-playback-fix.md`
+- Key decisions: `flutter_pcm_sound` over `raw_sound` (actively maintained, event-driven feed), `AudioPlaybackService` abstraction for testability
+- Context used: ~70%, key decisions: serverClientId fix (ADR-006), flutter_pcm_sound selection, tester checklist extraction
 
 ### 2026-03-15 (session 20, continued)
 - **Maestro 9/9 flows all green**

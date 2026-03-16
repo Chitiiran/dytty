@@ -10,8 +10,13 @@ enum Speaker { user, ai }
 class Transcript {
   final Speaker speaker;
   final String text;
+  final bool isFinal;
 
-  const Transcript({required this.speaker, required this.text});
+  const Transcript({
+    required this.speaker,
+    required this.text,
+    this.isFinal = true,
+  });
 }
 
 /// Wraps the Firebase AI Live API for bidirectional voice streaming.
@@ -81,7 +86,9 @@ class GeminiLiveService {
       );
       _listenToResponses();
       _stateController.add(GeminiLiveState.active);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('Gemini Live connect error: $e');
+      debugPrint('Stack trace: $stackTrace');
       _stateController.add(GeminiLiveState.error);
       rethrow;
     }
@@ -191,6 +198,7 @@ class GeminiLiveService {
         Transcript(
           speaker: Speaker.user,
           text: content.inputTranscription!.text!,
+          isFinal: content.inputTranscription!.finished == true,
         ),
       );
     }
@@ -199,6 +207,7 @@ class GeminiLiveService {
         Transcript(
           speaker: Speaker.ai,
           text: content.outputTranscription!.text!,
+          isFinal: content.outputTranscription!.finished == true,
         ),
       );
     }
