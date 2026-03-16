@@ -134,12 +134,7 @@ jobs:
           script: |
             adb install build/app/outputs/flutter-apk/app-debug.apk
             mkdir -p maestro-output
-            maestro test \
-              --debug-output maestro-output \
-              --format junit \
-              --output maestro-output/results.xml \
-              --include-tags=smoke,state \
-              .maestro/
+            maestro test --debug-output maestro-output --format junit --output maestro-output/results.xml --include-tags=smoke,state .maestro/
 
       - name: Upload Maestro screenshots
         if: always()
