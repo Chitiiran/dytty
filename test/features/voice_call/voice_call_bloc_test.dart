@@ -401,11 +401,7 @@ void main() {
       act: (bloc) {
         bloc.add(
           const TranscriptReceived(
-            Transcript(
-              speaker: Speaker.user,
-              text: 'Hello',
-              isFinal: false,
-            ),
+            Transcript(speaker: Speaker.user, text: 'Hello', isFinal: false),
           ),
         );
         bloc.add(
@@ -427,11 +423,7 @@ void main() {
       act: (bloc) {
         bloc.add(
           const TranscriptReceived(
-            Transcript(
-              speaker: Speaker.ai,
-              text: 'Welcome',
-              isFinal: false,
-            ),
+            Transcript(speaker: Speaker.ai, text: 'Welcome', isFinal: false),
           ),
         );
       },
@@ -472,11 +464,7 @@ void main() {
             .having((s) => s.transcripts.last.text, 'text', 'First sentence.'),
         isA<VoiceCallState>()
             .having((s) => s.transcripts.length, 'length', 2)
-            .having(
-              (s) => s.transcripts.last.text,
-              'text',
-              'Second sentence.',
-            ),
+            .having((s) => s.transcripts.last.text, 'text', 'Second sentence.'),
       ],
     );
   });

@@ -67,9 +67,7 @@ Future<void> pumpVoiceCallScreen(
           RepositoryProvider<AudioStorageService>.value(value: mockStorage),
         ],
         child: MaterialApp(
-          home: VoiceCallScreen(
-            playbackService: FakeAudioPlaybackService(),
-          ),
+          home: VoiceCallScreen(playbackService: FakeAudioPlaybackService()),
         ),
       ),
     ),

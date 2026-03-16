@@ -827,4 +827,3 @@ class _CallControls extends StatelessWidget {
     );
   }
 }
-

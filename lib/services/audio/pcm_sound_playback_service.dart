@@ -7,10 +7,7 @@ import 'package:dytty/services/audio/audio_playback_service.dart';
 class PcmSoundPlaybackService implements AudioPlaybackService {
   @override
   Future<void> init({required int sampleRate, required int channels}) async {
-    await FlutterPcmSound.setup(
-      sampleRate: sampleRate,
-      channelCount: channels,
-    );
+    await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: channels);
   }
 
   @override
