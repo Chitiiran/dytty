@@ -68,12 +68,19 @@ This ensures:
 [What the tester said, paraphrased with context]
 
 ## Acceptance Criteria
-- [ ] [Specific, testable criteria]
+- [ ] [Specific, testable criteria — what the feature/fix must do]
+
+## Success Criteria
+- [ ] [How we verify it works — concrete test scenarios, platforms, commands to run]
 
 ## Dependencies
 - Blocked by #NN (description)
 - Blocks #NN (description)
 ```
+
+**Acceptance vs Success Criteria:**
+- **Acceptance**: _What_ must be true (functional requirements)
+- **Success**: _How_ we verify it (test scenarios, platforms, specific commands or flows that must pass)
 
 ### Labels (pick all that apply)
 
