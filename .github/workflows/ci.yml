@@ -49,13 +49,8 @@ jobs:
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
 
-      - name: Print debug keystore SHA-1
-        run: |
-          keytool -list -v \
-            -keystore ~/.android/debug.keystore \
-            -alias androiddebugkey \
-            -storepass android -keypass android 2>/dev/null \
-            | grep SHA1 || echo "No debug keystore found"
+      - name: Restore shared debug keystore
+        run: echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
 
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
@@ -151,6 +146,9 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Restore shared debug keystore
+        run: echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
 
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
