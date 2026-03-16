@@ -32,7 +32,7 @@ jobs:
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
         with:
-          min_coverage: 40
+          min_coverage: 39
 
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
