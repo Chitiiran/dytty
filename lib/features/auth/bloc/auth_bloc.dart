@@ -98,34 +98,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   StreamSubscription<dynamic>? _authSub;
 
   AuthBloc({required AuthService authService})
-      : _authService = authService,
-        super(const AuthInitial()) {
+    : _authService = authService,
+      super(const AuthInitial()) {
     on<_AuthUserChanged>(_onAuthUserChanged);
     on<SignInWithGoogle>(_onSignInWithGoogle);
     on<SignInAnonymously>(_onSignInAnonymously);
     on<SignOut>(_onSignOut);
 
     _authSub = _authService.authStateChanges.listen((user) {
-      add(_AuthUserChanged(
-        uid: user?.uid,
-        displayName: user?.displayName,
-        email: user?.email,
-        photoUrl: user?.photoURL,
-      ));
+      add(
+        _AuthUserChanged(
+          uid: user?.uid,
+          displayName: user?.displayName,
+          email: user?.email,
+          photoUrl: user?.photoURL,
+        ),
+      );
     });
   }
 
-  void _onAuthUserChanged(
-    _AuthUserChanged event,
-    Emitter<AuthState> emit,
-  ) {
+  void _onAuthUserChanged(_AuthUserChanged event, Emitter<AuthState> emit) {
     if (event.uid != null) {
-      emit(Authenticated(
-        uid: event.uid!,
-        displayName: event.displayName,
-        email: event.email,
-        photoUrl: event.photoUrl,
-      ));
+      emit(
+        Authenticated(
+          uid: event.uid!,
+          displayName: event.displayName,
+          email: event.email,
+          photoUrl: event.photoUrl,
+        ),
+      );
     } else {
       emit(const Unauthenticated());
     }
@@ -157,10 +158,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onSignOut(
-    SignOut event,
-    Emitter<AuthState> emit,
-  ) async {
+  Future<void> _onSignOut(SignOut event, Emitter<AuthState> emit) async {
     await _authService.signOut();
     // State will update via _AuthUserChanged from stream
   }

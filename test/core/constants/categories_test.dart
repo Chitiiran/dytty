@@ -31,8 +31,7 @@ void main() {
     });
 
     test('each category has a unique icon', () {
-      final icons =
-          CategoryConfig.defaults.map((c) => c.iconCodePoint).toSet();
+      final icons = CategoryConfig.defaults.map((c) => c.iconCodePoint).toSet();
       expect(icons.length, CategoryConfig.defaults.length);
     });
 

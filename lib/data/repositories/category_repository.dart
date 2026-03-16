@@ -6,8 +6,8 @@ class CategoryRepository {
   final String _uid;
 
   CategoryRepository({required String uid, FirebaseFirestore? firestore})
-      : _uid = uid,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+    : _uid = uid,
+      _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference get _categoriesCollection =>
       _firestore.collection('users').doc(_uid).collection('categories');

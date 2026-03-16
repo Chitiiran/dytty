@@ -22,8 +22,10 @@ class CategorizationResult {
 abstract class LlmService {
   Future<LlmResponse> generateResponse(String prompt);
 
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds});
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds,
+  });
 
   Future<String> summarizeEntry(String text);
 

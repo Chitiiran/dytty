@@ -97,9 +97,9 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.brightness_auto_rounded,
                     label: 'System',
                     selected: themeMode == ThemeMode.system,
-                    onTap: () => context
-                        .read<ThemeCubit>()
-                        .setThemeMode(ThemeMode.system),
+                    onTap: () => context.read<ThemeCubit>().setThemeMode(
+                      ThemeMode.system,
+                    ),
                   ),
                   Divider(
                     height: 1,
@@ -112,9 +112,9 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.light_mode_rounded,
                     label: 'Light',
                     selected: themeMode == ThemeMode.light,
-                    onTap: () => context
-                        .read<ThemeCubit>()
-                        .setThemeMode(ThemeMode.light),
+                    onTap: () => context.read<ThemeCubit>().setThemeMode(
+                      ThemeMode.light,
+                    ),
                   ),
                   Divider(
                     height: 1,
@@ -127,9 +127,8 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.dark_mode_rounded,
                     label: 'Dark',
                     selected: themeMode == ThemeMode.dark,
-                    onTap: () => context
-                        .read<ThemeCubit>()
-                        .setThemeMode(ThemeMode.dark),
+                    onTap: () =>
+                        context.read<ThemeCubit>().setThemeMode(ThemeMode.dark),
                   ),
                 ],
               ),
@@ -208,8 +207,7 @@ class SettingsScreen extends StatelessWidget {
                 SwitchListTile(
                   secondary: const Icon(Icons.phone_rounded),
                   title: const Text('Daily call reminder'),
-                  subtitle:
-                      const Text('Get reminded to start your daily call'),
+                  subtitle: const Text('Get reminded to start your daily call'),
                   value: settingsState.dailyCallEnabled,
                   onChanged: (_) =>
                       context.read<SettingsCubit>().toggleDailyCall(),
@@ -238,9 +236,7 @@ class SettingsScreen extends StatelessWidget {
                         initialTime: settingsState.dailyCallTime,
                       );
                       if (picked != null && context.mounted) {
-                        context
-                            .read<SettingsCubit>()
-                            .setDailyCallTime(picked);
+                        context.read<SettingsCubit>().setDailyCallTime(picked);
                       }
                     },
                   ),
@@ -330,8 +326,9 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildInitials(String? name, ThemeData theme) {
-    final initial =
-        (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
+    final initial = (name != null && name.isNotEmpty)
+        ? name[0].toUpperCase()
+        : '?';
     return Container(
       color: theme.colorScheme.primaryContainer,
       alignment: Alignment.center,

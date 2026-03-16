@@ -9,8 +9,10 @@ class NoOpLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds = const ['positive']}) async {
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
     return CategorizationResult(
       suggestedCategory: categoryIds.first,
       summary: '',

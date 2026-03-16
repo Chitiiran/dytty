@@ -8,8 +8,9 @@ import 'package:flutter/foundation.dart'
 
 class DefaultFirebaseOptions {
   static const _webApiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
-  static const _androidApiKey =
-      String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
+  static const _androidApiKey = String.fromEnvironment(
+    'FIREBASE_ANDROID_API_KEY',
+  );
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {

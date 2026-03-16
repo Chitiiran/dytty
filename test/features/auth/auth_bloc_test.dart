@@ -18,8 +18,9 @@ void main() {
   setUp(() {
     mockAuthService = MockAuthService();
     authStreamController = StreamController<User?>.broadcast();
-    when(mockAuthService.authStateChanges)
-        .thenAnswer((_) => authStreamController.stream);
+    when(
+      mockAuthService.authStateChanges,
+    ).thenAnswer((_) => authStreamController.stream);
   });
 
   tearDown(() {
@@ -58,22 +59,21 @@ void main() {
       'emits AuthLoading then waits for stream on SignInWithGoogle',
       build: () => AuthBloc(authService: mockAuthService),
       setUp: () {
-        when(mockAuthService.signInWithGoogle())
-            .thenAnswer((_) async => throw UnimplementedError());
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenAnswer((_) async => throw UnimplementedError());
       },
       act: (bloc) => bloc.add(const SignInWithGoogle()),
-      expect: () => [
-        const AuthLoading(),
-        isA<AuthError>(),
-      ],
+      expect: () => [const AuthLoading(), isA<AuthError>()],
     );
 
     blocTest<AuthBloc, AuthState>(
       'emits AuthError on sign-in failure',
       build: () => AuthBloc(authService: mockAuthService),
       setUp: () {
-        when(mockAuthService.signInWithGoogle())
-            .thenThrow(Exception('sign-in failed'));
+        when(
+          mockAuthService.signInWithGoogle(),
+        ).thenThrow(Exception('sign-in failed'));
       },
       act: (bloc) => bloc.add(const SignInWithGoogle()),
       expect: () => [

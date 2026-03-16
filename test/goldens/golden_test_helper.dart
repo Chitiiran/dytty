@@ -10,8 +10,7 @@ import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/data/models/category_config.dart';
 
-class MockAuthBloc extends MockBloc<AuthEvent, AuthState>
-    implements AuthBloc {}
+class MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
 
 class MockJournalBloc extends MockBloc<JournalEvent, JournalState>
     implements JournalBloc {}
@@ -27,24 +26,24 @@ class MockThemeCubit extends MockCubit<ThemeMode> implements ThemeCubit {}
 /// Test-safe themes that don't use Google Fonts (avoids network requests).
 /// Uses the same color scheme as AppTheme but with default Material fonts.
 ThemeData get _testLightTheme => ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.seedColor,
-        brightness: Brightness.light,
-        surface: AppColors.lightSurface,
-      ),
-      scaffoldBackgroundColor: AppColors.lightBackground,
-    );
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: AppColors.seedColor,
+    brightness: Brightness.light,
+    surface: AppColors.lightSurface,
+  ),
+  scaffoldBackgroundColor: AppColors.lightBackground,
+);
 
 ThemeData get _testDarkTheme => ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.seedColor,
-        brightness: Brightness.dark,
-        surface: AppColors.darkSurface,
-      ),
-      scaffoldBackgroundColor: AppColors.darkBackground,
-    );
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: AppColors.seedColor,
+    brightness: Brightness.dark,
+    surface: AppColors.darkSurface,
+  ),
+  scaffoldBackgroundColor: AppColors.darkBackground,
+);
 
 /// Wraps a widget with the full provider tree and Material theme for golden
 /// tests. Uses test-safe themes (no Google Fonts) to avoid network errors.
@@ -71,25 +70,21 @@ Widget goldenWrapper(
           email: 'test@test.com',
         ),
   );
-  when(() => mockJournalBloc.state).thenReturn(
-    journalState ?? JournalState(),
-  );
+  when(() => mockJournalBloc.state).thenReturn(journalState ?? JournalState());
   when(() => mockCategoryCubit.state).thenReturn(
     categoryState ??
         CategoryState(categories: CategoryConfig.defaults, loaded: true),
   );
-  when(() => mockSettingsCubit.state).thenReturn(
-    settingsState ?? const SettingsState(loaded: true),
-  );
+  when(
+    () => mockSettingsCubit.state,
+  ).thenReturn(settingsState ?? const SettingsState(loaded: true));
   when(() => mockThemeCubit.state).thenReturn(themeMode);
 
   // Stream stubs (needed for BlocBuilder to work)
   when(() => mockAuthBloc.stream).thenAnswer((_) => const Stream.empty());
   when(() => mockJournalBloc.stream).thenAnswer((_) => const Stream.empty());
-  when(() => mockCategoryCubit.stream)
-      .thenAnswer((_) => const Stream.empty());
-  when(() => mockSettingsCubit.stream)
-      .thenAnswer((_) => const Stream.empty());
+  when(() => mockCategoryCubit.stream).thenAnswer((_) => const Stream.empty());
+  when(() => mockSettingsCubit.stream).thenAnswer((_) => const Stream.empty());
   when(() => mockThemeCubit.stream).thenAnswer((_) => const Stream.empty());
 
   return MultiBlocProvider(
@@ -105,11 +100,7 @@ Widget goldenWrapper(
       darkTheme: _testDarkTheme,
       themeMode: themeMode,
       debugShowCheckedModeBanner: false,
-      home: SizedBox(
-        width: size.width,
-        height: size.height,
-        child: child,
-      ),
+      home: SizedBox(width: size.width, height: size.height, child: child),
     ),
   );
 }

@@ -33,8 +33,9 @@ class LoginScreen extends StatelessWidget {
               child: BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, state) {
                   final isLoading = state is AuthLoading;
-                  final errorMessage =
-                      state is AuthError ? state.message : null;
+                  final errorMessage = state is AuthError
+                      ? state.message
+                      : null;
 
                   return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -112,11 +113,12 @@ class LoginScreen extends StatelessWidget {
                                   Expanded(
                                     child: Text(
                                       errorMessage,
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onErrorContainer,
-                                      ),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onErrorContainer,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -138,9 +140,9 @@ class LoginScreen extends StatelessWidget {
                               child: ElevatedButton(
                                 onPressed: isLoading
                                     ? null
-                                    : () => context
-                                        .read<AuthBloc>()
-                                        .add(const SignInWithGoogle()),
+                                    : () => context.read<AuthBloc>().add(
+                                        const SignInWithGoogle(),
+                                      ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: isDark
                                       ? const Color(0xFF2D2D2D)
@@ -213,12 +215,11 @@ class LoginScreen extends StatelessWidget {
                           child: OutlinedButton.icon(
                             onPressed: isLoading
                                 ? null
-                                : () => context
-                                    .read<AuthBloc>()
-                                    .add(const SignInAnonymously()),
+                                : () => context.read<AuthBloc>().add(
+                                    const SignInAnonymously(),
+                                  ),
                             icon: const Icon(Icons.developer_mode, size: 18),
-                            label:
-                                const Text('Sign in anonymously (emulator)'),
+                            label: const Text('Sign in anonymously (emulator)'),
                           ),
                         ),
                       ],

@@ -55,8 +55,11 @@ void main() {
       },
       act: (bloc) => bloc.add(const LoadEntries()),
       expect: () => [
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loading),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.loading,
+        ),
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.length, 'entries.length', 1)
@@ -72,12 +75,14 @@ void main() {
       'AddEntry adds entry and reloads',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
-      act: (bloc) => bloc.add(
-        const AddEntry(categoryId: 'beauty', text: 'A sunset'),
-      ),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'beauty', text: 'A sunset')),
       expect: () => [
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.saving),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.length, 'entries.length', 1)
@@ -102,8 +107,11 @@ void main() {
         ),
       ),
       expect: () => [
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.saving),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.length, 'entries.length', 1)
@@ -117,11 +125,10 @@ void main() {
               'entries.first.transcript',
               'I am really grateful for the sunshine today',
             )
-            .having(
-              (s) => s.entries.first.tags,
-              'entries.first.tags',
-              ['sunshine', 'gratitude'],
-            ),
+            .having((s) => s.entries.first.tags, 'entries.first.tags', [
+              'sunshine',
+              'gratitude',
+            ]),
       ],
     );
 
@@ -130,11 +137,7 @@ void main() {
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
       setUp: () async {
-        await repository.addCategoryEntry(
-          '2026-03-01',
-          'identity',
-          'Original',
-        );
+        await repository.addCategoryEntry('2026-03-01', 'identity', 'Original');
       },
       act: (bloc) async {
         // Load first to get the entry ID
@@ -145,15 +148,21 @@ void main() {
       },
       expect: () => [
         // LoadEntries: loading
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loading),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.loading,
+        ),
         // LoadEntries: loaded with Original
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
             .having((s) => s.entries.first.text, 'text', 'Original'),
         // UpdateEntry: saving
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.saving),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
         // UpdateEntry: loaded with Updated
         isA<JournalState>()
             .having((s) => s.status, 'status', JournalStatus.loaded)
@@ -180,17 +189,25 @@ void main() {
       },
       expect: () => [
         // LoadEntries: loading
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loading),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.loading,
+        ),
         // LoadEntries: loaded with 1 entry
-        isA<JournalState>()
-            .having((s) => s.entries.length, 'entries.length', 1),
+        isA<JournalState>().having(
+          (s) => s.entries.length,
+          'entries.length',
+          1,
+        ),
         // DeleteEntry: saving
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.saving),
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
         // DeleteEntry: loaded with 0 entries
-        isA<JournalState>()
-            .having((s) => s.entries, 'entries', isEmpty),
+        isA<JournalState>().having((s) => s.entries, 'entries', isEmpty),
       ],
     );
 
@@ -198,19 +215,10 @@ void main() {
       'LoadMonthMarkers updates daysWithEntries',
       build: () => JournalBloc(repository: repository),
       setUp: () async {
-        await repository.addCategoryEntry(
-          '2026-03-01',
-          'positive',
-          'entry',
-        );
-        await repository.addCategoryEntry(
-          '2026-03-15',
-          'positive',
-          'entry',
-        );
+        await repository.addCategoryEntry('2026-03-01', 'positive', 'entry');
+        await repository.addCategoryEntry('2026-03-15', 'positive', 'entry');
       },
-      act: (bloc) =>
-          bloc.add(const LoadMonthMarkers(year: 2026, month: 3)),
+      act: (bloc) => bloc.add(const LoadMonthMarkers(year: 2026, month: 3)),
       expect: () => [
         isA<JournalState>().having(
           (s) => s.daysWithEntries,
@@ -229,17 +237,12 @@ void main() {
           final day = today.subtract(Duration(days: i));
           final dateStr =
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
-          await repository.addCategoryEntry(
-            dateStr,
-            'positive',
-            'Entry $i',
-          );
+          await repository.addCategoryEntry(dateStr, 'positive', 'Entry $i');
         }
       },
       act: (bloc) => bloc.add(const LoadStreak()),
       expect: () => [
-        isA<JournalState>()
-            .having((s) => s.currentStreak, 'currentStreak', 3),
+        isA<JournalState>().having((s) => s.currentStreak, 'currentStreak', 3),
       ],
     );
 
@@ -247,16 +250,12 @@ void main() {
       final today = DateTime.now();
       final todayStr =
           '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-      final state = JournalState(
-        daysWithEntries: {todayStr},
-      );
+      final state = JournalState(daysWithEntries: {todayStr});
       expect(state.journaledToday, true);
     });
 
     test('journaledToday returns false when today has no entries', () {
-      final state = JournalState(
-        daysWithEntries: {'2025-01-01'},
-      );
+      final state = JournalState(daysWithEntries: {'2025-01-01'});
       expect(state.journaledToday, false);
     });
 
@@ -287,9 +286,8 @@ void main() {
       'AddEntry updates daysWithEntries (calendar markers)',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
-      act: (bloc) => bloc.add(
-        const AddEntry(categoryId: 'positive', text: 'marker test'),
-      ),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'positive', text: 'marker test')),
       verify: (bloc) {
         expect(bloc.state.daysWithEntries, contains('2026-03-10'));
       },
@@ -300,10 +298,7 @@ void main() {
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime.now()),
       act: (bloc) => bloc.add(
-        const AddEntry(
-          categoryId: 'gratitude',
-          text: 'streak test',
-        ),
+        const AddEntry(categoryId: 'gratitude', text: 'streak test'),
       ),
       verify: (bloc) {
         expect(bloc.state.currentStreak, greaterThanOrEqualTo(1));
@@ -337,10 +332,7 @@ void main() {
         bloc.add(SelectDate(DateTime(2026, 3, 5)));
         await Future.delayed(const Duration(milliseconds: 100));
         bloc.add(
-          const AddEntry(
-            categoryId: 'negative',
-            text: 'Sequential test',
-          ),
+          const AddEntry(categoryId: 'negative', text: 'Sequential test'),
         );
       },
       verify: (bloc) {
@@ -354,12 +346,8 @@ void main() {
       'journaledToday is true after AddEntry on today',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime.now()),
-      act: (bloc) => bloc.add(
-        const AddEntry(
-          categoryId: 'identity',
-          text: 'Today entry',
-        ),
-      ),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'identity', text: 'Today entry')),
       verify: (bloc) {
         expect(bloc.state.journaledToday, true);
       },

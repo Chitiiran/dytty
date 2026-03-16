@@ -154,10 +154,8 @@ void main() {
         await cubit.toggleHideEntries();
       },
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.hideEntries, 'hideEntries', true),
-        isA<SettingsState>()
-            .having((s) => s.hideEntries, 'hideEntries', false),
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', true),
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', false),
       ],
     );
 
@@ -170,8 +168,11 @@ void main() {
       seed: () => const SettingsState(loaded: true),
       act: (cubit) => cubit.toggleReminder(),
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.reminderEnabled, 'reminderEnabled', true),
+        isA<SettingsState>().having(
+          (s) => s.reminderEnabled,
+          'reminderEnabled',
+          true,
+        ),
       ],
       verify: (_) {
         expect(notificationService.isReminderEnabled, true);
@@ -187,8 +188,11 @@ void main() {
       seed: () => const SettingsState(loaded: true, reminderEnabled: true),
       act: (cubit) => cubit.toggleReminder(),
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.reminderEnabled, 'reminderEnabled', false),
+        isA<SettingsState>().having(
+          (s) => s.reminderEnabled,
+          'reminderEnabled',
+          false,
+        ),
       ],
       verify: (_) {
         expect(notificationService.isReminderEnabled, false);

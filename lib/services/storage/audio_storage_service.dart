@@ -5,7 +5,7 @@ class AudioStorageService {
   final FirebaseStorage _storage;
 
   AudioStorageService({FirebaseStorage? storage})
-      : _storage = storage ?? FirebaseStorage.instance;
+    : _storage = storage ?? FirebaseStorage.instance;
 
   /// Upload call audio (PCM data) to Firebase Storage.
   /// Returns the download URL.

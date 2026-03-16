@@ -6,8 +6,7 @@ class SpeechService {
   final SpeechToText _speech;
   bool _isInitialized = false;
 
-  SpeechService({SpeechToText? speech})
-      : _speech = speech ?? SpeechToText();
+  SpeechService({SpeechToText? speech}) : _speech = speech ?? SpeechToText();
 
   bool get isListening => _speech.isListening;
   bool get isAvailable => _isInitialized;
@@ -19,11 +18,21 @@ class SpeechService {
   }
 
   /// Starts listening. [onResult] fires for each partial/final result.
+  ///
+  /// [pauseFor] — how long to wait after silence before auto-stopping
+  /// (default 5s, long enough for natural breath pauses).
+  /// [listenFor] — max recording duration as a safety cap (default 120s).
   Future<void> startListening({
     required void Function(SpeechRecognitionResult result) onResult,
+    Duration pauseFor = const Duration(seconds: 5),
+    Duration listenFor = const Duration(seconds: 120),
   }) async {
     if (!_isInitialized) return;
-    await _speech.listen(onResult: onResult);
+    await _speech.listen(
+      onResult: onResult,
+      pauseFor: pauseFor,
+      listenFor: listenFor,
+    );
   }
 
   /// Stops listening and finalizes the last result.

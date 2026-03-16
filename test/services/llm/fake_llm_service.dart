@@ -15,8 +15,10 @@ class FakeLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds = const ['positive']}) async {
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
     callCount++;
     return const CategorizationResult(
       suggestedCategory: 'positive',

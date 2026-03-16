@@ -51,7 +51,10 @@ void main() {
         // Verify persisted in Firestore
         final entries = await repository.getCategoryEntries('2026-02-27');
         expect(entries.first.source, 'voice');
-        expect(entries.first.transcript, 'I am really grateful for my health today');
+        expect(
+          entries.first.transcript,
+          'I am really grateful for my health today',
+        );
         expect(entries.first.tags, ['health', 'gratitude']);
       });
 
@@ -189,16 +192,8 @@ void main() {
 
     group('getDaysWithEntries', () {
       test('returns dates that have entries', () async {
-        await repository.addCategoryEntry(
-          '2026-02-15',
-          'positive',
-          'Entry 1',
-        );
-        await repository.addCategoryEntry(
-          '2026-02-20',
-          'gratitude',
-          'Entry 2',
-        );
+        await repository.addCategoryEntry('2026-02-15', 'positive', 'Entry 1');
+        await repository.addCategoryEntry('2026-02-20', 'gratitude', 'Entry 2');
 
         final days = await repository.getDaysWithEntries(2026, 2);
         expect(days, containsAll(['2026-02-15', '2026-02-20']));
@@ -223,11 +218,7 @@ void main() {
         final today = DateTime.now();
         final dateStr =
             '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-        await repository.addCategoryEntry(
-          dateStr,
-          'positive',
-          'Today entry',
-        );
+        await repository.addCategoryEntry(dateStr, 'positive', 'Today entry');
 
         final streak = await repository.getStreakData();
         expect(streak.currentStreak, 1);
@@ -240,11 +231,7 @@ void main() {
           final day = today.subtract(Duration(days: i));
           final dateStr =
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
-          await repository.addCategoryEntry(
-            dateStr,
-            'positive',
-            'Entry $i',
-          );
+          await repository.addCategoryEntry(dateStr, 'positive', 'Entry $i');
         }
 
         final streak = await repository.getStreakData();
@@ -257,11 +244,7 @@ void main() {
         // Today
         final todayStr =
             '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-        await repository.addCategoryEntry(
-          todayStr,
-          'positive',
-          'Today',
-        );
+        await repository.addCategoryEntry(todayStr, 'positive', 'Today');
         // 3 days ago (gap of 1 day)
         final threeDaysAgo = today.subtract(const Duration(days: 3));
         final threeStr =
@@ -283,11 +266,7 @@ void main() {
         for (final day in [yesterday, dayBefore]) {
           final dateStr =
               '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
-          await repository.addCategoryEntry(
-            dateStr,
-            'positive',
-            'Entry',
-          );
+          await repository.addCategoryEntry(dateStr, 'positive', 'Entry');
         }
 
         final streak = await repository.getStreakData();

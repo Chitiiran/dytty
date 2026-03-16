@@ -92,10 +92,7 @@ class GeminiLiveService {
   /// Send a text message to the model.
   Future<void> sendText(String text) async {
     if (_session == null) return;
-    await _session!.send(
-      input: Content.text(text),
-      turnComplete: true,
-    );
+    await _session!.send(input: Content.text(text), turnComplete: true);
   }
 
   /// Respond to a tool call from the model.
@@ -130,8 +127,7 @@ class GeminiLiveService {
   void _listenToResponses() {
     // Listen on the broadcast stream from the session's message controller
     // rather than receive() which stops at turnComplete.
-    _responseSubscription =
-        _session!.receive().listen(
+    _responseSubscription = _session!.receive().listen(
       (response) {
         final message = response.message;
 
@@ -141,7 +137,8 @@ class GeminiLiveService {
           _handleToolCall(message);
         } else if (message is GoingAwayNotice) {
           debugPrint(
-              'Gemini session ending soon: ${message.timeLeft} remaining');
+            'Gemini session ending soon: ${message.timeLeft} remaining',
+          );
         }
       },
       onError: (error) {
@@ -174,16 +171,20 @@ class GeminiLiveService {
 
     // Handle transcriptions
     if (content.inputTranscription?.text != null) {
-      _transcriptController.add(Transcript(
-        speaker: Speaker.user,
-        text: content.inputTranscription!.text!,
-      ));
+      _transcriptController.add(
+        Transcript(
+          speaker: Speaker.user,
+          text: content.inputTranscription!.text!,
+        ),
+      );
     }
     if (content.outputTranscription?.text != null) {
-      _transcriptController.add(Transcript(
-        speaker: Speaker.ai,
-        text: content.outputTranscription!.text!,
-      ));
+      _transcriptController.add(
+        Transcript(
+          speaker: Speaker.ai,
+          text: content.outputTranscription!.text!,
+        ),
+      );
     }
   }
 
@@ -205,7 +206,8 @@ class GeminiLiveService {
         description: 'The journal category that best fits this entry.',
       ),
       'text': Schema.string(
-        description: 'A concise summary of what the user shared, written in '
+        description:
+            'A concise summary of what the user shared, written in '
             'first person as if the user wrote it.',
       ),
       'transcript': Schema.string(
@@ -238,10 +240,4 @@ Avoid long monologues. Ask one question at a time.
 }
 
 /// Connection states for the Gemini Live session.
-enum GeminiLiveState {
-  idle,
-  connecting,
-  active,
-  disconnecting,
-  error,
-}
+enum GeminiLiveState { idle, connecting, active, disconnecting, error }
