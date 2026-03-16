@@ -38,10 +38,7 @@ void main() {
     });
 
     testWidgets('loading state shows spinner', (tester) async {
-      await tester.pumpApp(
-        const LoginScreen(),
-        authState: const AuthLoading(),
-      );
+      await tester.pumpApp(const LoginScreen(), authState: const AuthLoading());
       // Pump enough for animations but not pumpAndSettle (spinner animates)
       await tester.pump(const Duration(seconds: 1));
 

@@ -48,10 +48,7 @@ class DyttyApp extends StatelessWidget {
           }
 
           // Unauthenticated or AuthError
-          return _themedApp(
-            context,
-            home: const LoginScreen(),
-          );
+          return _themedApp(context, home: const LoginScreen());
         },
       ),
     );
@@ -112,8 +109,8 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
             widget.authState.email ?? '',
           )
           .catchError((e) {
-        debugPrint('Failed to ensure user profile: $e');
-      });
+            debugPrint('Failed to ensure user profile: $e');
+          });
     }
   }
 
@@ -126,9 +123,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
               ? GeminiLlmService(apiKey: geminiApiKey) as LlmService
               : NoOpLlmService(),
         ),
-        RepositoryProvider<SpeechService>(
-          create: (_) => SpeechService(),
-        ),
+        RepositoryProvider<SpeechService>(create: (_) => SpeechService()),
         RepositoryProvider<AudioStorageService>(
           create: (_) => AudioStorageService(),
         ),
@@ -147,7 +142,8 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           ),
           BlocProvider(
             create: (_) =>
-                CategoryCubit(repository: _categoryRepository)..loadCategories(),
+                CategoryCubit(repository: _categoryRepository)
+                  ..loadCategories(),
           ),
         ],
         child: _themedApp(
@@ -194,19 +190,13 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
   if (builder != null) {
     return PageRouteBuilder(
       settings: settings,
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          builder(context),
+      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(
-            CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ),
-          ),
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
           child: child,
         );
       },

@@ -4,7 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
-export 'package:dytty/data/repositories/journal_repository.dart' show StreakData;
+export 'package:dytty/data/repositories/journal_repository.dart'
+    show StreakData;
 
 // --- Events ---
 
@@ -150,8 +151,15 @@ class JournalState extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [status, selectedDate, entries, daysWithEntries, currentStreak, lastJournalDate, error];
+  List<Object?> get props => [
+    status,
+    selectedDate,
+    entries,
+    daysWithEntries,
+    currentStreak,
+    lastJournalDate,
+    error,
+  ];
 }
 
 // --- Bloc ---
@@ -160,8 +168,8 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   final JournalRepository _repository;
 
   JournalBloc({required JournalRepository repository})
-      : _repository = repository,
-        super(JournalState()) {
+    : _repository = repository,
+      super(JournalState()) {
     on<LoadEntries>(_onLoadEntries);
     on<SelectDate>(_onSelectDate);
     on<AddEntry>(_onAddEntry);
@@ -183,10 +191,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       );
       emit(state.copyWith(status: JournalStatus.loaded, entries: entries));
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
@@ -194,10 +199,9 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     SelectDate event,
     Emitter<JournalState> emit,
   ) async {
-    emit(state.copyWith(
-      selectedDate: event.date,
-      status: JournalStatus.loading,
-    ));
+    emit(
+      state.copyWith(selectedDate: event.date, status: JournalStatus.loading),
+    );
     try {
       final dateString = JournalState._dateFormat.format(event.date);
       final entries = await _repository.getCategoryEntries(dateString);
@@ -206,31 +210,26 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.date.month,
       );
       final streak = await _repository.getStreakData();
-      emit(state.copyWith(
-        status: JournalStatus.loaded,
-        entries: entries,
-        daysWithEntries: markers,
-        currentStreak: streak.currentStreak,
-        lastJournalDate: streak.lastJournalDate,
-      ));
+      emit(
+        state.copyWith(
+          status: JournalStatus.loaded,
+          entries: entries,
+          daysWithEntries: markers,
+          currentStreak: streak.currentStreak,
+          lastJournalDate: streak.lastJournalDate,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
-  Future<void> _onAddEntry(
-    AddEntry event,
-    Emitter<JournalState> emit,
-  ) async {
+  Future<void> _onAddEntry(AddEntry event, Emitter<JournalState> emit) async {
     final targetDate = event.date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
-    emit(state.copyWith(
-      status: JournalStatus.saving,
-      selectedDate: targetDate,
-    ));
+    emit(
+      state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
+    );
     try {
       final created = await _repository.addCategoryEntry(
         dateString,
@@ -252,18 +251,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
           optimisticStreak = state.currentStreak + 1;
         }
       }
-      emit(state.copyWith(
-        status: JournalStatus.loaded,
-        entries: updatedEntries,
-        daysWithEntries: updatedMarkers,
-        currentStreak: optimisticStreak,
-        lastJournalDate: dateString,
-      ));
+      emit(
+        state.copyWith(
+          status: JournalStatus.loaded,
+          entries: updatedEntries,
+          daysWithEntries: updatedMarkers,
+          currentStreak: optimisticStreak,
+          lastJournalDate: dateString,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
@@ -273,10 +271,9 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   ) async {
     final targetDate = event.date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
-    emit(state.copyWith(
-      status: JournalStatus.saving,
-      selectedDate: targetDate,
-    ));
+    emit(
+      state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
+    );
     try {
       final created = await _repository.addCategoryEntry(
         dateString,
@@ -300,18 +297,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
           optimisticStreak = state.currentStreak + 1;
         }
       }
-      emit(state.copyWith(
-        status: JournalStatus.loaded,
-        entries: updatedEntries,
-        daysWithEntries: updatedMarkers,
-        currentStreak: optimisticStreak,
-        lastJournalDate: dateString,
-      ));
+      emit(
+        state.copyWith(
+          status: JournalStatus.loaded,
+          entries: updatedEntries,
+          daysWithEntries: updatedMarkers,
+          currentStreak: optimisticStreak,
+          lastJournalDate: dateString,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
@@ -342,12 +338,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         }
         return e;
       }).toList();
-      emit(state.copyWith(status: JournalStatus.loaded, entries: updatedEntries));
+      emit(
+        state.copyWith(status: JournalStatus.loaded, entries: updatedEntries),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
@@ -362,32 +357,34 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.entryId,
       );
       // Optimistic: remove entry from current list
-      final updatedEntries =
-          state.entries.where((e) => e.id != event.entryId).toList();
+      final updatedEntries = state.entries
+          .where((e) => e.id != event.entryId)
+          .toList();
       final updatedMarkers = updatedEntries.isEmpty
           ? (Set<String>.from(state.daysWithEntries)
-            ..remove(state.selectedDateString))
+              ..remove(state.selectedDateString))
           : state.daysWithEntries;
-      emit(state.copyWith(
-        status: JournalStatus.loaded,
-        entries: updatedEntries,
-        daysWithEntries: updatedMarkers,
-      ));
+      emit(
+        state.copyWith(
+          status: JournalStatus.loaded,
+          entries: updatedEntries,
+          daysWithEntries: updatedMarkers,
+        ),
+      );
       // Refresh streak in background (non-blocking for UI)
       try {
         final streak = await _repository.getStreakData();
-        emit(state.copyWith(
-          currentStreak: streak.currentStreak,
-          lastJournalDate: streak.lastJournalDate,
-        ));
+        emit(
+          state.copyWith(
+            currentStreak: streak.currentStreak,
+            lastJournalDate: streak.lastJournalDate,
+          ),
+        );
       } catch (_) {
         // Streak refresh is non-critical
       }
     } catch (e) {
-      emit(state.copyWith(
-        status: JournalStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
 
@@ -412,10 +409,12 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   ) async {
     try {
       final streak = await _repository.getStreakData();
-      emit(state.copyWith(
-        currentStreak: streak.currentStreak,
-        lastJournalDate: streak.lastJournalDate,
-      ));
+      emit(
+        state.copyWith(
+          currentStreak: streak.currentStreak,
+          lastJournalDate: streak.lastJournalDate,
+        ),
+      );
     } catch (_) {
       // Non-critical — silently fail for streak
     }

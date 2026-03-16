@@ -41,19 +41,19 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   }
 
   void _addEntry(String categoryId, String text) {
-    context
-        .read<JournalBloc>()
-        .add(AddEntry(categoryId: categoryId, text: text));
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Entry added')));
+    context.read<JournalBloc>().add(
+      AddEntry(categoryId: categoryId, text: text),
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Entry added')));
   }
 
   void _updateEntry(String entryId, String text) {
-    context
-        .read<JournalBloc>()
-        .add(UpdateEntry(entryId: entryId, text: text));
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Entry updated')));
+    context.read<JournalBloc>().add(UpdateEntry(entryId: entryId, text: text));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Entry updated')));
   }
 
   void _deleteEntryOptimistic(CategoryEntry entry) {
@@ -67,8 +67,8 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
           label: 'Undo',
           onPressed: () {
             context.read<JournalBloc>().add(
-                  AddEntry(categoryId: entry.categoryId, text: entry.text),
-                );
+              AddEntry(categoryId: entry.categoryId, text: entry.text),
+            );
           },
         ),
         duration: const Duration(seconds: 4),
@@ -148,10 +148,7 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                             .animate()
                             .fadeIn(duration: 400.ms)
                             .slideY(begin: 0.1, end: 0, duration: 400.ms),
-                      ...categories
-                          .asMap()
-                          .entries
-                          .map((mapEntry) {
+                      ...categories.asMap().entries.map((mapEntry) {
                         final index = mapEntry.key;
                         final category = mapEntry.value;
                         return AnimationConfiguration.staggeredList(
@@ -164,13 +161,11 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _CategoryCard(
                                   category: category,
-                                  entries:
-                                      journalState.entriesForCategory(
+                                  entries: journalState.entriesForCategory(
                                     category.id,
                                   ),
                                   hideEntries: hideEntries,
-                                  onAdd: (text) =>
-                                      _addEntry(category.id, text),
+                                  onAdd: (text) => _addEntry(category.id, text),
                                   onEdit: (entryId, text) =>
                                       _updateEntry(entryId, text),
                                   onDelete: (entry) =>
@@ -300,8 +295,7 @@ class _CategoryCard extends StatelessWidget {
                       color: category.color.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child:
-                        Icon(category.icon, size: 18, color: category.color),
+                    child: Icon(category.icon, size: 18, color: category.color),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -360,8 +354,7 @@ class _CategoryCard extends StatelessWidget {
                         category.prompt,
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontStyle: FontStyle.italic,
-                          color:
-                              theme.colorScheme.onSurfaceVariant.withValues(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.6,
                           ),
                         ),
@@ -452,8 +445,7 @@ class _EntryTileState extends State<_EntryTile> {
               color: theme.colorScheme.surface.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color:
-                    theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -473,13 +465,15 @@ class _EntryTileState extends State<_EntryTile> {
                           ),
                         )
                       else
-                        Text(widget.entry.text, style: theme.textTheme.bodyMedium),
+                        Text(
+                          widget.entry.text,
+                          style: theme.textTheme.bodyMedium,
+                        ),
                       const SizedBox(height: 4),
                       Text(
                         formatRelativeTime(widget.entry.createdAt),
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color:
-                              theme.colorScheme.onSurfaceVariant.withValues(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.5,
                           ),
                         ),
@@ -537,8 +531,7 @@ class _EntryTileState extends State<_EntryTile> {
               ),
               title: Text(
                 'Delete',
-                style:
-                    TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onTap: () {
                 Navigator.pop(ctx);

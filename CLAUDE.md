@@ -2,10 +2,12 @@
 
 > **Start of session:**
 > 1. Read `PROGRESS.md` — only the top section (above the `## Log` heading).
-> 2. Read `docs/planning/BACKLOG.md` — open bugs and feature requests.
+> 2. Run `gh issue list --limit 50` — open bugs and feature requests (GitHub Issues is the single source of truth).
 > 3. Brief the user: where we are (current milestone status, any blockers), and where we can go next (top-priority backlog items, next milestone work). Keep it to a few sentences.
 >
-> **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section. Update `BACKLOG.md` if any bugs were fixed or features completed.
+> **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section.
+>
+> **Feedback process:** See `docs/planning/FEEDBACK_PROCESS.md` for converting user/tester feedback into GitHub Issues.
 
 ## Project Overview
 Daily journaling app with 5 structured categories. Cross-platform Flutter app backed by Firebase (Auth + Firestore). First target: web app with Playwright E2E tests.
@@ -84,12 +86,11 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 
 ## Git Workflow
 Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
-- **Branch model**: `develop` + `release/*` + `main` (feature branches target `develop`)
+- **Branch model**: Trunk-based — feature branches target `main` directly
 - Every change needs a GitHub Issue (check existing before creating)
 - Branch naming: `<type>/<issue#>-<short-name>` (e.g. `feat/14-voice-sheet`)
 - Conventional commits: `type(scope): what` + body with why + key decisions + `Refs #N`
-- PRs target `develop` (not main), use `.github/pull_request_template.md`, include `Fixes #N`
-- Release process: `bash scripts/release.sh X.Y.Z` (see `docs/planning/RELEASE.md`)
+- PRs target `main`, use `.github/pull_request_template.md`, include `Fixes #N`
 - Always ask user before pushing or creating PRs
 - Milestones M0-M2 closed, M3-M7 open on GitHub
 
@@ -102,7 +103,7 @@ TDD is mandatory. 5-layer test pyramid. Full details in `docs/planning/TESTING.m
 - **Layer 4: Integration tests** (Patrol) — On-device tests with native OS dialog support. `integration_test/`.
 - **Layer 5: E2E Android** (`bash scripts/maestro-test.sh`) — Black-box Maestro YAML flows. Screenshots as artifacts.
 - **E2E web** (`npx playwright test`) — Playwright against web build + Firebase emulators.
-- **Coverage enforcement**: CI enforces minimum 60% coverage (ratchets up over time).
+- **Coverage enforcement**: CI enforces minimum coverage (ratchets up 10% weekly toward 100%). Current gate: 40%.
 - **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E required for cross-screen UI state changes.
 
 ## Conventions

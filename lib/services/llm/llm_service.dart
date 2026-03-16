@@ -22,10 +22,20 @@ class CategorizationResult {
 abstract class LlmService {
   Future<LlmResponse> generateResponse(String prompt);
 
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds});
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds,
+  });
 
   Future<String> summarizeEntry(String text);
+
+  /// Re-summarizes when the user has edited the transcript.
+  /// Compares [originalTranscript] with [editedTranscript] and produces
+  /// a summary that reflects the user's intent (edited version takes priority).
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  );
 
   Future<String> generateWeeklySummary(List<String> entries);
 

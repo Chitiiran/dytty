@@ -9,8 +9,10 @@ class NoOpLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds = const ['positive']}) async {
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
     return CategorizationResult(
       suggestedCategory: categoryIds.first,
       summary: '',
@@ -20,6 +22,12 @@ class NoOpLlmService implements LlmService {
 
   @override
   Future<String> summarizeEntry(String text) async => text;
+
+  @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async => editedTranscript;
 
   @override
   Future<String> generateWeeklySummary(List<String> entries) async => '';

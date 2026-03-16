@@ -34,7 +34,7 @@ class NotificationService {
   late final SharedPreferences _prefs;
 
   NotificationService({FlutterLocalNotificationsPlugin? plugin})
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   /// Top-level callback for notification responses (required by flutter_local_notifications).
   @pragma('vm:entry-point')
@@ -56,8 +56,9 @@ class NotificationService {
     tz.initializeTimeZones();
     _prefs = await SharedPreferences.getInstance();
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -75,29 +76,20 @@ class NotificationService {
 
     // Re-schedule if reminder was enabled from a previous session
     if (isReminderEnabled) {
-      await scheduleDailyReminder(
-        hour: reminderHour,
-        minute: reminderMinute,
-      );
+      await scheduleDailyReminder(hour: reminderHour, minute: reminderMinute);
     }
 
     // Re-schedule if daily call was enabled from a previous session
     if (isDailyCallEnabled) {
-      await scheduleDailyCall(
-        hour: dailyCallHour,
-        minute: dailyCallMinute,
-      );
+      await scheduleDailyCall(hour: dailyCallHour, minute: dailyCallMinute);
     }
   }
 
-  bool get isReminderEnabled =>
-      _prefs.getBool(_prefReminderEnabled) ?? false;
+  bool get isReminderEnabled => _prefs.getBool(_prefReminderEnabled) ?? false;
 
-  int get reminderHour =>
-      _prefs.getInt(_prefReminderHour) ?? defaultHour;
+  int get reminderHour => _prefs.getInt(_prefReminderHour) ?? defaultHour;
 
-  int get reminderMinute =>
-      _prefs.getInt(_prefReminderMinute) ?? defaultMinute;
+  int get reminderMinute => _prefs.getInt(_prefReminderMinute) ?? defaultMinute;
 
   Future<void> scheduleDailyReminder({
     required int hour,
@@ -160,11 +152,9 @@ class NotificationService {
 
   // -- Daily call notification --
 
-  bool get isDailyCallEnabled =>
-      _prefs.getBool(_prefDailyCallEnabled) ?? false;
+  bool get isDailyCallEnabled => _prefs.getBool(_prefDailyCallEnabled) ?? false;
 
-  int get dailyCallHour =>
-      _prefs.getInt(_prefDailyCallHour) ?? defaultHour;
+  int get dailyCallHour => _prefs.getInt(_prefDailyCallHour) ?? defaultHour;
 
   int get dailyCallMinute =>
       _prefs.getInt(_prefDailyCallMinute) ?? defaultMinute;
@@ -203,10 +193,16 @@ class NotificationService {
       importance: Importance.high,
       priority: Priority.high,
       actions: [
-        AndroidNotificationAction('accept_call', 'Accept',
-            showsUserInterface: true),
-        AndroidNotificationAction('decline_call', 'Decline',
-            cancelNotification: true),
+        AndroidNotificationAction(
+          'accept_call',
+          'Accept',
+          showsUserInterface: true,
+        ),
+        AndroidNotificationAction(
+          'decline_call',
+          'Decline',
+          cancelNotification: true,
+        ),
       ],
     );
     const details = NotificationDetails(android: androidDetails);
@@ -237,14 +233,18 @@ class NotificationService {
   Future<bool> requestPermission() async {
     if (kIsWeb) return false;
 
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (android != null) {
       return await android.requestNotificationsPermission() ?? false;
     }
 
-    final ios = _plugin.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
+    final ios = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
     if (ios != null) {
       return await ios.requestPermissions(
             alert: true,

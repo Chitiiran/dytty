@@ -18,6 +18,10 @@ node_modules/
 test-results/
 playwright-report/
 
+# Test report artifacts
+test-results.json
+test-report.html
+
 # Maestro E2E test output
 .maestro/screenshots/
 maestro-output/

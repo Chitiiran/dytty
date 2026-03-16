@@ -1,9 +1,13 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/services/notification/notification_service.dart';
+
+class MockJournalRepository extends Mock implements JournalRepository {}
 
 /// Fake NotificationService that does nothing (no platform calls).
 class FakeNotificationService extends NotificationService {
@@ -154,10 +158,8 @@ void main() {
         await cubit.toggleHideEntries();
       },
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.hideEntries, 'hideEntries', true),
-        isA<SettingsState>()
-            .having((s) => s.hideEntries, 'hideEntries', false),
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', true),
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', false),
       ],
     );
 
@@ -170,8 +172,11 @@ void main() {
       seed: () => const SettingsState(loaded: true),
       act: (cubit) => cubit.toggleReminder(),
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.reminderEnabled, 'reminderEnabled', true),
+        isA<SettingsState>().having(
+          (s) => s.reminderEnabled,
+          'reminderEnabled',
+          true,
+        ),
       ],
       verify: (_) {
         expect(notificationService.isReminderEnabled, true);
@@ -187,12 +192,207 @@ void main() {
       seed: () => const SettingsState(loaded: true, reminderEnabled: true),
       act: (cubit) => cubit.toggleReminder(),
       expect: () => [
-        isA<SettingsState>()
-            .having((s) => s.reminderEnabled, 'reminderEnabled', false),
+        isA<SettingsState>().having(
+          (s) => s.reminderEnabled,
+          'reminderEnabled',
+          false,
+        ),
       ],
       verify: (_) {
         expect(notificationService.isReminderEnabled, false);
       },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'toggleDailyCall enables and schedules',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) => cubit.toggleDailyCall(),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.dailyCallEnabled,
+          'dailyCallEnabled',
+          true,
+        ),
+      ],
+      verify: (_) {
+        expect(notificationService.isDailyCallEnabled, true);
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'toggleDailyCall disables and cancels',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true, dailyCallEnabled: true),
+      act: (cubit) => cubit.toggleDailyCall(),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.dailyCallEnabled,
+          'dailyCallEnabled',
+          false,
+        ),
+      ],
+      verify: (_) {
+        expect(notificationService.isDailyCallEnabled, false);
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setDailyCallTime updates time and reschedules when call enabled',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true, dailyCallEnabled: true),
+      act: (cubit) =>
+          cubit.setDailyCallTime(const TimeOfDay(hour: 9, minute: 30)),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.dailyCallTime,
+          'dailyCallTime',
+          const TimeOfDay(hour: 9, minute: 30),
+        ),
+      ],
+      verify: (_) {
+        expect(notificationService.dailyCallHour, 9);
+        expect(notificationService.dailyCallMinute, 30);
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setDailyCallTime updates time without scheduling when call disabled',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true, dailyCallEnabled: false),
+      act: (cubit) =>
+          cubit.setDailyCallTime(const TimeOfDay(hour: 14, minute: 0)),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.dailyCallTime,
+          'dailyCallTime',
+          const TimeOfDay(hour: 14, minute: 0),
+        ),
+      ],
+      verify: (_) {
+        // Should not have scheduled — callHour/callMinute stay at defaults
+        expect(
+          notificationService.dailyCallHour,
+          NotificationService.defaultHour,
+        );
+        expect(
+          notificationService.dailyCallMinute,
+          NotificationService.defaultMinute,
+        );
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setReminderTime updates time and reschedules when reminder enabled',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true, reminderEnabled: true),
+      act: (cubit) =>
+          cubit.setReminderTime(const TimeOfDay(hour: 7, minute: 15)),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.reminderTime,
+          'reminderTime',
+          const TimeOfDay(hour: 7, minute: 15),
+        ),
+      ],
+      verify: (_) {
+        expect(notificationService.reminderHour, 7);
+        expect(notificationService.reminderMinute, 15);
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setReminderTime updates time without scheduling when reminder disabled',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true, reminderEnabled: false),
+      act: (cubit) =>
+          cubit.setReminderTime(const TimeOfDay(hour: 18, minute: 45)),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.reminderTime,
+          'reminderTime',
+          const TimeOfDay(hour: 18, minute: 45),
+        ),
+      ],
+      verify: (_) {
+        // Should not have scheduled — hour/minute stay at defaults
+        expect(
+          notificationService.reminderHour,
+          NotificationService.defaultHour,
+        );
+        expect(
+          notificationService.reminderMinute,
+          NotificationService.defaultMinute,
+        );
+      },
+    );
+  });
+
+  group('SettingsCubit error paths', () {
+    late MockJournalRepository mockRepository;
+    late FakeNotificationService notificationService;
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+      notificationService = FakeNotificationService();
+    });
+
+    blocTest<SettingsCubit, SettingsState>(
+      'loadSettings emits loaded with defaults when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.getUserSettings(),
+        ).thenThrow(Exception('Firestore unavailable'));
+      },
+      build: () => SettingsCubit(
+        repository: mockRepository,
+        notificationService: notificationService,
+      ),
+      act: (cubit) => cubit.loadSettings(),
+      expect: () => [
+        isA<SettingsState>()
+            .having((s) => s.loaded, 'loaded', true)
+            .having((s) => s.hideEntries, 'hideEntries', false),
+      ],
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'toggleHideEntries reverts on repository error',
+      setUp: () {
+        when(
+          () => mockRepository.updateUserSettings(any()),
+        ).thenThrow(Exception('Write failed'));
+      },
+      build: () => SettingsCubit(
+        repository: mockRepository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(hideEntries: false, loaded: true),
+      act: (cubit) => cubit.toggleHideEntries(),
+      expect: () => [
+        // Optimistically flips to true
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', true),
+        // Reverts to false on error
+        isA<SettingsState>().having((s) => s.hideEntries, 'hideEntries', false),
+      ],
     );
   });
 }

@@ -9,10 +9,7 @@ class CategoryState extends Equatable {
   final List<CategoryConfig> categories;
   final bool loaded;
 
-  const CategoryState({
-    this.categories = const [],
-    this.loaded = false,
-  });
+  const CategoryState({this.categories = const [], this.loaded = false});
 
   /// Active (non-archived) categories, sorted by order.
   List<CategoryConfig> get activeCategories =>
@@ -24,10 +21,7 @@ class CategoryState extends Equatable {
     return matches.isEmpty ? null : matches.first;
   }
 
-  CategoryState copyWith({
-    List<CategoryConfig>? categories,
-    bool? loaded,
-  }) {
+  CategoryState copyWith({List<CategoryConfig>? categories, bool? loaded}) {
     return CategoryState(
       categories: categories ?? this.categories,
       loaded: loaded ?? this.loaded,
@@ -44,8 +38,8 @@ class CategoryCubit extends Cubit<CategoryState> {
   final CategoryRepository _repository;
 
   CategoryCubit({required CategoryRepository repository})
-      : _repository = repository,
-        super(const CategoryState());
+    : _repository = repository,
+      super(const CategoryState());
 
   Future<void> loadCategories() async {
     // Emit defaults immediately so the UI is never empty

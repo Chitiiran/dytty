@@ -66,10 +66,9 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withValues(alpha: 0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -94,17 +93,17 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
       VoiceNoteStatus.initial => 'Initializing...',
       VoiceNoteStatus.ready => 'Ready to listen',
       VoiceNoteStatus.listening => 'Listening...',
+      VoiceNoteStatus.transcriptReview => 'Review transcript',
       VoiceNoteStatus.processing => 'Processing...',
       VoiceNoteStatus.reviewing => 'Review your note',
+      VoiceNoteStatus.reconciling => 'Re-summarizing...',
       VoiceNoteStatus.error => 'Something went wrong',
       VoiceNoteStatus.unavailable => 'Speech unavailable',
     };
 
     return Text(
       title,
-      style: theme.textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
+      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
@@ -113,12 +112,23 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
       VoiceNoteStatus.initial => const _LoadingView(),
       VoiceNoteStatus.ready => const _LoadingView(),
       VoiceNoteStatus.listening => _ListeningView(transcript: state.transcript),
-      VoiceNoteStatus.processing =>
-        _ProcessingView(transcript: state.transcript),
-      VoiceNoteStatus.reviewing =>
-        _ReviewingView(state: state, categories: categories),
-      VoiceNoteStatus.error =>
-        _ErrorView(error: state.error ?? 'Unknown error'),
+      VoiceNoteStatus.transcriptReview => _TranscriptReviewView(
+        transcript: state.transcript,
+      ),
+      VoiceNoteStatus.processing => _ProcessingView(
+        transcript: state.transcript,
+      ),
+      VoiceNoteStatus.reviewing => _ReviewingView(
+        state: state,
+        categories: categories,
+      ),
+      VoiceNoteStatus.reconciling => _ReviewingView(
+        state: state,
+        categories: categories,
+      ),
+      VoiceNoteStatus.error => _ErrorView(
+        error: state.error ?? 'Unknown error',
+      ),
       VoiceNoteStatus.unavailable => const _UnavailableView(),
     };
   }
@@ -150,25 +160,22 @@ class _ListeningView extends StatelessWidget {
         // Pulsing mic icon
         Semantics(
           label: 'Listening for speech',
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.mic_rounded,
-              size: 40,
-              color: theme.colorScheme.primary,
-            ),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                begin: const Offset(1.0, 1.0),
-                end: const Offset(1.15, 1.15),
-                duration: 800.ms,
-              ),
+          child:
+              Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.mic_rounded, size: 40, color: Colors.red),
+                  )
+                  .animate(onPlay: (c) => c.repeat(reverse: true))
+                  .scale(
+                    begin: const Offset(1.0, 1.0),
+                    end: const Offset(1.15, 1.15),
+                    duration: 800.ms,
+                  ),
         ),
         const SizedBox(height: 24),
 
@@ -180,8 +187,9 @@ class _ListeningView extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 80),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.5),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -210,6 +218,80 @@ class _ListeningView extends StatelessWidget {
   }
 }
 
+class _TranscriptReviewView extends StatefulWidget {
+  final String transcript;
+
+  const _TranscriptReviewView({required this.transcript});
+
+  @override
+  State<_TranscriptReviewView> createState() => _TranscriptReviewViewState();
+}
+
+class _TranscriptReviewViewState extends State<_TranscriptReviewView> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.transcript);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        TextField(
+          controller: _controller,
+          maxLines: 4,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            hintText: 'Edit transcript before summarizing...',
+            filled: true,
+            fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.5,
+            ),
+          ),
+          style: theme.textTheme.bodyLarge,
+          onChanged: (text) {
+            context.read<VoiceNoteBloc>().add(UpdateTranscript(text));
+          },
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Discard'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () {
+                  context.read<VoiceNoteBloc>().add(
+                    const RequestCategorization(),
+                  );
+                },
+                icon: const Icon(Icons.auto_awesome_rounded),
+                label: const Text('Summarize'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _ProcessingView extends StatelessWidget {
   final String transcript;
 
@@ -225,8 +307,9 @@ class _ProcessingView extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.5,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(transcript, style: theme.textTheme.bodyLarge),
@@ -256,27 +339,36 @@ class _ReviewingView extends StatefulWidget {
 }
 
 class _ReviewingViewState extends State<_ReviewingView> {
-  late TextEditingController _textController;
+  late TextEditingController _summaryController;
+  late TextEditingController _transcriptController;
   bool _transcriptExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(text: widget.state.summary);
+    _summaryController = TextEditingController(text: widget.state.summary);
+    _transcriptController = TextEditingController(
+      text: widget.state.transcript,
+    );
   }
 
   @override
   void didUpdateWidget(covariant _ReviewingView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.state.summary != widget.state.summary &&
-        _textController.text != widget.state.summary) {
-      _textController.text = widget.state.summary;
+        _summaryController.text != widget.state.summary) {
+      _summaryController.text = widget.state.summary;
+    }
+    if (oldWidget.state.transcript != widget.state.transcript &&
+        _transcriptController.text != widget.state.transcript) {
+      _transcriptController.text = widget.state.transcript;
     }
   }
 
   @override
   void dispose() {
-    _textController.dispose();
+    _summaryController.dispose();
+    _transcriptController.dispose();
     super.dispose();
   }
 
@@ -284,13 +376,15 @@ class _ReviewingViewState extends State<_ReviewingView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = widget.state;
+    final isReconciling = state.status == VoiceNoteStatus.reconciling;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Collapsible transcript
+        // Collapsible editable transcript
         GestureDetector(
-          onTap: () => setState(() => _transcriptExpanded = !_transcriptExpanded),
+          onTap: () =>
+              setState(() => _transcriptExpanded = !_transcriptExpanded),
           child: Row(
             children: [
               Icon(
@@ -301,35 +395,70 @@ class _ReviewingViewState extends State<_ReviewingView> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 4),
-              Text(
-                'Transcript',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Text(
+                  'Transcript',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
+              if (state.transcriptEdited)
+                Text(
+                  'edited',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.tertiary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
             ],
           ),
         ),
         if (_transcriptExpanded) ...[
           const SizedBox(height: 8),
-          Semantics(
-            label: 'Transcript',
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
+          TextField(
+            controller: _transcriptController,
+            maxLines: 4,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                state.transcript,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              hintText: 'Edit transcript...',
+              filled: true,
+              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
+            ),
+            style: theme.textTheme.bodyMedium,
+            onChanged: (text) {
+              context.read<VoiceNoteBloc>().add(UpdateTranscript(text));
+            },
+          ),
+          if (state.transcriptEdited) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: isReconciling
+                    ? null
+                    : () {
+                        context.read<VoiceNoteBloc>().add(
+                          const ReconcileSummary(),
+                        );
+                      },
+                icon: isReconciling
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_awesome_rounded, size: 16),
+                label: Text(
+                  isReconciling ? 'Re-summarizing...' : 'Re-summarize',
                 ),
               ),
             ),
-          ),
+          ],
         ],
         const SizedBox(height: 16),
 
@@ -342,12 +471,11 @@ class _ReviewingViewState extends State<_ReviewingView> {
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: _textController,
+          controller: _summaryController,
           maxLines: 3,
+          enabled: !isReconciling,
           decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             hintText: 'Edit your note...',
           ),
           onChanged: (text) {
@@ -379,31 +507,11 @@ class _ReviewingViewState extends State<_ReviewingView> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
 
-        // Tags
-        if (state.suggestedTags.isNotEmpty) ...[
-          Text(
-            'Tags',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            children: state.suggestedTags.map((tag) {
-              return Chip(
-                label: Text(tag),
-                visualDensity: VisualDensity.compact,
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-        ],
+        // Tags hidden from user (kept internal per #59)
 
         // Action buttons
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
         Row(
           children: [
             Expanded(
@@ -415,14 +523,14 @@ class _ReviewingViewState extends State<_ReviewingView> {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                onPressed: state.suggestedCategory != null
+                onPressed: state.suggestedCategory != null && !isReconciling
                     ? () {
                         Navigator.pop(
                           context,
                           VoiceNoteResult(
                             categoryId: state.suggestedCategory!,
-                            text: _textController.text.isNotEmpty
-                                ? _textController.text
+                            text: _summaryController.text.isNotEmpty
+                                ? _summaryController.text
                                 : state.transcript,
                             transcript: state.transcript,
                             tags: state.suggestedTags,

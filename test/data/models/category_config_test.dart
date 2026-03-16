@@ -43,8 +43,10 @@ void main() {
         isArchived: true,
       );
 
-      final restored =
-          CategoryConfig.fromFirestore(original.id, original.toFirestore());
+      final restored = CategoryConfig.fromFirestore(
+        original.id,
+        original.toFirestore(),
+      );
       expect(restored, original);
     });
 

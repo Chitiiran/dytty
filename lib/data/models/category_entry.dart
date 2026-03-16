@@ -23,8 +23,16 @@ class CategoryEntry extends Equatable {
   });
 
   @override
-  List<Object?> get props =>
-      [id, categoryId, text, source, createdAt, audioUrl, transcript, tags];
+  List<Object?> get props => [
+    id,
+    categoryId,
+    text,
+    source,
+    createdAt,
+    audioUrl,
+    transcript,
+    tags,
+  ];
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;

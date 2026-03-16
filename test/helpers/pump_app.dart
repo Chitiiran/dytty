@@ -11,8 +11,7 @@ import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/data/models/category_config.dart';
 
 /// Mock Blocs/Cubits for widget testing.
-class MockAuthBloc extends MockBloc<AuthEvent, AuthState>
-    implements AuthBloc {}
+class MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
 
 class MockJournalBloc extends MockBloc<JournalEvent, JournalState>
     implements JournalBloc {}
@@ -64,22 +63,17 @@ extension PumpApp on WidgetTester {
             email: 'test@test.com',
           ),
     );
-    when(() => mockJournalBloc.state).thenReturn(
-      journalState ?? JournalState(),
-    );
+    when(
+      () => mockJournalBloc.state,
+    ).thenReturn(journalState ?? JournalState());
     when(() => mockCategoryCubit.state).thenReturn(
       categoryState ??
-          CategoryState(
-            categories: CategoryConfig.defaults,
-            loaded: true,
-          ),
+          CategoryState(categories: CategoryConfig.defaults, loaded: true),
     );
-    when(() => mockSettingsCubit.state).thenReturn(
-      settingsState ?? const SettingsState(loaded: true),
-    );
-    when(() => mockThemeCubit.state).thenReturn(
-      themeMode ?? ThemeMode.system,
-    );
+    when(
+      () => mockSettingsCubit.state,
+    ).thenReturn(settingsState ?? const SettingsState(loaded: true));
+    when(() => mockThemeCubit.state).thenReturn(themeMode ?? ThemeMode.system);
 
     await pumpWidget(
       MultiBlocProvider(
@@ -90,9 +84,7 @@ extension PumpApp on WidgetTester {
           BlocProvider<SettingsCubit>.value(value: mockSettingsCubit),
           BlocProvider<ThemeCubit>.value(value: mockThemeCubit),
         ],
-        child: MaterialApp(
-          home: widget,
-        ),
+        child: MaterialApp(home: widget),
       ),
     );
   }

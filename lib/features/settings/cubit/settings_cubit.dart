@@ -47,13 +47,13 @@ class SettingsState extends Equatable {
 
   @override
   List<Object?> get props => [
-        hideEntries,
-        loaded,
-        reminderEnabled,
-        reminderTime,
-        dailyCallEnabled,
-        dailyCallTime,
-      ];
+    hideEntries,
+    loaded,
+    reminderEnabled,
+    reminderTime,
+    dailyCallEnabled,
+    dailyCallTime,
+  ];
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
@@ -63,41 +63,45 @@ class SettingsCubit extends Cubit<SettingsState> {
   SettingsCubit({
     required JournalRepository repository,
     required NotificationService notificationService,
-  })  : _repository = repository,
-        _notificationService = notificationService,
-        super(const SettingsState());
+  }) : _repository = repository,
+       _notificationService = notificationService,
+       super(const SettingsState());
 
   Future<void> loadSettings() async {
     try {
       final settings = await _repository.getUserSettings();
-      emit(SettingsState(
-        hideEntries: settings['hideEntries'] as bool? ?? false,
-        loaded: true,
-        reminderEnabled: _notificationService.isReminderEnabled,
-        reminderTime: TimeOfDay(
-          hour: _notificationService.reminderHour,
-          minute: _notificationService.reminderMinute,
+      emit(
+        SettingsState(
+          hideEntries: settings['hideEntries'] as bool? ?? false,
+          loaded: true,
+          reminderEnabled: _notificationService.isReminderEnabled,
+          reminderTime: TimeOfDay(
+            hour: _notificationService.reminderHour,
+            minute: _notificationService.reminderMinute,
+          ),
+          dailyCallEnabled: _notificationService.isDailyCallEnabled,
+          dailyCallTime: TimeOfDay(
+            hour: _notificationService.dailyCallHour,
+            minute: _notificationService.dailyCallMinute,
+          ),
         ),
-        dailyCallEnabled: _notificationService.isDailyCallEnabled,
-        dailyCallTime: TimeOfDay(
-          hour: _notificationService.dailyCallHour,
-          minute: _notificationService.dailyCallMinute,
-        ),
-      ));
+      );
     } catch (_) {
-      emit(state.copyWith(
-        loaded: true,
-        reminderEnabled: _notificationService.isReminderEnabled,
-        reminderTime: TimeOfDay(
-          hour: _notificationService.reminderHour,
-          minute: _notificationService.reminderMinute,
+      emit(
+        state.copyWith(
+          loaded: true,
+          reminderEnabled: _notificationService.isReminderEnabled,
+          reminderTime: TimeOfDay(
+            hour: _notificationService.reminderHour,
+            minute: _notificationService.reminderMinute,
+          ),
+          dailyCallEnabled: _notificationService.isDailyCallEnabled,
+          dailyCallTime: TimeOfDay(
+            hour: _notificationService.dailyCallHour,
+            minute: _notificationService.dailyCallMinute,
+          ),
         ),
-        dailyCallEnabled: _notificationService.isDailyCallEnabled,
-        dailyCallTime: TimeOfDay(
-          hour: _notificationService.dailyCallHour,
-          minute: _notificationService.dailyCallMinute,
-        ),
-      ));
+      );
     }
   }
 

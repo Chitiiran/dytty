@@ -15,8 +15,10 @@ class FakeLlmService implements LlmService {
   }
 
   @override
-  Future<CategorizationResult> categorizeEntry(String text,
-      {List<String> categoryIds = const ['positive']}) async {
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
     callCount++;
     return const CategorizationResult(
       suggestedCategory: 'positive',
@@ -30,6 +32,15 @@ class FakeLlmService implements LlmService {
   Future<String> summarizeEntry(String text) async {
     callCount++;
     return 'Fake summary of: $text';
+  }
+
+  @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async {
+    callCount++;
+    return 'Reconciled summary of edited transcript';
   }
 
   @override

@@ -34,7 +34,10 @@ class AuthService {
   }
 
   Future<UserCredential> signInAnonymously() async {
-    assert(kDebugMode || useEmulators, 'signInAnonymously is for debug/emulator use only');
+    assert(
+      kDebugMode || useEmulators,
+      'signInAnonymously is for debug/emulator use only',
+    );
     return _auth.signInAnonymously();
   }
 

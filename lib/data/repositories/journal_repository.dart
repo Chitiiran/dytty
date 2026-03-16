@@ -182,7 +182,9 @@ class JournalRepository {
 
     return StreakData(
       currentStreak: currentStreak,
-      longestStreak: longestStreak > currentStreak ? longestStreak : currentStreak,
+      longestStreak: longestStreak > currentStreak
+          ? longestStreak
+          : currentStreak,
       lastJournalDate: lastJournalDate,
     );
   }
@@ -218,9 +220,7 @@ class JournalRepository {
       return {'hideEntries': false};
     }
     final data = snapshot.data() ?? {};
-    return {
-      'hideEntries': data['hideEntries'] ?? false,
-    };
+    return {'hideEntries': data['hideEntries'] ?? false};
   }
 
   /// Updates user settings in profile doc.

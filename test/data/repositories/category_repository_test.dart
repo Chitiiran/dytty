@@ -9,10 +9,7 @@ void main() {
 
   setUp(() {
     fakeFirestore = FakeFirebaseFirestore();
-    repository = CategoryRepository(
-      uid: 'test-user',
-      firestore: fakeFirestore,
-    );
+    repository = CategoryRepository(uid: 'test-user', firestore: fakeFirestore);
   });
 
   group('CategoryRepository', () {

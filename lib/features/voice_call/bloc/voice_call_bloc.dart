@@ -157,18 +157,18 @@ class VoiceCallState extends Equatable {
 
   @override
   List<Object?> get props => [
-        status,
-        transcripts,
-        savedEntries,
-        latencyMs,
-        elapsed,
-        error,
-        showTimeWarning,
-        audioUrl,
-        uploadingAudio,
-        sessionSummary,
-        generatingSummary,
-      ];
+    status,
+    transcripts,
+    savedEntries,
+    latencyMs,
+    elapsed,
+    error,
+    showTimeWarning,
+    audioUrl,
+    uploadingAudio,
+    sessionSummary,
+    generatingSummary,
+  ];
 }
 
 // --- Bloc ---
@@ -211,12 +211,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
-  })  : _service = service,
-        _journalBloc = journalBloc,
-        _llmService = llmService,
-        _audioStorage = audioStorage,
-        _uid = uid,
-        super(const VoiceCallState()) {
+  }) : _service = service,
+       _journalBloc = journalBloc,
+       _llmService = llmService,
+       _audioStorage = audioStorage,
+       _uid = uid,
+       super(const VoiceCallState()) {
     on<StartCall>(_onStartCall);
     on<EndCall>(_onEndCall);
     on<TranscriptReceived>(_onTranscriptReceived);
@@ -232,14 +232,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     Emitter<VoiceCallState> emit,
   ) async {
     _recordedAudio.clear();
-    emit(state.copyWith(
-      status: VoiceCallStatus.connecting,
-      transcripts: [],
-      savedEntries: [],
-      latencyMs: null,
-      elapsed: Duration.zero,
-      showTimeWarning: false,
-    ));
+    emit(
+      state.copyWith(
+        status: VoiceCallStatus.connecting,
+        transcripts: [],
+        savedEntries: [],
+        latencyMs: null,
+        elapsed: Duration.zero,
+        showTimeWarning: false,
+      ),
+    );
     _warned5 = false;
     _warned9 = false;
 
@@ -264,17 +266,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         add(const _SessionTick());
       });
     } catch (e) {
-      emit(state.copyWith(
-        status: VoiceCallStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: VoiceCallStatus.error, error: e.toString()));
     }
   }
 
-  Future<void> _onEndCall(
-    EndCall event,
-    Emitter<VoiceCallState> emit,
-  ) async {
+  Future<void> _onEndCall(EndCall event, Emitter<VoiceCallState> emit) async {
     emit(state.copyWith(status: VoiceCallStatus.ending));
     _elapsedTimer?.cancel();
     _callStartTime = null;
@@ -286,10 +282,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _audioStorage != null && _uid != null && _recordedAudio.isNotEmpty;
 
     if (hasAudio) {
-      emit(state.copyWith(
-        status: VoiceCallStatus.ended,
-        uploadingAudio: true,
-      ));
+      emit(state.copyWith(status: VoiceCallStatus.ended, uploadingAudio: true));
 
       try {
         final now = DateTime.now();
@@ -300,10 +293,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           audioData: Uint8List.fromList(_recordedAudio),
         );
         debugPrint('Audio uploaded: $url');
-        emit(state.copyWith(
-          audioUrl: url,
-          uploadingAudio: false,
-        ));
+        emit(state.copyWith(audioUrl: url, uploadingAudio: false));
       } catch (e) {
         debugPrint('Failed to upload audio: $e');
         emit(state.copyWith(uploadingAudio: false));
@@ -314,11 +304,15 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
 
     // Trigger post-session summary generation
     if (_llmService != null && state.transcripts.isNotEmpty) {
-      add(GenerateSessionSummary(
-        state.transcripts
-            .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
-            .toList(),
-      ));
+      add(
+        GenerateSessionSummary(
+          state.transcripts
+              .map(
+                (t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}',
+              )
+              .toList(),
+        ),
+      );
     }
   }
 
@@ -343,10 +337,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       // Don't show empty summaries (e.g. from NoOpLlmService)
       final summary = response.text.trim();
       if (summary.isNotEmpty) {
-        emit(state.copyWith(
-          sessionSummary: summary,
-          generatingSummary: false,
-        ));
+        emit(state.copyWith(sessionSummary: summary, generatingSummary: false));
       } else {
         emit(state.copyWith(generatingSummary: false));
       }
@@ -356,10 +347,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     }
   }
 
-  void _onSessionTick(
-    _SessionTick event,
-    Emitter<VoiceCallState> emit,
-  ) {
+  void _onSessionTick(_SessionTick event, Emitter<VoiceCallState> emit) {
     if (_callStartTime == null) return;
     final elapsed = DateTime.now().difference(_callStartTime!);
 
@@ -382,20 +370,20 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       debugPrint('Session warning: 1 minute remaining');
     }
 
-    emit(state.copyWith(
-      status: VoiceCallStatus.active,
-      elapsed: elapsed,
-      showTimeWarning: showWarning,
-    ));
+    emit(
+      state.copyWith(
+        status: VoiceCallStatus.active,
+        elapsed: elapsed,
+        showTimeWarning: showWarning,
+      ),
+    );
   }
 
   void _onTranscriptReceived(
     TranscriptReceived event,
     Emitter<VoiceCallState> emit,
   ) {
-    emit(state.copyWith(
-      transcripts: [...state.transcripts, event.transcript],
-    ));
+    emit(state.copyWith(transcripts: [...state.transcripts, event.transcript]));
   }
 
   Future<void> _onToolCallReceived(
@@ -408,8 +396,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       final categoryName =
           args[_SaveEntryArgs.category] as String? ?? 'positive';
       final text = args[_SaveEntryArgs.text] as String? ?? '';
-      final transcript =
-          args[_SaveEntryArgs.transcript] as String? ?? '';
+      final transcript = args[_SaveEntryArgs.transcript] as String? ?? '';
 
       final entry = SavedEntry(
         categoryId: categoryName,
@@ -417,24 +404,23 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         transcript: transcript,
       );
 
-      emit(state.copyWith(
-        savedEntries: [...state.savedEntries, entry],
-      ));
+      emit(state.copyWith(savedEntries: [...state.savedEntries, entry]));
 
       // Persist to Firestore via JournalBloc
-      _journalBloc?.add(AddVoiceEntry(
-        categoryId: categoryName,
-        text: text,
-        transcript: transcript,
-        tags: const ['voice-call'],
-      ));
+      _journalBloc?.add(
+        AddVoiceEntry(
+          categoryId: categoryName,
+          text: text,
+          transcript: transcript,
+          tags: const ['voice-call'],
+        ),
+      );
 
       // Acknowledge the tool call to the model
-      await _service.sendToolResponse(
-        call.name,
-        call.id,
-        {'status': 'saved', _SaveEntryArgs.category: categoryName},
-      );
+      await _service.sendToolResponse(call.name, call.id, {
+        'status': 'saved',
+        _SaveEntryArgs.category: categoryName,
+      });
 
       debugPrint('Tool call: save_entry → $categoryName: $text');
     }
@@ -450,10 +436,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           emit(state.copyWith(status: VoiceCallStatus.active));
         }
       case GeminiLiveState.error:
-        emit(state.copyWith(
-          status: VoiceCallStatus.error,
-          error: 'Connection error',
-        ));
+        emit(
+          state.copyWith(
+            status: VoiceCallStatus.error,
+            error: 'Connection error',
+          ),
+        );
       case GeminiLiveState.idle:
         if (state.status == VoiceCallStatus.active) {
           // Server closed the connection (e.g. timeout)
@@ -464,10 +452,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     }
   }
 
-  void _onLatencyUpdated(
-    LatencyUpdated event,
-    Emitter<VoiceCallState> emit,
-  ) {
+  void _onLatencyUpdated(LatencyUpdated event, Emitter<VoiceCallState> emit) {
     emit(state.copyWith(latencyMs: event.latencyMs));
   }
 

@@ -127,10 +127,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     header.setUint32(36, 0x64617461, Endian.big); // "data"
     header.setUint32(40, dataSize, Endian.little);
 
-    return Uint8List.fromList([
-      ...header.buffer.asUint8List(),
-      ...pcmData,
-    ]);
+    return Uint8List.fromList([...header.buffer.asUint8List(), ...pcmData]);
   }
 
   String _formatDuration(Duration d) {
@@ -174,8 +171,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _latencyColor(state.latencyMs!)
-                              .withValues(alpha: 0.15),
+                          color: _latencyColor(
+                            state.latencyMs!,
+                          ).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -246,8 +244,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     reverse: true,
                     itemCount: state.transcripts.length,
                     itemBuilder: (context, index) {
-                      final transcript = state.transcripts[
-                          state.transcripts.length - 1 - index];
+                      final transcript = state
+                          .transcripts[state.transcripts.length - 1 - index];
                       return _TranscriptBubble(transcript: transcript);
                     },
                   ),
@@ -260,10 +258,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                       horizontal: 16,
                       vertical: 8,
                     ),
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primaryContainer
-                        .withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                     child: Row(
                       children: [
                         Icon(
@@ -504,10 +501,7 @@ class _PostCallSummary extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: FilledButton(
-              onPressed: onDone,
-              child: const Text('Done'),
-            ),
+            child: FilledButton(onPressed: onDone, child: const Text('Done')),
           ),
         ],
       ),
@@ -543,10 +537,7 @@ class _StatChip extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         Text(
           caption,
@@ -586,11 +577,7 @@ class _SavedEntryTile extends StatelessWidget {
                 color: cat.color.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                cat.icon,
-                size: 18,
-                color: cat.color,
-              ),
+              child: Icon(cat.icon, size: 18, color: cat.color),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -606,10 +593,7 @@ class _SavedEntryTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    entry.text,
-                    style: theme.textTheme.bodyMedium,
-                  ),
+                  Text(entry.text, style: theme.textTheme.bodyMedium),
                 ],
               ),
             ),
@@ -678,10 +662,7 @@ class _StatusBar extends StatelessWidget {
               width: 8,
               height: 8,
               margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           Text(
             label,
@@ -721,10 +702,7 @@ class _TranscriptBubble extends StatelessWidget {
               : theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          transcript.text,
-          style: theme.textTheme.bodyMedium,
-        ),
+        child: Text(transcript.text, style: theme.textTheme.bodyMedium),
       ),
     );
   }
@@ -743,7 +721,8 @@ class _CallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = status == VoiceCallStatus.active ||
+    final isActive =
+        status == VoiceCallStatus.active ||
         status == VoiceCallStatus.connecting;
 
     return SizedBox(
