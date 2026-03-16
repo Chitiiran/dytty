@@ -23,11 +23,20 @@ late final NotificationService notificationService;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } on FirebaseException catch (e) {
+    // google-services.json auto-initializes on Android; safe to ignore duplicate.
+    if (e.code != 'duplicate-app') rethrow;
+  }
 
   if (useEmulators) {
     // Android emulator uses 10.0.2.2 to reach host machine's localhost
-    final emulatorHost = kIsWeb ? 'localhost' : (Platform.isAndroid ? '10.0.2.2' : 'localhost');
+    final emulatorHost = kIsWeb
+        ? 'localhost'
+        : (Platform.isAndroid ? '10.0.2.2' : 'localhost');
     await FirebaseAuth.instance.useAuthEmulator(emulatorHost, 9099);
     FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, 8080);
     FirebaseStorage.instance.useStorageEmulator(emulatorHost, 9199);

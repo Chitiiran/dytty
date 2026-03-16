@@ -28,10 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final bloc = context.read<JournalBloc>();
-      bloc.add(LoadMonthMarkers(
-        year: _focusedDay.year,
-        month: _focusedDay.month,
-      ));
+      bloc.add(
+        LoadMonthMarkers(year: _focusedDay.year, month: _focusedDay.month),
+      );
       bloc.add(SelectDate(DateTime.now()));
       bloc.add(const LoadStreak());
     });
@@ -54,18 +53,60 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayName = authState is Authenticated
         ? authState.displayName?.split(' ').first ?? 'there'
         : 'there';
-    final photoUrl =
-        authState is Authenticated ? authState.photoUrl : null;
-    final userName =
-        authState is Authenticated ? authState.displayName : null;
+    final photoUrl = authState is Authenticated ? authState.photoUrl : null;
+    final userName = authState is Authenticated ? authState.displayName : null;
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.large(
-        onPressed: () => _openVoiceNote(context),
-        tooltip: 'Record voice note',
-        child: const Icon(Icons.mic_rounded, size: 32),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  label: 'Today button',
+                  button: true,
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.tonalIcon(
+                      onPressed: () {
+                        final today = DateTime.now();
+                        setState(() {
+                          _focusedDay = today;
+                        });
+                        context.read<JournalBloc>().add(SelectDate(today));
+                        Navigator.pushNamed(context, '/daily-journal');
+                      },
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text('Write'),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton.large(
+                onPressed: () => _openVoiceNote(context),
+                tooltip: 'Record voice note',
+                elevation: 2,
+                child: const Icon(Icons.mic_rounded, size: 32),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/voice-call');
+                    },
+                    icon: const Icon(Icons.call_rounded),
+                    label: const Text('Call'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       appBar: AppBar(
         title: Text('Dytty'),
         actions: [
@@ -123,9 +164,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         setState(() {
                           _focusedDay = focusedDay;
                         });
-                        context
-                            .read<JournalBloc>()
-                            .add(SelectDate(selectedDay));
+                        context.read<JournalBloc>().add(
+                          SelectDate(selectedDay),
+                        );
                         Navigator.pushNamed(context, '/daily-journal');
                       },
                       onFormatChanged: (format) {
@@ -135,10 +176,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                       onPageChanged: (focusedDay) {
                         _focusedDay = focusedDay;
-                        context.read<JournalBloc>().add(LoadMonthMarkers(
-                              year: focusedDay.year,
-                              month: focusedDay.month,
-                            ));
+                        context.read<JournalBloc>().add(
+                          LoadMonthMarkers(
+                            year: focusedDay.year,
+                            month: focusedDay.month,
+                          ),
+                        );
                       },
                       eventLoader: (day) {
                         final dateStr = _dateFormat.format(day);
@@ -207,8 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                         weekendStyle: TextStyle(
-                          color:
-                              theme.colorScheme.onSurfaceVariant.withValues(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.6,
                           ),
                           fontSize: 12,
@@ -225,9 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!journalState.journaledToday)
                   Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _NudgeCard(
-                          onTap: () => _openVoiceNote(context),
-                        ),
+                        child: _NudgeCard(onTap: () => _openVoiceNote(context)),
                       )
                       .animate()
                       .fadeIn(duration: 400.ms)
@@ -249,62 +289,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     .slideY(begin: 0.1, end: 0, duration: 400.ms),
 
                 const SizedBox(height: 16),
-
-                // Today button
-                Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Semantics(
-                        label: 'Today button',
-                        button: true,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              final today = DateTime.now();
-                              setState(() {
-                                _focusedDay = today;
-                              });
-                              context
-                                  .read<JournalBloc>()
-                                  .add(SelectDate(today));
-                              Navigator.pushNamed(context, '/daily-journal');
-                            },
-                            icon: const Icon(Icons.edit_note_rounded),
-                            label: const Text("Write Today's Journal"),
-                          ),
-                        ),
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(delay: 350.ms, duration: 400.ms)
-                    .slideY(begin: 0.1, end: 0, duration: 400.ms),
-
-                const SizedBox(height: 12),
-
-                // Daily call button
-                Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/voice-call');
-                          },
-                          icon: const Icon(Icons.call_rounded),
-                          label: const Text('Start Daily Call'),
-                        ),
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(delay: 450.ms, duration: 400.ms)
-                    .slideY(begin: 0.1, end: 0, duration: 400.ms),
-
-                const SizedBox(height: 24),
-
-                // Extra space so FAB doesn't overlap content
-                const SizedBox(height: 80),
               ],
             ),
           ),
@@ -377,13 +361,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final bloc = context.read<JournalBloc>();
     final today = DateTime.now();
-    bloc.add(AddVoiceEntry(
-      categoryId: result.categoryId,
-      text: result.text,
-      transcript: result.transcript,
-      tags: result.tags,
-      date: today,
-    ));
+    bloc.add(
+      AddVoiceEntry(
+        categoryId: result.categoryId,
+        text: result.text,
+        transcript: result.transcript,
+        tags: result.tags,
+        date: today,
+      ),
+    );
 
     if (context.mounted) {
       final categoryState = context.read<CategoryCubit>().state;
@@ -486,9 +472,9 @@ class _ProgressCard extends StatelessWidget {
       filledCategoryIds.add(entry.categoryId);
     }
     final total = categories.length;
-    final filled = filledCategoryIds.intersection(
-      categories.map((c) => c.id).toSet(),
-    ).length;
+    final filled = filledCategoryIds
+        .intersection(categories.map((c) => c.id).toSet())
+        .length;
     final progress = total > 0 ? filled / total : 0.0;
 
     String message;
@@ -502,132 +488,133 @@ class _ProgressCard extends StatelessWidget {
     }
 
     return Semantics(
-      label: 'Progress $filled of $total${currentStreak > 0 ? ', streak $currentStreak day${currentStreak == 1 ? '' : 's'}' : ''}',
+      label:
+          'Progress $filled of $total${currentStreak > 0 ? ', streak $currentStreak day${currentStreak == 1 ? '' : 's'}' : ''}',
       child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  "Today's Progress",
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    "Today's Progress",
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                if (currentStreak > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.local_fire_department_rounded,
-                          size: 14,
-                          color: Color(0xFFF59E0B),
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          '$currentStreak day${currentStreak == 1 ? '' : 's'}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                  if (currentStreak > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 14,
                             color: Color(0xFFF59E0B),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 3),
+                          Text(
+                            '$currentStreak day${currentStreak == 1 ? '' : 's'}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  Text(
+                    '$filled/$total',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
-                const Spacer(),
-                Text(
-                  '$filled/$total',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Category icons row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: categories.map((cat) {
-                final isFilled = filledCategoryIds.contains(cat.id);
-                return Column(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isFilled
-                            ? cat.color.withValues(alpha: 0.15)
-                            : theme.colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        cat.icon,
-                        size: 20,
-                        color: isFilled
-                            ? cat.color
-                            : theme.colorScheme.onSurfaceVariant.withValues(
-                                alpha: 0.3,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (isFilled)
+              ),
+              const SizedBox(height: 12),
+              // Category icons row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: categories.map((cat) {
+                  final isFilled = filledCategoryIds.contains(cat.id);
+                  return Column(
+                    children: [
                       Container(
-                        width: 6,
-                        height: 6,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
-                          color: cat.color,
+                          color: isFilled
+                              ? cat.color.withValues(alpha: 0.15)
+                              : theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                         ),
-                      )
-                    else
-                      const SizedBox(height: 6),
-                  ],
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            // Progress bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                color: filled == total
-                    ? const Color(0xFF10B981)
-                    : theme.colorScheme.primary,
+                        child: Icon(
+                          cat.icon,
+                          size: 20,
+                          color: isFilled
+                              ? cat.color
+                              : theme.colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.3,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (isFilled)
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: cat.color,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 6),
+                    ],
+                  );
+                }).toList(),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: 12),
+              // Progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 8,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
+                  color: filled == total
+                      ? const Color(0xFF10B981)
+                      : theme.colorScheme.primary,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

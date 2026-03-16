@@ -30,11 +30,11 @@ class HomeScreenRobot {
   }
 
   void expectTodayButtonVisible() {
-    expect(find.text("Write Today's Journal"), findsOneWidget);
+    expect(find.text('Write'), findsOneWidget);
   }
 
   void expectDailyCallButtonVisible() {
-    expect(find.text('Start Daily Call'), findsOneWidget);
+    expect(find.text('Call'), findsOneWidget);
   }
 
   Future<void> tapSettings() async {
@@ -43,7 +43,7 @@ class HomeScreenRobot {
   }
 
   Future<void> tapTodayButton() async {
-    await tester.tap(find.text("Write Today's Journal"));
+    await tester.tap(find.text('Write'));
     await tester.pumpAndSettle();
   }
 }

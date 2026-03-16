@@ -36,17 +36,11 @@ void main() {
       robot.expectCategoryCardVisible('Gratitude');
 
       // Scroll down to reveal remaining categories
-      await tester.scrollUntilVisible(
-        find.text('Beauty'),
-        200,
-      );
+      await tester.scrollUntilVisible(find.text('Beauty'), 200);
       await tester.pump(const Duration(milliseconds: 500));
       robot.expectCategoryCardVisible('Beauty');
 
-      await tester.scrollUntilVisible(
-        find.text('Identity'),
-        200,
-      );
+      await tester.scrollUntilVisible(find.text('Identity'), 200);
       await tester.pump(const Duration(milliseconds: 500));
       robot.expectCategoryCardVisible('Identity');
     });
