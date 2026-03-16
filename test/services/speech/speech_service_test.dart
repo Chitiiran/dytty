@@ -75,4 +75,72 @@ void main() {
       );
     });
   });
+
+  group('SpeechService.stopListening', () {
+    setUp(() {
+      when(() => mockStt.stop()).thenAnswer((_) async {});
+    });
+
+    test('delegates to SpeechToText.stop', () async {
+      await service.stopListening();
+
+      verify(() => mockStt.stop()).called(1);
+    });
+  });
+
+  group('SpeechService.cancel', () {
+    setUp(() {
+      when(() => mockStt.cancel()).thenAnswer((_) async {});
+    });
+
+    test('delegates to SpeechToText.cancel', () async {
+      await service.cancel();
+
+      verify(() => mockStt.cancel()).called(1);
+    });
+  });
+
+  group('SpeechService.dispose', () {
+    setUp(() {
+      when(() => mockStt.cancel()).thenAnswer((_) async {});
+    });
+
+    test('calls cancel on underlying SpeechToText', () {
+      service.dispose();
+
+      verify(() => mockStt.cancel()).called(1);
+    });
+  });
+
+  group('SpeechService.isAvailable', () {
+    test('returns false before initialization', () {
+      expect(service.isAvailable, isFalse);
+    });
+
+    test('returns true after successful initialization', () async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+
+      await service.initialize();
+
+      expect(service.isAvailable, isTrue);
+    });
+
+    test('returns false after failed initialization', () async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => false);
+
+      await service.initialize();
+
+      expect(service.isAvailable, isFalse);
+    });
+  });
+
+  group('SpeechService.isListening', () {
+    test('delegates to SpeechToText.isListening', () {
+      when(() => mockStt.isListening).thenReturn(false);
+      expect(service.isListening, isFalse);
+
+      when(() => mockStt.isListening).thenReturn(true);
+      expect(service.isListening, isTrue);
+    });
+  });
 }

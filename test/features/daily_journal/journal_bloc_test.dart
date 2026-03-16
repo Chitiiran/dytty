@@ -1,9 +1,12 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+
+class MockJournalRepository extends Mock implements JournalRepository {}
 
 void main() {
   late FakeFirebaseFirestore firestore;
@@ -351,6 +354,202 @@ void main() {
       verify: (bloc) {
         expect(bloc.state.journaledToday, true);
       },
+    );
+  });
+
+  group('JournalEvent props equality', () {
+    test('AddEntry with same fields are equal', () {
+      final date = DateTime(2026, 3, 1);
+      expect(
+        AddEntry(categoryId: 'positive', text: 'hello', date: date),
+        AddEntry(categoryId: 'positive', text: 'hello', date: date),
+      );
+    });
+
+    test('AddEntry with different fields are not equal', () {
+      expect(
+        const AddEntry(categoryId: 'positive', text: 'hello'),
+        isNot(const AddEntry(categoryId: 'negative', text: 'hello')),
+      );
+    });
+
+    test('UpdateEntry with same fields are equal', () {
+      expect(
+        const UpdateEntry(entryId: 'e1', text: 'updated'),
+        const UpdateEntry(entryId: 'e1', text: 'updated'),
+      );
+    });
+
+    test('DeleteEntry with same id are equal', () {
+      expect(const DeleteEntry('e1'), const DeleteEntry('e1'));
+    });
+
+    test('DeleteEntry with different ids are not equal', () {
+      expect(const DeleteEntry('e1'), isNot(const DeleteEntry('e2')));
+    });
+
+    test('SelectDate with same date are equal', () {
+      expect(
+        SelectDate(DateTime(2026, 3, 1)),
+        SelectDate(DateTime(2026, 3, 1)),
+      );
+    });
+
+    test('LoadEntries are equal', () {
+      expect(const LoadEntries(), const LoadEntries());
+    });
+
+    test('LoadMonthMarkers with same fields are equal', () {
+      expect(
+        const LoadMonthMarkers(year: 2026, month: 3),
+        const LoadMonthMarkers(year: 2026, month: 3),
+      );
+    });
+
+    test('LoadStreak are equal', () {
+      expect(const LoadStreak(), const LoadStreak());
+    });
+
+    test('AddVoiceEntry with same fields are equal', () {
+      expect(
+        const AddVoiceEntry(
+          categoryId: 'gratitude',
+          text: 'thanks',
+          transcript: 'raw',
+          tags: ['a'],
+        ),
+        const AddVoiceEntry(
+          categoryId: 'gratitude',
+          text: 'thanks',
+          transcript: 'raw',
+          tags: ['a'],
+        ),
+      );
+    });
+  });
+
+  group('JournalBloc error paths', () {
+    late MockJournalRepository mockRepository;
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'LoadEntries emits error when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.getCategoryEntries(any()),
+        ).thenThrow(Exception('load failed'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) => bloc.add(const LoadEntries()),
+      expect: () => [
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.loading,
+        ),
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.error)
+            .having((s) => s.error, 'error', contains('load failed')),
+      ],
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'AddEntry emits error when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.addCategoryEntry(
+            any(),
+            any(),
+            any(),
+            source: any(named: 'source'),
+            transcript: any(named: 'transcript'),
+            tags: any(named: 'tags'),
+          ),
+        ).thenThrow(Exception('add failed'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'positive', text: 'test')),
+      expect: () => [
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.error)
+            .having((s) => s.error, 'error', contains('add failed')),
+      ],
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'UpdateEntry emits error when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.updateCategoryEntry(any(), any(), any()),
+        ).thenThrow(Exception('update failed'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        selectedDate: DateTime(2026, 3, 1),
+        entries: [
+          CategoryEntry(
+            id: 'e1',
+            categoryId: 'positive',
+            text: 'original',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+        ],
+      ),
+      act: (bloc) =>
+          bloc.add(const UpdateEntry(entryId: 'e1', text: 'updated')),
+      expect: () => [
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.error)
+            .having((s) => s.error, 'error', contains('update failed')),
+      ],
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'DeleteEntry emits error when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.deleteCategoryEntry(any(), any()),
+        ).thenThrow(Exception('delete failed'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        selectedDate: DateTime(2026, 3, 1),
+        entries: [
+          CategoryEntry(
+            id: 'e1',
+            categoryId: 'positive',
+            text: 'to delete',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(const DeleteEntry('e1')),
+      expect: () => [
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.saving,
+        ),
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.error)
+            .having((s) => s.error, 'error', contains('delete failed')),
+      ],
     );
   });
 }
