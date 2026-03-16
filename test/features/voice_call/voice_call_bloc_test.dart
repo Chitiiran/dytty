@@ -111,6 +111,8 @@ void main() {
       expect(bloc.state.uploadingAudio, false);
       expect(bloc.state.sessionSummary, isNull);
       expect(bloc.state.generatingSummary, false);
+      expect(bloc.state.isMuted, false);
+      expect(bloc.state.isSpeakerOn, true);
       bloc.close();
     });
   });
@@ -274,12 +276,7 @@ void main() {
     );
 
     blocTest<VoiceCallBloc, VoiceCallState>(
-      'triggers summary generation when llmService and transcripts are present',
-      setUp: () {
-        when(
-          () => mockLlmService.generateResponse(any()),
-        ).thenAnswer((_) async => const LlmResponse(text: 'Test summary'));
-      },
+      'EndCall does NOT auto-trigger summary generation (user-triggered)',
       build: () => buildBloc(llmService: mockLlmService),
       seed: () => VoiceCallState(
         status: VoiceCallStatus.active,
@@ -297,23 +294,14 @@ void main() {
           'status',
           VoiceCallStatus.ending,
         ),
-        // ended
-        isA<VoiceCallState>().having(
-          (s) => s.status,
-          'status',
-          VoiceCallStatus.ended,
-        ),
-        // generating summary
-        isA<VoiceCallState>().having(
-          (s) => s.generatingSummary,
-          'generatingSummary',
-          true,
-        ),
-        // summary complete
+        // ended — no summary generation follows
         isA<VoiceCallState>()
-            .having((s) => s.sessionSummary, 'sessionSummary', 'Test summary')
+            .having((s) => s.status, 'status', VoiceCallStatus.ended)
             .having((s) => s.generatingSummary, 'generatingSummary', false),
       ],
+      verify: (_) {
+        verifyNever(() => mockLlmService.generateResponse(any()));
+      },
     );
   });
 
@@ -644,6 +632,62 @@ void main() {
     );
   });
 
+  group('ToggleMute', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'flips isMuted from false to true',
+      build: () => buildBloc(),
+      seed: () =>
+          const VoiceCallState(status: VoiceCallStatus.active, isMuted: false),
+      act: (bloc) => bloc.add(const ToggleMute()),
+      expect: () => [
+        isA<VoiceCallState>().having((s) => s.isMuted, 'isMuted', true),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'flips isMuted from true to false',
+      build: () => buildBloc(),
+      seed: () =>
+          const VoiceCallState(status: VoiceCallStatus.active, isMuted: true),
+      act: (bloc) => bloc.add(const ToggleMute()),
+      expect: () => [
+        isA<VoiceCallState>().having((s) => s.isMuted, 'isMuted', false),
+      ],
+    );
+  });
+
+  group('ToggleSpeaker', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'flips isSpeakerOn from true to false',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        isSpeakerOn: true,
+      ),
+      act: (bloc) => bloc.add(const ToggleSpeaker()),
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.isSpeakerOn,
+          'isSpeakerOn',
+          false,
+        ),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'flips isSpeakerOn from false to true',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        isSpeakerOn: false,
+      ),
+      act: (bloc) => bloc.add(const ToggleSpeaker()),
+      expect: () => [
+        isA<VoiceCallState>().having((s) => s.isSpeakerOn, 'isSpeakerOn', true),
+      ],
+    );
+  });
+
   group('sendAudio', () {
     test('accumulates audio and forwards to service', () {
       final bloc = buildBloc();
@@ -660,6 +704,40 @@ void main() {
     test('recordedAudio is null when no audio recorded', () {
       final bloc = buildBloc();
       expect(bloc.recordedAudio, isNull);
+      bloc.close();
+    });
+
+    test('does not forward to service when muted', () {
+      final bloc = buildBloc();
+      // Manually set muted state by adding ToggleMute
+      bloc.add(const ToggleMute());
+      // Wait for state to propagate
+      Future<void>.delayed(const Duration(milliseconds: 50)).then((_) {
+        final data = Uint8List.fromList([10, 20, 30]);
+        bloc.sendAudio(data);
+        // Audio still accumulated for recording
+        expect(bloc.recordedAudio, isNotNull);
+        expect(bloc.recordedAudio!.length, 3);
+        // But NOT forwarded to service
+        verifyNever(() => mockService.sendAudio(any()));
+        bloc.close();
+      });
+    });
+
+    test('resumes forwarding when unmuted', () async {
+      final bloc = buildBloc();
+      final data = Uint8List.fromList([10, 20, 30]);
+      // Mute
+      bloc.add(const ToggleMute());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      bloc.sendAudio(data);
+      verifyNever(() => mockService.sendAudio(any()));
+
+      // Unmute
+      bloc.add(const ToggleMute());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      bloc.sendAudio(data);
+      verify(() => mockService.sendAudio(data)).called(1);
       bloc.close();
     });
   });
@@ -790,6 +868,14 @@ void main() {
         const GenerateSessionSummary(['a']),
         isNot(const GenerateSessionSummary(['b'])),
       );
+    });
+
+    test('ToggleMute instances are equal', () {
+      expect(const ToggleMute(), const ToggleMute());
+    });
+
+    test('ToggleSpeaker instances are equal', () {
+      expect(const ToggleSpeaker(), const ToggleSpeaker());
     });
   });
 

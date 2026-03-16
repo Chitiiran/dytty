@@ -37,6 +37,8 @@ jobs:
       - run: flutter pub get
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
+      - name: Restore shared debug keystore
+        run: mkdir -p ~/.android && echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
       - name: Build release APK
         run: |
           flutter build apk --release \

@@ -49,6 +49,9 @@ jobs:
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
 
+      - name: Restore shared debug keystore
+        run: mkdir -p ~/.android && echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
+
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
 
@@ -82,16 +85,37 @@ jobs:
           name: debug-apk
           path: build/app/outputs/flutter-apk/
 
-      - name: Extract release notes from merge commit
+      - name: Extract release notes from merged PR
         id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          BODY=$(git log -1 --pretty=%b)
-          if [ -z "$BODY" ]; then
-            BODY=$(git log -1 --pretty=%s)
+          # Find the PR that was merged in this push
+          COMMIT_SHA=$(git rev-parse HEAD)
+          PR_NUMBER=$(gh pr list --state merged --search "$COMMIT_SHA" --json number --jq '.[0].number' 2>/dev/null)
+
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            # Extract PR title and body
+            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+            PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body')
+
+            # Build tester-friendly release notes
+            NOTES="Build from PR #${PR_NUMBER}: ${PR_TITLE}"
+            NOTES="${NOTES}"$'\n\n'"${PR_BODY}"
+          else
+            # Fallback: use commit subject + body
+            SUBJECT=$(git log -1 --pretty=%s)
+            BODY=$(git log -1 --pretty=%b)
+            NOTES="${SUBJECT}"
+            if [ -n "$BODY" ]; then
+              NOTES="${NOTES}"$'\n\n'"${BODY}"
+            fi
+            NOTES="${NOTES}"$'\n\n'"(No linked PR found — release notes may be incomplete. Check the commit for details.)"
           fi
+
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "body<<$EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
       - name: Upload to Firebase App Distribution
@@ -122,6 +146,9 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Restore shared debug keystore
+        run: mkdir -p ~/.android && echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
 
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json

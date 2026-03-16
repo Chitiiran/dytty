@@ -140,161 +140,185 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Widget build(BuildContext context) {
     return BlocProvider.value(
       value: _bloc,
-      child: BlocBuilder<VoiceCallBloc, VoiceCallState>(
-        builder: (context, state) {
-          // Post-call summary screen
-          if (state.status == VoiceCallStatus.ended) {
-            return _PostCallSummary(
-              savedEntries: state.savedEntries,
-              elapsed: state.elapsed,
-              latencyMs: state.latencyMs,
-              sessionSummary: state.sessionSummary,
-              generatingSummary: state.generatingSummary,
-              audioUrl: state.audioUrl,
-              uploadingAudio: state.uploadingAudio,
-              formatDuration: _formatDuration,
-              onDone: () => Navigator.pop(context),
-            );
-          }
+      child: BlocListener<VoiceCallBloc, VoiceCallState>(
+        listenWhen: (prev, curr) =>
+            curr.savedEntries.length > prev.savedEntries.length,
+        listener: (context, state) {
+          final entry = state.savedEntries.last;
+          final cat = CategoryConfig.defaults.firstWhere(
+            (c) => c.id == entry.categoryId,
+            orElse: () => CategoryConfig.defaults.first,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Saved to ${cat.displayName}'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        child: BlocBuilder<VoiceCallBloc, VoiceCallState>(
+          builder: (context, state) {
+            // Post-call summary screen
+            if (state.status == VoiceCallStatus.ended) {
+              return _PostCallSummary(
+                bloc: _bloc,
+                savedEntries: state.savedEntries,
+                transcripts: state.transcripts,
+                elapsed: state.elapsed,
+                latencyMs: state.latencyMs,
+                sessionSummary: state.sessionSummary,
+                generatingSummary: state.generatingSummary,
+                audioUrl: state.audioUrl,
+                uploadingAudio: state.uploadingAudio,
+                formatDuration: _formatDuration,
+                onDone: () => Navigator.pop(context),
+              );
+            }
 
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('Daily Call'),
-              actions: [
-                if (state.latencyMs != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _latencyColor(
-                            state.latencyMs!,
-                          ).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${state.latencyMs}ms',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _latencyColor(state.latencyMs!),
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Daily Call'),
+                actions: [
+                  if (state.latencyMs != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _latencyColor(
+                              state.latencyMs!,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${state.latencyMs}ms',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _latencyColor(state.latencyMs!),
+                            ),
                           ),
                         ),
                       ),
                     ),
+                ],
+              ),
+              body: Column(
+                children: [
+                  // Status bar
+                  _StatusBar(
+                    status: state.status,
+                    elapsed: state.elapsed,
+                    timeRemaining: state.timeRemaining,
+                    isNearTimeout: state.isNearTimeout,
+                    formatDuration: _formatDuration,
                   ),
-              ],
-            ),
-            body: Column(
-              children: [
-                // Status bar
-                _StatusBar(
-                  status: state.status,
-                  elapsed: state.elapsed,
-                  timeRemaining: state.timeRemaining,
-                  isNearTimeout: state.isNearTimeout,
-                  formatDuration: _formatDuration,
-                ),
 
-                // Time warning banner
-                if (state.showTimeWarning &&
-                    state.status == VoiceCallStatus.active)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    color: state.isNearTimeout
-                        ? const Color(0xFFEF4444).withValues(alpha: 0.12)
-                        : const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.timer_outlined,
-                          size: 16,
-                          color: state.isNearTimeout
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFFF59E0B),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${_formatDuration(state.timeRemaining)} remaining',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                  // Time warning banner
+                  if (state.showTimeWarning &&
+                      state.status == VoiceCallStatus.active)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      color: state.isNearTimeout
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                          : const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 16,
                             color: state.isNearTimeout
                                 ? const Color(0xFFEF4444)
                                 : const Color(0xFFF59E0B),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Text(
+                            '${_formatDuration(state.timeRemaining)} remaining',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: state.isNearTimeout
+                                  ? const Color(0xFFEF4444)
+                                  : const Color(0xFFF59E0B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Transcripts
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      reverse: true,
+                      itemCount: state.transcripts.length,
+                      itemBuilder: (context, index) {
+                        final transcript = state
+                            .transcripts[state.transcripts.length - 1 - index];
+                        return _TranscriptBubble(transcript: transcript);
+                      },
                     ),
                   ),
 
-                // Transcripts
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    reverse: true,
-                    itemCount: state.transcripts.length,
-                    itemBuilder: (context, index) {
-                      final transcript = state
-                          .transcripts[state.transcripts.length - 1 - index];
-                      return _TranscriptBubble(transcript: transcript);
-                    },
-                  ),
-                ),
-
-                // Saved entries indicator
-                if (state.savedEntries.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.bookmark_rounded,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${state.savedEntries.length} '
-                          '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                  // Saved entries indicator
+                  if (state.savedEntries.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.bookmark_rounded,
+                            size: 18,
                             color: Theme.of(context).colorScheme.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            '${state.savedEntries.length} '
+                            '${state.savedEntries.length == 1 ? 'entry' : 'entries'} saved',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Call controls
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: _CallControls(
+                      status: state.status,
+                      isMuted: state.isMuted,
+                      isSpeakerOn: state.isSpeakerOn,
+                      onStart: _startCall,
+                      onEnd: _endCall,
+                      onToggleMute: () => _bloc.add(const ToggleMute()),
+                      onToggleSpeaker: () => _bloc.add(const ToggleSpeaker()),
                     ),
                   ),
-
-                // Call control
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: _CallButton(
-                    status: state.status,
-                    onStart: _startCall,
-                    onEnd: _endCall,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -309,7 +333,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 // --- Post-call summary ---
 
 class _PostCallSummary extends StatelessWidget {
+  final VoiceCallBloc bloc;
   final List<SavedEntry> savedEntries;
+  final List<Transcript> transcripts;
   final Duration elapsed;
   final int? latencyMs;
   final String? sessionSummary;
@@ -320,7 +346,9 @@ class _PostCallSummary extends StatelessWidget {
   final VoidCallback onDone;
 
   const _PostCallSummary({
+    required this.bloc,
     required this.savedEntries,
+    required this.transcripts,
     required this.elapsed,
     required this.latencyMs,
     this.sessionSummary,
@@ -330,6 +358,18 @@ class _PostCallSummary extends StatelessWidget {
     required this.formatDuration,
     required this.onDone,
   });
+
+  void _generateSummary() {
+    bloc.add(
+      GenerateSessionSummary(
+        transcripts
+            .map(
+              (t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}',
+            )
+            .toList(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -365,7 +405,7 @@ class _PostCallSummary extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Session summary (loading or generated)
+          // Session summary (loading, generated, or generate button)
           if (generatingSummary)
             Card(
               child: Padding(
@@ -418,6 +458,14 @@ class _PostCallSummary extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            )
+          else if (transcripts.isNotEmpty)
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _generateSummary,
+                icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                label: const Text('Generate Summary'),
               ),
             ),
 
@@ -708,15 +756,23 @@ class _TranscriptBubble extends StatelessWidget {
   }
 }
 
-class _CallButton extends StatelessWidget {
+class _CallControls extends StatelessWidget {
   final VoiceCallStatus status;
+  final bool isMuted;
+  final bool isSpeakerOn;
   final VoidCallback onStart;
   final VoidCallback onEnd;
+  final VoidCallback onToggleMute;
+  final VoidCallback onToggleSpeaker;
 
-  const _CallButton({
+  const _CallControls({
     required this.status,
+    required this.isMuted,
+    required this.isSpeakerOn,
     required this.onStart,
     required this.onEnd,
+    required this.onToggleMute,
+    required this.onToggleSpeaker,
   });
 
   @override
@@ -725,20 +781,80 @@ class _CallButton extends StatelessWidget {
         status == VoiceCallStatus.active ||
         status == VoiceCallStatus.connecting;
 
-    return SizedBox(
-      width: 80,
-      height: 80,
-      child: FloatingActionButton.large(
-        onPressed: isActive ? onEnd : onStart,
-        backgroundColor: isActive
-            ? const Color(0xFFEF4444)
-            : Theme.of(context).colorScheme.primary,
-        child: Icon(
-          isActive ? Icons.call_end_rounded : Icons.call_rounded,
-          size: 36,
-          color: Colors.white,
+    // Pre-call: single Start Call button
+    if (!isActive) {
+      return SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: FilledButton.icon(
+          onPressed: onStart,
+          icon: const Icon(Icons.call_rounded),
+          label: const Text('Start Call'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+          ),
         ),
-      ),
+      );
+    }
+
+    // Active call: [ Mute ] [ End Call ] [ Speaker ]
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        // Mute toggle
+        Semantics(
+          label: isMuted ? 'Unmute microphone' : 'Mute microphone',
+          child: IconButton.filled(
+            onPressed: onToggleMute,
+            tooltip: isMuted ? 'Unmute' : 'Mute',
+            icon: Icon(isMuted ? Icons.mic_off : Icons.mic),
+            style: IconButton.styleFrom(
+              backgroundColor: isMuted
+                  ? Theme.of(context).colorScheme.errorContainer
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+              foregroundColor: isMuted
+                  ? Theme.of(context).colorScheme.onErrorContainer
+                  : Theme.of(context).colorScheme.onSurface,
+              minimumSize: const Size(56, 56),
+            ),
+          ),
+        ),
+
+        // End call
+        Semantics(
+          label: 'End call',
+          child: FloatingActionButton(
+            onPressed: onEnd,
+            tooltip: 'End call',
+            backgroundColor: const Color(0xFFEF4444),
+            child: const Icon(
+              Icons.call_end_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+        ),
+
+        // Speaker toggle
+        Semantics(
+          label: isSpeakerOn ? 'Switch to earpiece' : 'Switch to speaker',
+          child: IconButton.filled(
+            onPressed: onToggleSpeaker,
+            tooltip: isSpeakerOn ? 'Speaker' : 'Earpiece',
+            icon: Icon(isSpeakerOn ? Icons.volume_up : Icons.hearing),
+            style: IconButton.styleFrom(
+              backgroundColor: isSpeakerOn
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+              foregroundColor: isSpeakerOn
+                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                  : Theme.of(context).colorScheme.onSurface,
+              minimumSize: const Size(56, 56),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

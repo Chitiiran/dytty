@@ -71,6 +71,14 @@ class GenerateSessionSummary extends VoiceCallEvent {
   List<Object?> get props => [transcripts];
 }
 
+class ToggleMute extends VoiceCallEvent {
+  const ToggleMute();
+}
+
+class ToggleSpeaker extends VoiceCallEvent {
+  const ToggleSpeaker();
+}
+
 // --- State ---
 
 enum VoiceCallStatus { idle, connecting, active, ending, ended, error }
@@ -105,6 +113,8 @@ class VoiceCallState extends Equatable {
   final bool uploadingAudio;
   final String? sessionSummary;
   final bool generatingSummary;
+  final bool isMuted;
+  final bool isSpeakerOn;
 
   const VoiceCallState({
     this.status = VoiceCallStatus.idle,
@@ -118,6 +128,8 @@ class VoiceCallState extends Equatable {
     this.uploadingAudio = false,
     this.sessionSummary,
     this.generatingSummary = false,
+    this.isMuted = false,
+    this.isSpeakerOn = true,
   });
 
   Duration get timeRemaining {
@@ -139,6 +151,8 @@ class VoiceCallState extends Equatable {
     bool? uploadingAudio,
     String? sessionSummary,
     bool? generatingSummary,
+    bool? isMuted,
+    bool? isSpeakerOn,
   }) {
     return VoiceCallState(
       status: status ?? this.status,
@@ -152,6 +166,8 @@ class VoiceCallState extends Equatable {
       uploadingAudio: uploadingAudio ?? this.uploadingAudio,
       sessionSummary: sessionSummary ?? this.sessionSummary,
       generatingSummary: generatingSummary ?? this.generatingSummary,
+      isMuted: isMuted ?? this.isMuted,
+      isSpeakerOn: isSpeakerOn ?? this.isSpeakerOn,
     );
   }
 
@@ -168,6 +184,8 @@ class VoiceCallState extends Equatable {
     uploadingAudio,
     sessionSummary,
     generatingSummary,
+    isMuted,
+    isSpeakerOn,
   ];
 }
 
@@ -225,6 +243,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<LatencyUpdated>(_onLatencyUpdated);
     on<_SessionTick>(_onSessionTick);
     on<GenerateSessionSummary>(_onGenerateSessionSummary);
+    on<ToggleMute>(_onToggleMute);
+    on<ToggleSpeaker>(_onToggleSpeaker);
   }
 
   Future<void> _onStartCall(
@@ -300,19 +320,6 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       }
     } else {
       emit(state.copyWith(status: VoiceCallStatus.ended));
-    }
-
-    // Trigger post-session summary generation
-    if (_llmService != null && state.transcripts.isNotEmpty) {
-      add(
-        GenerateSessionSummary(
-          state.transcripts
-              .map(
-                (t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}',
-              )
-              .toList(),
-        ),
-      );
     }
   }
 
@@ -456,10 +463,20 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     emit(state.copyWith(latencyMs: event.latencyMs));
   }
 
+  void _onToggleMute(ToggleMute event, Emitter<VoiceCallState> emit) {
+    emit(state.copyWith(isMuted: !state.isMuted));
+  }
+
+  void _onToggleSpeaker(ToggleSpeaker event, Emitter<VoiceCallState> emit) {
+    emit(state.copyWith(isSpeakerOn: !state.isSpeakerOn));
+  }
+
   /// Send mic audio to the model and accumulate for later upload.
   void sendAudio(Uint8List pcmData) {
     _recordedAudio.addAll(pcmData);
-    _service.sendAudio(pcmData);
+    if (!state.isMuted) {
+      _service.sendAudio(pcmData);
+    }
   }
 
   Future<void> _cancelSubscriptions() async {

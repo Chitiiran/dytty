@@ -19,6 +19,9 @@ Daily journaling app with 5 structured categories. Cross-platform Flutter app ba
 - State management: Bloc
 - E2E tests: Playwright (web), Maestro (Android)
 
+## Architecture Decision Records
+Architecture decisions are documented in `docs/decisions/`. Use `docs/decisions/TEMPLATE.md` for new ADRs. Number sequentially (e.g., `006-...`).
+
 ## Architecture
 Clean architecture with features-based organization:
 - `lib/core/` - Constants (categories enum), theme
