@@ -1,38 +1,29 @@
-/// Patrol integration test: Dashboard state management.
-///
-/// Tests that adding entries updates progress card and nudge card state
-/// across screens (journal -> home).
-///
-/// Requires:
-///   - patrol and patrol_finders in dev_dependencies
-///   - Android emulator with Firebase emulators running
-library;
+import '../app_test_setup.dart';
 
-// TODO(#45): Implement once patrol is added to dev_dependencies
-//
-// void main() {
-//   patrolTest('progress updates after adding entry', ($) async {
-//     await $.pumpWidgetAndSettle(const DyttyApp());
-//
-//     // Login
-//     await $('Sign in anonymously (emulator)').tap();
-//     await $.pumpAndSettle();
-//
-//     // Verify nudge card visible (no entries yet)
-//     expect($(RegExp('haven.*journaled')), findsOneWidget);
-//
-//     // Navigate to journal and add entry
-//     await $("Write Today's Journal").tap();
-//     await $.pumpAndSettle();
-//     await $(find.byTooltip('Add Positive Things entry')).tap();
-//     // ...add entry flow...
-//
-//     // Go back to home
-//     await $.native.pressBack();
-//     await $.pumpAndSettle();
-//
-//     // Nudge card should be gone, progress should show 1/5
-//     expect($(RegExp('haven.*journaled')), findsNothing);
-//     expect($('1/5'), findsOneWidget);
-//   });
-// }
+void main() {
+  patrolTest('progress updates after adding entry', ($) async {
+    await $.pumpWidgetAndSettle(const DyttyApp());
+
+    final auth = AuthRobot($);
+    final home = HomeScreenRobot($);
+    final journal = JournalScreenRobot($);
+
+    // Login
+    await auth.loginWithEmulator();
+
+    // Verify nudge card visible (no entries yet)
+    await home.expectNudgeCardVisible();
+
+    // Navigate to journal and add entry
+    await home.tapWriteJournal();
+    await journal.addEntry('Positive Things', 'Had a great day');
+
+    // Go back to home via app bar back button
+    await $(find.byTooltip('Back')).tap();
+    await $.pumpAndSettle();
+
+    // Nudge card should be gone, progress should show 1/5
+    await home.expectNudgeCardGone();
+    await home.expectProgress(1, 5);
+  });
+}
