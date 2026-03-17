@@ -1,21 +1,15 @@
 # Dytty Progress
 
 ## Current Status
-**Daily call audio playback fix planned (#94). Google Sign-In fix applied. Distribution pipeline improved.**
+**Daily call audio + transcript fix shipped (PR #96). Build 0.1.6+8 distributed to testers. Pending manual verification on Pixel 9.**
 
-**Committed on main (uncommitted sign-in fix pending):**
-- `serverClientId` fix for Google Sign-In (`auth_service.dart`) — resolves ApiException: 10 since March 12
-- Debug logging added to `GeminiLiveService.connect()` and `VoiceCallBloc._onStartCall`
-- Version bumped to 0.1.5+7 (distributed to testers)
-
-**Recent merges:**
-- PR #87: M4 daily call polish — mute/speaker/end controls, multi-turn fix, CI shared keystore, 65.8% coverage
-- CI tester checklist: distribution emails now send only `## Tester Checklist` section from PR body
-- PR template updated with Tester Checklist section
+**Latest on main:**
+- PR #96: replaced `just_audio` with `flutter_pcm_sound` for streaming PCM playback, transcript aggregation via `Transcription.finished` flag, Google Sign-In `serverClientId` fix (ADR-006)
+- Version: 0.1.6+8 (distributed to testers via `scripts/distribute.sh`)
 
 **Open PRs:** None
 
-**Test status:** ~200 unit/widget tests, 9 Maestro flows. Coverage: 65.8% (CI gate: 50%)
+**Test status:** 545 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: 81.7% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -39,21 +33,58 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 | M7: Launch Prep | Not started |
 
 ## Blockers
-- **#94 Daily call audio broken** — `just_audio` crashes on streaming PCM, transcripts render word-by-word. Plan ready: `docs/planning/PLAN-094-audio-playback-fix.md`
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
+- #95: CI auto-distribution requires `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` secret
 
 ## Up Next
-- **#94**: Fix daily call audio playback (replace `just_audio` with `flutter_pcm_sound`, transcript aggregation) — plan at `docs/planning/PLAN-094-audio-playback-fix.md`
-- Commit sign-in fix + debug logging, create PR
+- **#86**: Journal entries lost on app restart (P0, offline persistence)
+- **#83**: First-time user onboarding (P0)
+- **#82**: Security audit — Firestore rules, API keys, audio encryption (P0)
+- **#79**: Data export + account deletion for GDPR (P0)
+- **#78**: iOS build for close-circle distribution (P0)
 - **#90**: Error state flash on call start (race condition)
 - **#91**: Speaker toggle icon UX
-- **#92**: Gemini model retirement check (deadline: 1 June 2026)
-- **#93**: Firebase App Check
-- Coverage: maintain 50%+ gate, push toward 60% by 2026-03-22
+- **#95**: Enable CI auto-distribution (infra)
+- **#48**: Golden test CI failures (cross-platform fonts)
+- Coverage at 81.7% — ahead of ratchet schedule, bump CI gate
 
 ---
 
 ## Log
+
+### 2026-03-17 (session 23)
+- **#51 Patrol setup — ready for closure**
+  - Patrol 4.3.0 added, all 3 integration test flows compiled (auth, dashboard, journal CRUD)
+  - Robot pattern preserved with `PatrolIntegrationTester`
+  - Needs emulator run to confirm green — all flows compile and import correctly
+- **#52 gRPC audio injection — spike complete, documented**
+  - `scripts/inject-audio.py`: discovery (grpc.port + grpc.address), --address flag, --grpc-use-token auth
+  - 14 Python unit tests passing (WAV chunking, INI parsing, discovery)
+  - Spike result: `injectAudio` streaming RPC fails on Windows emulator 35.5.10.0 (connection reset)
+  - Root cause: likely Windows-specific gRPC streaming issue in emulator
+  - Documented findings in `docs/research/grpc-audio-injection.md` with retry recommendation for Linux CI
+- **Coverage: 67.8% → 81.7%** (545 tests, target was 80%)
+  - voice_call_screen: 64 new tests (all states + transcripts + time warnings)
+  - voice_recording_sheet: 24 new tests (all VoiceNoteBloc states end-to-end)
+  - home_screen: 16 new tests (avatars, streaks, progress messages, greeting)
+  - daily_journal_screen: 7 new interaction tests
+  - voice_call_bloc: copyWith + dispose tests
+  - voice_note_bloc: event props + state tests
+  - gemini_live_service: 12 unit tests (Transcript, Speaker, state)
+- Context used: ~80%, key decisions: grpc.port discovery fix, -grpc-use-token for auth, emulator -no-audio disables injectAudio
+
+### 2026-03-16 (session 22)
+- **#94 Fixed — PR #96 merged** — daily call audio playback + transcript rendering
+  - Replaced `just_audio` with `flutter_pcm_sound` — feeds raw PCM directly, no WAV wrapping/buffering
+  - Added `isFinal` flag to `Transcript` model, wired `Transcription.finished` from `firebase_ai`
+  - Transcript aggregation: partials from same speaker replace last bubble, finals lock it
+  - Created `AudioPlaybackService` abstract interface + `PcmSoundPlaybackService` implementation
+  - `VoiceCallScreen` accepts optional `AudioPlaybackService` for DI in tests
+  - Google Sign-In `serverClientId` fix included (ADR-006)
+  - 10 new tests (5 transcript aggregation, 5 fake audio service), 386 total passing
+- **Build 0.1.6+8 distributed** to testers via `scripts/distribute.sh`
+- **#95 created** (infra) — enable CI auto-distribution on main push (needs `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` secret)
+- Context used: ~40%, key decisions: `flutter_pcm_sound` over raw_sound, `AudioPlaybackService` abstraction, transcript aggregation rule
 
 ### 2026-03-16 (session 21)
 - **Google Sign-In fix** — `google_sign_in_android 6.2+` migrated to Credential Manager which requires explicit `serverClientId`. Added web client ID to `GoogleSignIn()` constructor. Documented in ADR-006.

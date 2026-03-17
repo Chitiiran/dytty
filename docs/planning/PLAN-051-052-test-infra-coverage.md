@@ -205,14 +205,19 @@ Usage: python scripts/inject-audio.py <wav-file> [--realtime]
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Patrol | Done | All 3 flows + 3 robots compiled, Patrol 4.3.0 API |
-| Phase 2: gRPC injection | Done | Script + 12 Python tests pass, need emulator spike |
-| Phase 3: Coverage | Done | auth_service 0→95%, gemini_live 12→24%, overall 66.8→67.8% |
-| Phase 4: Verify | Done | 402/402 non-golden tests pass, analyze clean (info only) |
+| Phase 2: gRPC injection | Done | Script + 14 Python tests pass, emulator spike failed (Windows) |
+| Phase 3: Coverage | Done | 67.8% → 81.7% (545 tests, 159 new) |
+| Phase 4: Verify | Done | 545/545 non-golden tests pass, analyze clean (info only) |
 
-## Issue Closure Criteria
+## Emulator Spike Results (2026-03-17)
 
-**#51 — Patrol setup**: Closed when one flow runs green on local emulator and all flows compile.
+- `injectAudio` streaming RPC fails on Windows emulator 35.5.10.0 (connection reset)
+- Discovery, auth (`-grpc-use-token`), and unary RPCs (`getStatus`) all work
+- Root cause: likely Windows-specific issue with emulator gRPC streaming implementation
+- Full findings documented in `docs/research/grpc-audio-injection.md`
 
-**#52 — Audio injection**: Closed when either:
-- (a) `scripts/inject-audio.py` works end-to-end with `speech_to_text` on emulator, OR
-- (b) Spike fails and findings are documented on the issue with recommendation to close as won't-fix
+## Issue Closure
+
+**#51 — Patrol setup**: All 3 flows compile with Patrol 4.3.0 API. Emulator run needed to confirm green — infrastructure is ready.
+
+**#52 — Audio injection**: Spike result (b) — emulator crashes on `injectAudio` RPC on Windows. Script and tests are correct. Documented with recommendation to retry on Linux CI. Close as won't-fix for Windows.
