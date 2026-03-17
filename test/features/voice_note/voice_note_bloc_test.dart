@@ -418,7 +418,316 @@ void main() {
             .having((s) => s.summary, 'summary', ''),
       ],
     );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'InitializeSpeech emits error when initialize throws',
+      build: () {
+        speechService = _ThrowingSpeechService();
+        return VoiceNoteBloc(
+          speechService: speechService,
+          llmService: llmService,
+        );
+      },
+      act: (bloc) => bloc.add(const InitializeSpeech()),
+      expect: () => [
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.error)
+            .having(
+              (s) => s.error,
+              'error',
+              contains('Failed to initialize speech'),
+            ),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'CategorizeTranscript emits error when LLM throws non-timeout exception',
+      build: () {
+        final errorLlm = _ErrorLlmService();
+        return VoiceNoteBloc(
+          speechService: speechService,
+          llmService: errorLlm,
+        );
+      },
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.transcriptReview,
+        transcript: 'Some journal text',
+      ),
+      act: (bloc) => bloc.add(const CategorizeTranscript()),
+      expect: () => [
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.processing,
+        ),
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.error)
+            .having((s) => s.error, 'error', contains('Failed to categorize')),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'CategorizeTranscript uses transcript as summary when LLM returns empty summary',
+      build: () {
+        final emptySummaryLlm = _EmptySummaryLlmService();
+        return VoiceNoteBloc(
+          speechService: speechService,
+          llmService: emptySummaryLlm,
+        );
+      },
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.transcriptReview,
+        transcript: 'My original text here',
+      ),
+      act: (bloc) => bloc.add(const CategorizeTranscript()),
+      expect: () => [
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.processing,
+        ),
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', 'My original text here'),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'ReconcileSummary falls back to transcript on non-timeout error',
+      build: () {
+        final errorLlm = _ErrorLlmService();
+        return VoiceNoteBloc(
+          speechService: speechService,
+          llmService: errorLlm,
+        );
+      },
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        originalTranscript: 'Original words',
+        transcript: 'Edited words by user',
+        summary: 'Old summary',
+        transcriptEdited: true,
+      ),
+      act: (bloc) => bloc.add(const ReconcileSummary()),
+      expect: () => [
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.reconciling,
+        ),
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', 'Edited words by user'),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      '_SpeechResultReceived with final but empty text stays in listening',
+      build: () {
+        final bloc = VoiceNoteBloc(
+          speechService: speechService,
+          llmService: llmService,
+        );
+        return bloc;
+      },
+      seed: () => const VoiceNoteState(status: VoiceNoteStatus.ready),
+      act: (bloc) async {
+        bloc.add(const StartListening());
+        await Future<void>.delayed(Duration.zero);
+        // Simulate a final speech result with empty text
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult(
+            [SpeechRecognitionWords('', [''], 0.0)],
+            true, // finalResult
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => [
+        // listening from StartListening (transcript='')
+        // _SpeechResultReceived emits transcript='' again but bloc deduplicates
+        // so only 1 state: listening. No transcriptReview because text is empty.
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.listening)
+            .having((s) => s.transcript, 'transcript', ''),
+      ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      '_SpeechResultReceived with non-final result stays in listening',
+      build: () {
+        final bloc = VoiceNoteBloc(
+          speechService: speechService,
+          llmService: llmService,
+        );
+        return bloc;
+      },
+      seed: () => const VoiceNoteState(status: VoiceNoteStatus.ready),
+      act: (bloc) async {
+        bloc.add(const StartListening());
+        await Future<void>.delayed(Duration.zero);
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult(
+            [SpeechRecognitionWords('Hello wor', ['Hello wor'], 0.8)],
+            false, // not final
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => [
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.listening,
+        ),
+        // transcript updated but stays listening (not final)
+        isA<VoiceNoteState>()
+            .having((s) => s.transcript, 'transcript', 'Hello wor')
+            .having((s) => s.status, 'status', VoiceNoteStatus.listening),
+      ],
+    );
+
+    test('close disposes speech service', () async {
+      final bloc = VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+      );
+      await bloc.close();
+      // FakeSpeechService.dispose() is called - no throw expected
+    });
   });
+
+  group('VoiceNoteState', () {
+    test('copyWith preserves values when no arguments given', () {
+      const original = VoiceNoteState(
+        status: VoiceNoteStatus.reviewing,
+        transcript: 'hello',
+        originalTranscript: 'original',
+        summary: 'sum',
+        suggestedCategory: 'positive',
+        suggestedTags: ['tag1'],
+        confidence: 0.9,
+        transcriptEdited: true,
+      );
+      final copied = original.copyWith();
+      expect(copied.status, VoiceNoteStatus.reviewing);
+      expect(copied.transcript, 'hello');
+      expect(copied.originalTranscript, 'original');
+      expect(copied.summary, 'sum');
+      expect(copied.suggestedCategory, 'positive');
+      expect(copied.suggestedTags, ['tag1']);
+      expect(copied.confidence, 0.9);
+      expect(copied.transcriptEdited, true);
+      // error is cleared by design when not passed
+      expect(copied.error, isNull);
+    });
+
+    test('props includes all fields for equality', () {
+      const s1 = VoiceNoteState(transcript: 'a', confidence: 0.5);
+      const s2 = VoiceNoteState(transcript: 'a', confidence: 0.5);
+      const s3 = VoiceNoteState(transcript: 'b', confidence: 0.5);
+      expect(s1, s2);
+      expect(s1, isNot(s3));
+    });
+  });
+
+  group('VoiceNoteEvent props', () {
+    test('UpdateCategory instances with same id are equal', () {
+      expect(const UpdateCategory('positive'), const UpdateCategory('positive'));
+    });
+
+    test('UpdateCategory instances with different ids are not equal', () {
+      expect(
+        const UpdateCategory('positive'),
+        isNot(const UpdateCategory('negative')),
+      );
+    });
+
+    test('UpdateText instances with same text are equal', () {
+      expect(const UpdateText('hello'), const UpdateText('hello'));
+    });
+
+    test('UpdateTranscript instances with same text are equal', () {
+      expect(const UpdateTranscript('hi'), const UpdateTranscript('hi'));
+    });
+  });
+}
+
+/// Speech service that throws on initialize.
+class _ThrowingSpeechService extends FakeSpeechService {
+  _ThrowingSpeechService() : super(simulateAvailable: true);
+
+  @override
+  Future<bool> initialize() async {
+    throw Exception('Microphone permission denied');
+  }
+}
+
+/// LLM service that throws a non-timeout error.
+class _ErrorLlmService implements LlmService {
+  @override
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
+    throw Exception('Network error');
+  }
+
+  @override
+  Future<LlmResponse> generateResponse(String prompt) async =>
+      const LlmResponse(text: '');
+
+  @override
+  Future<String> summarizeEntry(String text) async => '';
+
+  @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async {
+    throw Exception('Reconcile failed');
+  }
+
+  @override
+  Future<String> generateWeeklySummary(List<String> entries) async => '';
+
+  @override
+  void dispose() {}
+}
+
+/// LLM service that returns empty summary in categorization.
+class _EmptySummaryLlmService implements LlmService {
+  @override
+  Future<CategorizationResult> categorizeEntry(
+    String text, {
+    List<String> categoryIds = const ['positive'],
+  }) async {
+    return const CategorizationResult(
+      suggestedCategory: 'positive',
+      summary: '',
+      confidence: 0.8,
+      suggestedTags: [],
+    );
+  }
+
+  @override
+  Future<LlmResponse> generateResponse(String prompt) async =>
+      const LlmResponse(text: '');
+
+  @override
+  Future<String> summarizeEntry(String text) async => '';
+
+  @override
+  Future<String> reconcileSummary(
+    String originalTranscript,
+    String editedTranscript,
+  ) async => '';
+
+  @override
+  Future<String> generateWeeklySummary(List<String> entries) async => '';
+
+  @override
+  void dispose() {}
 }
 
 /// LLM service that never completes, simulating a hang.

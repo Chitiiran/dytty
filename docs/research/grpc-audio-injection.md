@@ -146,7 +146,35 @@ Usage: python scripts/inject-audio.py <wav-file> [--realtime]
 - Proto stubs generated as build step or committed
 - Emulator must be running before script executes
 
+## Spike Results (2026-03-17)
+
+### Environment
+- Emulator: Android SDK 35.5.10.0 (Pixel 9 AVD)
+- Platform: Windows 10 (MSYS2/bash)
+- Python: 3.12, grpcio 1.x
+- Emulator launched with: `-avd Pixel_9 -no-window -grpc 8554 -grpc-use-token`
+
+### Findings
+
+**gRPC discovery**: Works. The `pid_*.ini` file at `%LOCALAPPDATA%\Temp\avd\running\` contains `grpc.port` (not `grpc.address`) and `grpc.token`. Fixed script to handle both key names.
+
+**Authentication**: The emulator's `emulator_access.json` allowlist requires JWT for `injectAudio` when using default `-grpc-use-jwt` mode. Switching to `-grpc-use-token` exposes a simpler bearer token in the INI file. `getStatus` and other unary RPCs work fine with the token.
+
+**injectAudio RPC**: **FAILS** — the streaming RPC consistently returns `StatusCode.UNAVAILABLE` with "Connection reset" (error 10054 on Windows). Tested with:
+1. Single small packet (100ms, 16kHz mono S16)
+2. Full 3-second WAV in 300ms chunks
+3. With and without auth token
+4. With and without `-no-audio` flag
+5. Multiple emulator restarts
+
+The emulator crashes or forcibly closes the connection when `injectAudio` is called. This appears to be a Windows-specific issue with the emulator's gRPC streaming implementation. The audio subsystem may not properly support the streaming RPC on Windows.
+
+### Conclusion
+**gRPC `injectAudio` is not viable on Windows** with the current emulator version (35.5.10.0). The script, proto stubs, and discovery mechanism are all correct and tested (12 Python unit tests pass), but the emulator's server-side implementation crashes on the streaming RPC.
+
+**Recommendation**: Close #52. The infrastructure (`scripts/inject-audio.py`, proto stubs, test WAV files) is ready for re-testing on Linux CI or a future emulator version. If a Linux CI runner is available, the spike should be retried there — PulseAudio virtual mic is the backup approach for Linux-only.
+
 ## Open Risk
-If the `speech_to_text` package or Google's on-device speech recognition service uses a private audio pipeline that bypasses the standard `AudioRecord` API, injected audio may not reach STT. This needs a **proof-of-concept spike** on a real emulator before committing to test flows.
+If the `speech_to_text` package or Google's on-device speech recognition service uses a private audio pipeline that bypasses the standard `AudioRecord` API, injected audio may not reach STT. This was not testable due to the emulator crash above.
 
 The `record` package (used in daily call for raw PCM capture) should work since it uses standard `AudioRecord` — lower risk.

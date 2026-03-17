@@ -196,6 +196,35 @@ def test_parse_ini_missing_token():
         os.unlink(path)
 
 
+def test_parse_ini_with_port_only():
+    """_parse_ini should construct localhost address from grpc.port."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ini", delete=False) as f:
+        f.write("grpc.port=8554\n")
+        f.write("grpc.token=xyz789\n")
+        path = f.name
+
+    try:
+        address, token = inject_audio._parse_ini(path)
+        assert address == "localhost:8554"
+        assert token == "xyz789"
+    finally:
+        os.unlink(path)
+
+
+def test_parse_ini_address_takes_precedence_over_port():
+    """grpc.address should take precedence over grpc.port."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ini", delete=False) as f:
+        f.write("grpc.address=10.0.0.1:9090\n")
+        f.write("grpc.port=8554\n")
+        path = f.name
+
+    try:
+        address, token = inject_audio._parse_ini(path)
+        assert address == "10.0.0.1:9090"
+    finally:
+        os.unlink(path)
+
+
 def test_parse_ini_nonexistent_file():
     """_parse_ini should return (None, None) for missing file."""
     address, token = inject_audio._parse_ini("/nonexistent/pid_999.ini")

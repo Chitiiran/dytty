@@ -5,7 +5,7 @@ Uses the EmulatorController.injectAudio RPC from the Android Emulator gRPC API.
 The emulator must be running. Discovery is automatic via pid_*.ini files.
 
 Usage:
-    python scripts/inject-audio.py <wav-file> [--realtime]
+    python scripts/inject-audio.py <wav-file> [--realtime] [--address HOST:PORT]
 
 Requirements:
     pip install grpcio grpcio-tools
@@ -67,9 +67,14 @@ def discover_emulator():
 
 
 def _parse_ini(path):
-    """Parse a pid_*.ini file for grpc.address and grpc.token."""
+    """Parse a pid_*.ini file for gRPC connection details.
+
+    Supports both `grpc.address` (host:port) and `grpc.port` (port only,
+    defaults to localhost).
+    """
     address = None
     token = None
+    port = None
     try:
         with open(path, "r") as f:
             for line in f:
@@ -80,10 +85,17 @@ def _parse_ini(path):
                     value = line[idx + 1 :].strip()
                     if key == "grpc.address":
                         address = value
+                    elif key == "grpc.port":
+                        port = value
                     elif key == "grpc.token":
                         token = value
     except OSError:
         pass
+
+    # Prefer grpc.address; fall back to localhost:grpc.port
+    if not address and port:
+        address = f"localhost:{port}"
+
     return address, token
 
 
@@ -144,19 +156,24 @@ def read_wav_chunks(wav_path, realtime=False):
                 time.sleep(CHUNK_DURATION_S)
 
 
-def inject(wav_path, realtime=False):
+def inject(wav_path, realtime=False, address=None):
     """Inject a WAV file into the emulator's virtual microphone."""
-    address, token = discover_emulator()
-    if not address:
-        print("ERROR: No running emulator found.")
-        print("  Searched for pid_*.ini in:")
-        if platform.system() == "Windows":
-            print(f"    %LOCALAPPDATA%\\Temp\\avd\\running\\")
-        print(f"    ~/.android/avd/running/")
-        print("  Start an emulator and try again.")
-        sys.exit(1)
+    token = None
+    if address:
+        print(f"Using explicit address: {address}")
+    else:
+        address, token = discover_emulator()
+        if not address:
+            print("ERROR: No running emulator found.")
+            print("  Searched for pid_*.ini in:")
+            if platform.system() == "Windows":
+                print(f"    %LOCALAPPDATA%\\Temp\\avd\\running\\")
+            print(f"    ~/.android/avd/running/")
+            print("  Start an emulator and try again.")
+            print("  Or use --address HOST:PORT to connect directly.")
+            sys.exit(1)
 
-    print(f"Emulator found at {address}")
+        print(f"Emulator found at {address}")
 
     # Connect
     channel = grpc.insecure_channel(address)
@@ -200,13 +217,17 @@ def main():
         action="store_true",
         help="Pace delivery at real-time speed (experimental MODE_REAL_TIME)",
     )
+    parser.add_argument(
+        "--address",
+        help="Explicit gRPC address (HOST:PORT) — bypasses pid_*.ini discovery",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.wav_file):
         print(f"ERROR: WAV file not found: {args.wav_file}")
         sys.exit(1)
 
-    inject(args.wav_file, realtime=args.realtime)
+    inject(args.wav_file, realtime=args.realtime, address=args.address)
 
 
 if __name__ == "__main__":
