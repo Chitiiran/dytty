@@ -27,6 +27,9 @@ class MockLlmService extends Mock implements LlmService {}
 
 class MockAudioStorageService extends Mock implements AudioStorageService {}
 
+class MockVoiceCallBloc extends MockBloc<VoiceCallEvent, VoiceCallState>
+    implements VoiceCallBloc {}
+
 /// Pumps VoiceCallScreen with all required providers.
 ///
 /// The screen internally creates GeminiLiveService and VoiceCallBloc.
@@ -68,6 +71,50 @@ Future<void> pumpVoiceCallScreen(
         ],
         child: MaterialApp(
           home: VoiceCallScreen(playbackService: FakeAudioPlaybackService()),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Pumps VoiceCallScreen with an injected MockVoiceCallBloc.
+///
+/// Used for state-based rendering tests where we need to control the exact
+/// state without going through real event handlers.
+Future<void> pumpWithMockBloc(
+  WidgetTester tester, {
+  required MockVoiceCallBloc bloc,
+}) async {
+  final mockAuth = MockAuthBloc();
+  final mockJournal = MockJournalBloc();
+  final mockLlm = MockLlmService();
+  final mockStorage = MockAudioStorageService();
+
+  when(() => mockAuth.state).thenReturn(
+    const Authenticated(
+      uid: 'test-uid',
+      displayName: 'Test User',
+      email: 'test@test.com',
+    ),
+  );
+  when(() => mockJournal.state).thenReturn(JournalState());
+
+  await tester.pumpWidget(
+    MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthBloc>.value(value: mockAuth),
+        BlocProvider<JournalBloc>.value(value: mockJournal),
+      ],
+      child: MultiRepositoryProvider(
+        providers: [
+          RepositoryProvider<LlmService>.value(value: mockLlm),
+          RepositoryProvider<AudioStorageService>.value(value: mockStorage),
+        ],
+        child: MaterialApp(
+          home: VoiceCallScreen(
+            playbackService: FakeAudioPlaybackService(),
+            bloc: bloc,
+          ),
         ),
       ),
     ),
@@ -283,6 +330,762 @@ void main() {
     });
   });
 
+  group('VoiceCallScreen - connecting state (mock bloc)', () {
+    testWidgets('shows "Connecting..." status text', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Connecting...'), findsOneWidget);
+    });
+
+    testWidgets('shows end call button (FAB) during connecting', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.call_end_rounded), findsOneWidget);
+    });
+
+    testWidgets('hides "Start Call" button during connecting', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Start Call'), findsNothing);
+    });
+
+    testWidgets('shows mute and speaker buttons during connecting', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+      expect(find.byIcon(Icons.volume_up), findsOneWidget);
+    });
+  });
+
+  group('VoiceCallScreen - active state (mock bloc)', () {
+    testWidgets('shows "In call" status with timer', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 2, seconds: 30),
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.textContaining('In call'), findsOneWidget);
+      expect(find.textContaining('02:30'), findsOneWidget);
+    });
+
+    testWidgets('shows latency indicator in AppBar for low latency', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 120),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('120ms'), findsOneWidget);
+    });
+
+    testWidgets('shows latency indicator for moderate latency', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 350),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('350ms'), findsOneWidget);
+    });
+
+    testWidgets('shows latency indicator for high latency', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 500),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('500ms'), findsOneWidget);
+    });
+
+    testWidgets('shows saved entries indicator with plural count', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Great day',
+              transcript: 'It was a great day',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful',
+              transcript: 'I am thankful',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('2 entries saved'), findsOneWidget);
+      expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
+    });
+
+    testWidgets('shows singular "entry saved" for one entry', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Great day',
+              transcript: 'It was a great day',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('1 entry saved'), findsOneWidget);
+    });
+
+    testWidgets('shows end call FAB during active call', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.call_end_rounded), findsOneWidget);
+    });
+
+    testWidgets('shows muted icon when muted', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, isMuted: true),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.mic_off), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsNothing);
+    });
+
+    testWidgets('shows earpiece icon when speaker is off', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          isSpeakerOn: false,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.hearing), findsOneWidget);
+      expect(find.byIcon(Icons.volume_up), findsNothing);
+    });
+
+    testWidgets('formats elapsed time correctly at 9m05s', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 9, seconds: 5),
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.textContaining('09:05'), findsOneWidget);
+    });
+
+    testWidgets('does not show latency indicator when latencyMs is null', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      // No "ms" text should appear in AppBar
+      expect(find.textContaining('ms'), findsNothing);
+    });
+
+    testWidgets('does not show saved entries indicator when empty', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.textContaining('entries saved'), findsNothing);
+      expect(find.textContaining('entry saved'), findsNothing);
+    });
+  });
+
+  group('VoiceCallScreen - time warning (mock bloc)', () {
+    testWidgets('shows time warning banner when showTimeWarning is true', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 5),
+          showTimeWarning: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.textContaining('remaining'), findsOneWidget);
+      expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
+    });
+
+    testWidgets('shows correct remaining time (05:00) at 5 min elapsed', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 5),
+          showTimeWarning: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('05:00 remaining'), findsOneWidget);
+    });
+
+    testWidgets('shows near-timeout remaining time (00:30) at 9m30s', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 9, seconds: 30),
+          showTimeWarning: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('00:30 remaining'), findsOneWidget);
+    });
+
+    testWidgets('does not show warning when showTimeWarning is false', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 3),
+          showTimeWarning: false,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.textContaining('remaining'), findsNothing);
+    });
+
+    testWidgets('does not show warning in idle status even if flag set', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.idle,
+          showTimeWarning: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      // Warning only shows when status == active AND showTimeWarning == true
+      expect(find.textContaining('remaining'), findsNothing);
+    });
+  });
+
+  group('VoiceCallScreen - error state (mock bloc)', () {
+    testWidgets('shows "Connection error" status text', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Something went wrong',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Connection error'), findsOneWidget);
+    });
+
+    testWidgets('shows "Start Call" button (retry) in error state', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Failed to connect',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Start Call'), findsOneWidget);
+      expect(find.byIcon(Icons.call_rounded), findsOneWidget);
+    });
+
+    testWidgets('hides end call controls in error state', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Connection lost',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.call_end_rounded), findsNothing);
+    });
+  });
+
+  group('VoiceCallScreen - ending state (mock bloc)', () {
+    testWidgets('shows "Saving and ending..." status text', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ending));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Saving and ending...'), findsOneWidget);
+    });
+
+    testWidgets('shows "Start Call" button in ending state', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ending));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Start Call'), findsOneWidget);
+    });
+  });
+
+  group('VoiceCallScreen - post-call summary generation (mock bloc)', () {
+    testWidgets('shows "Generating summary..." indicator', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          generatingSummary: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Generating summary...'), findsOneWidget);
+    });
+
+    testWidgets('shows session summary text when available', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          sessionSummary: 'You had a wonderful day reflecting on gratitude.',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Session Summary'), findsOneWidget);
+      expect(
+        find.text('You had a wonderful day reflecting on gratitude.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows "Generate Summary" button when transcripts exist', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Hello'),
+            const Transcript(speaker: Speaker.ai, text: 'Hi there!'),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Generate Summary'), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+    });
+
+    testWidgets('hides "Generate Summary" when no transcripts', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Generate Summary'), findsNothing);
+    });
+
+    testWidgets('hides "Generate Summary" when summary already exists', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [const Transcript(speaker: Speaker.user, text: 'Hello')],
+          sessionSummary: 'Already generated summary',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Generate Summary'), findsNothing);
+      expect(find.text('Session Summary'), findsOneWidget);
+    });
+
+    testWidgets('tapping "Generate Summary" dispatches event', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Hello'),
+            const Transcript(speaker: Speaker.ai, text: 'Hi!'),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      await tester.tap(find.text('Generate Summary'));
+      await tester.pump();
+
+      verify(
+        () => bloc.add(const GenerateSessionSummary(['You: Hello', 'AI: Hi!'])),
+      ).called(1);
+    });
+  });
+
+  group('VoiceCallScreen - post-call audio upload (mock bloc)', () {
+    testWidgets('shows "Uploading audio..." when uploadingAudio is true', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          uploadingAudio: true,
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Uploading audio...'), findsOneWidget);
+    });
+
+    testWidgets('shows "Audio saved to cloud" when audioUrl is set', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          audioUrl: 'https://storage.example.com/audio.wav',
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Audio saved to cloud'), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+    });
+
+    testWidgets('hides audio status when neither uploading nor uploaded', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Uploading audio...'), findsNothing);
+      expect(find.text('Audio saved to cloud'), findsNothing);
+    });
+  });
+
+  group('VoiceCallScreen - post-call saved entries (mock bloc)', () {
+    testWidgets('shows "Captured entries" header when entries exist', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Had a great morning',
+              transcript: 'I had a great morning',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Captured entries'), findsOneWidget);
+      expect(find.text('Had a great morning'), findsOneWidget);
+    });
+
+    testWidgets('shows entry count stat chip in summary', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Entry 1',
+              transcript: 'Transcript 1',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Entry 2',
+              transcript: 'Transcript 2',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Entries'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+    });
+
+    testWidgets('shows duration stat chip with elapsed time', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          elapsed: Duration(minutes: 4, seconds: 15),
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Duration'), findsOneWidget);
+      expect(find.text('04:15'), findsOneWidget);
+    });
+
+    testWidgets('shows latency stat chip when latency was measured', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.ended, latencyMs: 200),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Latency'), findsOneWidget);
+      expect(find.text('200ms'), findsOneWidget);
+    });
+
+    testWidgets('hides latency stat chip when no latency measured', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Latency'), findsNothing);
+    });
+
+    testWidgets('shows "No entries" message when no entries captured', (
+      tester,
+    ) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(
+        find.text('No entries were captured during this session.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows category display name for saved entry', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful for family',
+              transcript: 'I am thankful for family',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Thankful for family'), findsOneWidget);
+      expect(find.text('Gratitude'), findsOneWidget);
+    });
+
+    testWidgets('shows multiple saved entries', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Good morning run',
+              transcript: 'I went for a run',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful for health',
+              transcript: 'I am thankful for health',
+            ),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Good morning run'), findsOneWidget);
+      expect(find.text('Thankful for health'), findsOneWidget);
+    });
+
+    testWidgets('shows "Done" button in summary view', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Done'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Done'), findsOneWidget);
+    });
+  });
+
   group('VoiceCallScreen - transcript display', () {
     late VoiceCallScreenRobot robot;
 
@@ -318,6 +1121,27 @@ void main() {
       expect(find.text('Good morning'), findsOneWidget);
       expect(find.text('Good morning! How did you sleep?'), findsOneWidget);
       expect(find.text('Really well actually'), findsOneWidget);
+    });
+  });
+
+  group('VoiceCallScreen - transcript display (mock bloc)', () {
+    testWidgets('shows transcript bubbles from state', (tester) async {
+      final bloc = MockVoiceCallBloc();
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.active,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Testing one two'),
+            const Transcript(speaker: Speaker.ai, text: 'I hear you clearly'),
+          ],
+        ),
+      );
+
+      await pumpWithMockBloc(tester, bloc: bloc);
+      await tester.pump();
+
+      expect(find.text('Testing one two'), findsOneWidget);
+      expect(find.text('I hear you clearly'), findsOneWidget);
     });
   });
 }

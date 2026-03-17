@@ -18,7 +18,11 @@ import 'package:dytty/data/models/category_config.dart';
 class VoiceCallScreen extends StatefulWidget {
   final AudioPlaybackService? playbackService;
 
-  const VoiceCallScreen({super.key, this.playbackService});
+  /// Optional bloc for testing. When provided, the screen skips internal
+  /// bloc creation and uses this instance instead.
+  final VoiceCallBloc? bloc;
+
+  const VoiceCallScreen({super.key, this.playbackService, this.bloc});
 
   @override
   State<VoiceCallScreen> createState() => _VoiceCallScreenState();
@@ -32,6 +36,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   late final GeminiLiveService _service;
   late final VoiceCallBloc _bloc;
 
+  bool _ownsBloc = false;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +48,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    if (widget.bloc != null) {
+      _bloc = widget.bloc!;
+      _ownsBloc = false;
+      return;
+    }
+
     // Wire dependencies for entry persistence, audio upload, and post-call summary
     final authState = context.read<AuthBloc>().state;
     final uid = authState is Authenticated ? authState.uid : null;
@@ -53,6 +66,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
     );
+    _ownsBloc = true;
   }
 
   @override
@@ -60,7 +74,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _audioOutputSub?.cancel();
     _recorder.dispose();
     _playback.dispose();
-    _bloc.close();
+    if (_ownsBloc) _bloc.close();
     super.dispose();
   }
 

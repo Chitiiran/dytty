@@ -31,5 +31,34 @@ void main() {
         '{\n  "category": "positive",\n  "summary": "test"\n}',
       );
     });
+
+    test('trims leading/trailing whitespace on plain JSON', () {
+      const input = '  \n {"key": "value"} \n  ';
+      expect(extractJson(input), '{"key": "value"}');
+    });
+
+    test('returns empty object string unchanged', () {
+      const input = '{}';
+      expect(extractJson(input), '{}');
+    });
+
+    test('returns plain text unchanged when no fences', () {
+      const input = 'just some plain text';
+      expect(extractJson(input), 'just some plain text');
+    });
+
+    test('handles fences with only whitespace content', () {
+      const input = '```json\n  \n```';
+      expect(extractJson(input), '');
+    });
+  });
+
+  group('GeminiLlmService', () {
+    test('dispose does not throw', () {
+      // GeminiLlmService constructor requires a valid API key format but
+      // dispose should always succeed since GenerativeModel needs no cleanup.
+      final service = GeminiLlmService(apiKey: 'test-api-key');
+      expect(() => service.dispose(), returnsNormally);
+    });
   });
 }

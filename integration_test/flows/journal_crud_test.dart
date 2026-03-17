@@ -1,34 +1,26 @@
-/// Patrol integration test: Journal CRUD flow.
-///
-/// Tests add entry -> verify visible -> edit -> verify updated -> delete.
-///
-/// Requires:
-///   - patrol and patrol_finders in dev_dependencies
-///   - Android emulator with Firebase emulators running
-library;
+import '../app_test_setup.dart';
 
-// TODO(#45): Implement once patrol is added to dev_dependencies
-//
-// void main() {
-//   patrolTest('add, edit, and delete journal entry', ($) async {
-//     await $.pumpWidgetAndSettle(const DyttyApp());
-//
-//     // Login
-//     await $('Sign in anonymously (emulator)').tap();
-//     await $.pumpAndSettle();
-//
-//     // Navigate to journal
-//     await $("Write Today's Journal").tap();
-//     await $.pumpAndSettle();
-//
-//     // Add entry to Positive Things
-//     await $(find.byTooltip('Add Positive Things entry')).tap();
-//     await $.pumpAndSettle();
-//     await $.native.enterText('Had a great day');
-//     await $('Save').tap();
-//     await $.pumpAndSettle();
-//
-//     // Verify entry visible
-//     expect($('Had a great day'), findsOneWidget);
-//   });
-// }
+void main() {
+  patrolTest('add and verify journal entry', ($) async {
+    await $.pumpWidgetAndSettle(const DyttyApp());
+
+    final auth = AuthRobot($);
+    final home = HomeScreenRobot($);
+    final journal = JournalScreenRobot($);
+
+    // Login
+    await auth.loginWithEmulator();
+
+    // Navigate to journal
+    await home.tapWriteJournal();
+
+    // Verify empty state
+    await journal.expectEmptyBanner();
+
+    // Add entry to Positive Things
+    await journal.addEntry('Positive Things', 'Had a great day');
+
+    // Verify entry visible
+    await journal.expectEntryVisible('Had a great day');
+  });
+}
