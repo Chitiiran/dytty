@@ -186,6 +186,29 @@ Usage: python scripts/inject-audio.py <wav-file> [--realtime]
 | Phase 3 (unit/widget) | ~20-30 | ~150-200 | +5-6% |
 | **Total** | ~25-35 | ~150-200 | **~70-72%** |
 
+## Key Decisions (Implementation)
+
+1. **Patrol 4.3.0 (not 3.13.0)**: `flutter pub add --dev patrol` installed 4.3.0 which has API differences. `$.native` is deprecated → use `$.platform.mobile` for native actions (pressBack, enterTextByIndex).
+
+2. **`PatrolIntegrationTester`**: Patrol 4.x uses `PatrolIntegrationTester` (not `PatrolTester`). The `$` callback param in `patrolTest` gives both Flutter widget finders (`$('text')`, `$(find.byTooltip(...))`) and native platform automation (`$.platform.mobile`).
+
+3. **Robot pattern preserved**: Kept the existing robot classes (`AuthRobot`, `HomeScreenRobot`, `JournalScreenRobot`) for Patrol tests. Each robot takes `PatrolIntegrationTester $` in constructor.
+
+4. **mocktail for service tests**: Used mocktail (not mockito) for new `AuthService` and `GeminiLiveService` tests, consistent with other new tests in the project.
+
+5. **Skipped `audio_storage_service` and `pcm_sound_playback_service` tests**: Both are thin wrappers around Firebase Storage and FlutterPcmSound static methods. Mocking static methods requires significant ceremony for minimal value. Interface-level testing via `FakeAudioPlaybackService` is sufficient.
+
+6. **Golden test failures are pre-existing**: 3 golden tests fail with 0.10% pixel diff — unrelated to our changes, likely platform font rendering differences.
+
+## Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Patrol | Done | All 3 flows + 3 robots compiled, Patrol 4.3.0 API |
+| Phase 2: gRPC injection | Done | Script + 12 Python tests pass, need emulator spike |
+| Phase 3: Coverage | Done | auth_service 0→95%, gemini_live 12→24%, overall 66.8→67.8% |
+| Phase 4: Verify | Done | 402/402 non-golden tests pass, analyze clean (info only) |
+
 ## Issue Closure Criteria
 
 **#51 — Patrol setup**: Closed when one flow runs green on local emulator and all flows compile.
