@@ -136,8 +136,9 @@ void main() {
       robot.expectDailyCallButtonVisible();
     });
 
-    testWidgets('shows calendar with markers for days with entries',
-        (tester) async {
+    testWidgets('shows calendar with markers for days with entries', (
+      tester,
+    ) async {
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       await tester.pumpApp(
         const HomeScreen(),
@@ -304,8 +305,9 @@ void main() {
       robot.expectProgressVisible(0, 5);
     });
 
-    testWidgets('progress card shows start message when no entries',
-        (tester) async {
+    testWidgets('progress card shows start message when no entries', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const HomeScreen(),
         journalState: JournalState(
@@ -322,8 +324,9 @@ void main() {
       expect(find.text('Start your daily reflection'), findsOneWidget);
     });
 
-    testWidgets('progress card shows completion message when all filled',
-        (tester) async {
+    testWidgets('progress card shows completion message when all filled', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const HomeScreen(),
         journalState: JournalState(
@@ -371,8 +374,9 @@ void main() {
       expect(find.text('All categories complete!'), findsOneWidget);
     });
 
-    testWidgets('progress card shows keep going message for partial entries',
-        (tester) async {
+    testWidgets('progress card shows keep going message for partial entries', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const HomeScreen(),
         journalState: JournalState(
@@ -397,8 +401,9 @@ void main() {
       expect(find.textContaining('4 categories left'), findsOneWidget);
     });
 
-    testWidgets('progress card shows singular category left for 4/5',
-        (tester) async {
+    testWidgets('progress card shows singular category left for 4/5', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const HomeScreen(),
         journalState: JournalState(

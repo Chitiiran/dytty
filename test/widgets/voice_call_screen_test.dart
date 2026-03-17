@@ -333,9 +333,9 @@ void main() {
   group('VoiceCallScreen - connecting state (mock bloc)', () {
     testWidgets('shows "Connecting..." status text', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.connecting,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -347,9 +347,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.connecting,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -359,9 +359,9 @@ void main() {
 
     testWidgets('hides "Start Call" button during connecting', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.connecting,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -373,9 +373,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.connecting,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.connecting));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -388,10 +388,12 @@ void main() {
   group('VoiceCallScreen - active state (mock bloc)', () {
     testWidgets('shows "In call" status with timer', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 2, seconds: 30),
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 2, seconds: 30),
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -404,10 +406,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        latencyMs: 120,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 120),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -415,14 +416,11 @@ void main() {
       expect(find.text('120ms'), findsOneWidget);
     });
 
-    testWidgets('shows latency indicator for moderate latency', (
-      tester,
-    ) async {
+    testWidgets('shows latency indicator for moderate latency', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        latencyMs: 350,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 350),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -432,10 +430,9 @@ void main() {
 
     testWidgets('shows latency indicator for high latency', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        latencyMs: 500,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, latencyMs: 500),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -447,21 +444,23 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'positive',
-            text: 'Great day',
-            transcript: 'It was a great day',
-          ),
-          SavedEntry(
-            categoryId: 'gratitude',
-            text: 'Thankful',
-            transcript: 'I am thankful',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Great day',
+              transcript: 'It was a great day',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful',
+              transcript: 'I am thankful',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -472,16 +471,18 @@ void main() {
 
     testWidgets('shows singular "entry saved" for one entry', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'positive',
-            text: 'Great day',
-            transcript: 'It was a great day',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Great day',
+              transcript: 'It was a great day',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -491,9 +492,9 @@ void main() {
 
     testWidgets('shows end call FAB during active call', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -503,10 +504,9 @@ void main() {
 
     testWidgets('shows muted icon when muted', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        isMuted: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.active, isMuted: true),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -517,10 +517,12 @@ void main() {
 
     testWidgets('shows earpiece icon when speaker is off', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        isSpeakerOn: false,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          isSpeakerOn: false,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -531,10 +533,12 @@ void main() {
 
     testWidgets('formats elapsed time correctly at 9m05s', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 9, seconds: 5),
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 9, seconds: 5),
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -546,9 +550,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -561,9 +565,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.active));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -578,11 +582,13 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 5),
-        showTimeWarning: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 5),
+          showTimeWarning: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -595,11 +601,13 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 5),
-        showTimeWarning: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 5),
+          showTimeWarning: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -611,11 +619,13 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 9, seconds: 30),
-        showTimeWarning: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 9, seconds: 30),
+          showTimeWarning: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -627,11 +637,13 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.active,
-        elapsed: Duration(minutes: 3),
-        showTimeWarning: false,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.active,
+          elapsed: Duration(minutes: 3),
+          showTimeWarning: false,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -643,10 +655,12 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.idle,
-        showTimeWarning: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.idle,
+          showTimeWarning: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -659,10 +673,12 @@ void main() {
   group('VoiceCallScreen - error state (mock bloc)', () {
     testWidgets('shows "Connection error" status text', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.error,
-        error: 'Something went wrong',
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Something went wrong',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -674,10 +690,12 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.error,
-        error: 'Failed to connect',
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Failed to connect',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -688,10 +706,12 @@ void main() {
 
     testWidgets('hides end call controls in error state', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.error,
-        error: 'Connection lost',
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.error,
+          error: 'Connection lost',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -703,9 +723,9 @@ void main() {
   group('VoiceCallScreen - ending state (mock bloc)', () {
     testWidgets('shows "Saving and ending..." status text', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ending,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ending));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -715,9 +735,9 @@ void main() {
 
     testWidgets('shows "Start Call" button in ending state', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ending,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ending));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -729,10 +749,12 @@ void main() {
   group('VoiceCallScreen - post-call summary generation (mock bloc)', () {
     testWidgets('shows "Generating summary..." indicator', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        generatingSummary: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          generatingSummary: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -742,10 +764,12 @@ void main() {
 
     testWidgets('shows session summary text when available', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        sessionSummary: 'You had a wonderful day reflecting on gratitude.',
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          sessionSummary: 'You had a wonderful day reflecting on gratitude.',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -761,13 +785,15 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(VoiceCallState(
-        status: VoiceCallStatus.ended,
-        transcripts: [
-          const Transcript(speaker: Speaker.user, text: 'Hello'),
-          const Transcript(speaker: Speaker.ai, text: 'Hi there!'),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Hello'),
+            const Transcript(speaker: Speaker.ai, text: 'Hi there!'),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -776,13 +802,11 @@ void main() {
       expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
     });
 
-    testWidgets('hides "Generate Summary" when no transcripts', (
-      tester,
-    ) async {
+    testWidgets('hides "Generate Summary" when no transcripts', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -794,13 +818,13 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(VoiceCallState(
-        status: VoiceCallStatus.ended,
-        transcripts: [
-          const Transcript(speaker: Speaker.user, text: 'Hello'),
-        ],
-        sessionSummary: 'Already generated summary',
-      ));
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [const Transcript(speaker: Speaker.user, text: 'Hello')],
+          sessionSummary: 'Already generated summary',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -809,17 +833,17 @@ void main() {
       expect(find.text('Session Summary'), findsOneWidget);
     });
 
-    testWidgets('tapping "Generate Summary" dispatches event', (
-      tester,
-    ) async {
+    testWidgets('tapping "Generate Summary" dispatches event', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(VoiceCallState(
-        status: VoiceCallStatus.ended,
-        transcripts: [
-          const Transcript(speaker: Speaker.user, text: 'Hello'),
-          const Transcript(speaker: Speaker.ai, text: 'Hi!'),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.ended,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Hello'),
+            const Transcript(speaker: Speaker.ai, text: 'Hi!'),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -828,9 +852,7 @@ void main() {
       await tester.pump();
 
       verify(
-        () => bloc.add(
-          const GenerateSessionSummary(['You: Hello', 'AI: Hi!']),
-        ),
+        () => bloc.add(const GenerateSessionSummary(['You: Hello', 'AI: Hi!'])),
       ).called(1);
     });
   });
@@ -840,10 +862,12 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        uploadingAudio: true,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          uploadingAudio: true,
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -855,10 +879,12 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        audioUrl: 'https://storage.example.com/audio.wav',
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          audioUrl: 'https://storage.example.com/audio.wav',
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -871,9 +897,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -888,16 +914,18 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'positive',
-            text: 'Had a great morning',
-            transcript: 'I had a great morning',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Had a great morning',
+              transcript: 'I had a great morning',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -908,21 +936,23 @@ void main() {
 
     testWidgets('shows entry count stat chip in summary', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'positive',
-            text: 'Entry 1',
-            transcript: 'Transcript 1',
-          ),
-          SavedEntry(
-            categoryId: 'gratitude',
-            text: 'Entry 2',
-            transcript: 'Transcript 2',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Entry 1',
+              transcript: 'Transcript 1',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Entry 2',
+              transcript: 'Transcript 2',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -933,10 +963,12 @@ void main() {
 
     testWidgets('shows duration stat chip with elapsed time', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        elapsed: Duration(minutes: 4, seconds: 15),
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          elapsed: Duration(minutes: 4, seconds: 15),
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -949,10 +981,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        latencyMs: 200,
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(status: VoiceCallStatus.ended, latencyMs: 200),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -965,9 +996,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -979,9 +1010,9 @@ void main() {
       tester,
     ) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -992,20 +1023,20 @@ void main() {
       );
     });
 
-    testWidgets('shows category display name for saved entry', (
-      tester,
-    ) async {
+    testWidgets('shows category display name for saved entry', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'gratitude',
-            text: 'Thankful for family',
-            transcript: 'I am thankful for family',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful for family',
+              transcript: 'I am thankful for family',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -1016,21 +1047,23 @@ void main() {
 
     testWidgets('shows multiple saved entries', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-        savedEntries: [
-          SavedEntry(
-            categoryId: 'positive',
-            text: 'Good morning run',
-            transcript: 'I went for a run',
-          ),
-          SavedEntry(
-            categoryId: 'gratitude',
-            text: 'Thankful for health',
-            transcript: 'I am thankful for health',
-          ),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        const VoiceCallState(
+          status: VoiceCallStatus.ended,
+          savedEntries: [
+            SavedEntry(
+              categoryId: 'positive',
+              text: 'Good morning run',
+              transcript: 'I went for a run',
+            ),
+            SavedEntry(
+              categoryId: 'gratitude',
+              text: 'Thankful for health',
+              transcript: 'I am thankful for health',
+            ),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -1041,9 +1074,9 @@ void main() {
 
     testWidgets('shows "Done" button in summary view', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(const VoiceCallState(
-        status: VoiceCallStatus.ended,
-      ));
+      when(
+        () => bloc.state,
+      ).thenReturn(const VoiceCallState(status: VoiceCallStatus.ended));
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
@@ -1094,13 +1127,15 @@ void main() {
   group('VoiceCallScreen - transcript display (mock bloc)', () {
     testWidgets('shows transcript bubbles from state', (tester) async {
       final bloc = MockVoiceCallBloc();
-      when(() => bloc.state).thenReturn(VoiceCallState(
-        status: VoiceCallStatus.active,
-        transcripts: [
-          const Transcript(speaker: Speaker.user, text: 'Testing one two'),
-          const Transcript(speaker: Speaker.ai, text: 'I hear you clearly'),
-        ],
-      ));
+      when(() => bloc.state).thenReturn(
+        VoiceCallState(
+          status: VoiceCallStatus.active,
+          transcripts: [
+            const Transcript(speaker: Speaker.user, text: 'Testing one two'),
+            const Transcript(speaker: Speaker.ai, text: 'I hear you clearly'),
+          ],
+        ),
+      );
 
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();

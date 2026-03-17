@@ -22,10 +22,9 @@ class MockLlmService extends Mock implements LlmService {}
 
 /// Creates a [SpeechRecognitionResult] with the given words and finality.
 SpeechRecognitionResult _makeSpeechResult(String words, bool isFinal) {
-  return SpeechRecognitionResult(
-    [SpeechRecognitionWords(words, null, 0.95)],
-    isFinal,
-  );
+  return SpeechRecognitionResult([
+    SpeechRecognitionWords(words, null, 0.95),
+  ], isFinal);
 }
 
 void main() {
@@ -95,8 +94,9 @@ void main() {
         listenFor: any(named: 'listenFor'),
       ),
     ).thenAnswer((invocation) async {
-      final onResult = invocation.namedArguments[#onResult]
-          as void Function(SpeechRecognitionResult);
+      final onResult =
+          invocation.namedArguments[#onResult]
+              as void Function(SpeechRecognitionResult);
       // Fire a final result immediately so the bloc transitions
       // listening -> transcriptReview, avoiding the flutter_animate timer.
       onResult(_makeSpeechResult(transcript, true));
@@ -116,13 +116,16 @@ void main() {
   }
 
   group('VoiceRecordingSheet', () {
-    testWidgets('shows "Speech unavailable" when STT init fails',
-        (tester) async {
+    testWidgets('shows "Speech unavailable" when STT init fails', (
+      tester,
+    ) async {
       await openSheet(tester);
 
       expect(find.text('Speech unavailable'), findsOneWidget);
-      expect(find.text('Speech recognition is not supported on this device.'),
-          findsOneWidget);
+      expect(
+        find.text('Speech recognition is not supported on this device.'),
+        findsOneWidget,
+      );
       expect(find.text('Close'), findsOneWidget);
     });
 
@@ -195,8 +198,9 @@ void main() {
     });
 
     testWidgets('error state shows custom error message', (tester) async {
-      when(() => mockStt.initialize())
-          .thenThrow(Exception('Microphone permission denied'));
+      when(
+        () => mockStt.initialize(),
+      ).thenThrow(Exception('Microphone permission denied'));
 
       await openSheet(tester);
 
@@ -208,8 +212,9 @@ void main() {
       );
     });
 
-    testWidgets('Try Again in error state re-initializes speech',
-        (tester) async {
+    testWidgets('Try Again in error state re-initializes speech', (
+      tester,
+    ) async {
       when(() => mockStt.initialize()).thenThrow(Exception('STT failed'));
 
       await openSheet(tester);
@@ -228,8 +233,9 @@ void main() {
           listenFor: any(named: 'listenFor'),
         ),
       ).thenAnswer((invocation) async {
-        final onResult = invocation.namedArguments[#onResult]
-            as void Function(SpeechRecognitionResult);
+        final onResult =
+            invocation.namedArguments[#onResult]
+                as void Function(SpeechRecognitionResult);
         onResult(_makeSpeechResult('recovered text', true));
       });
 
@@ -247,14 +253,17 @@ void main() {
   });
 
   group('TranscriptReview state', () {
-    testWidgets('shows title, transcript field, and action buttons',
-        (tester) async {
+    testWidgets('shows title, transcript field, and action buttons', (
+      tester,
+    ) async {
       await openSheetToTranscriptReview(tester, 'I had a great day today');
 
       expect(find.text('Review transcript'), findsOneWidget);
       // TextField should be pre-filled with the transcript
-      expect(find.widgetWithText(TextField, 'I had a great day today'),
-          findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'I had a great day today'),
+        findsOneWidget,
+      );
       expect(find.text('Discard'), findsOneWidget);
       expect(find.text('Summarize'), findsOneWidget);
     });
@@ -269,15 +278,19 @@ void main() {
       expect(find.text('Review transcript'), findsNothing);
     });
 
-    testWidgets('Summarize button transitions to processing state',
-        (tester) async {
+    testWidgets('Summarize button transitions to processing state', (
+      tester,
+    ) async {
       await openSheetToTranscriptReview(tester, 'I felt grateful today');
 
       // Use a Completer so the future never completes (no pending timer)
       final completer = Completer<CategorizationResult>();
-      when(() => mockLlm.categorizeEntry(any(),
-              categoryIds: any(named: 'categoryIds')))
-          .thenAnswer((_) => completer.future);
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenAnswer((_) => completer.future);
 
       await tester.tap(find.text('Summarize'));
       await tester.pump();
@@ -290,11 +303,13 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       // Complete the future to clean up
-      completer.complete(const CategorizationResult(
-        suggestedCategory: 'gratitude',
-        summary: 'Felt grateful',
-        confidence: 0.9,
-      ));
+      completer.complete(
+        const CategorizationResult(
+          suggestedCategory: 'gratitude',
+          summary: 'Felt grateful',
+          confidence: 0.9,
+        ),
+      );
       await tester.pump(const Duration(seconds: 1));
     });
 
@@ -327,22 +342,28 @@ void main() {
     }) async {
       await openSheetToTranscriptReview(tester, transcript);
 
-      when(() => mockLlm.categorizeEntry(any(),
-              categoryIds: any(named: 'categoryIds')))
-          .thenAnswer((_) async => CategorizationResult(
-                suggestedCategory: category,
-                summary: summary,
-                confidence: 0.9,
-                suggestedTags: tags,
-              ));
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenAnswer(
+        (_) async => CategorizationResult(
+          suggestedCategory: category,
+          summary: summary,
+          confidence: 0.9,
+          suggestedTags: tags,
+        ),
+      );
 
       await tester.tap(find.text('Summarize'));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('shows title, summary field, category chips, and buttons',
-        (tester) async {
+    testWidgets('shows title, summary field, category chips, and buttons', (
+      tester,
+    ) async {
       await openSheetToReviewing(tester);
 
       expect(find.text('Review your note'), findsOneWidget);
@@ -352,12 +373,8 @@ void main() {
       expect(find.text('Save'), findsOneWidget);
     });
 
-    testWidgets('summary field is pre-filled with LLM result',
-        (tester) async {
-      await openSheetToReviewing(
-        tester,
-        summary: 'AI-generated summary',
-      );
+    testWidgets('summary field is pre-filled with LLM result', (tester) async {
+      await openSheetToReviewing(tester, summary: 'AI-generated summary');
 
       expect(
         find.widgetWithText(TextField, 'AI-generated summary'),
@@ -365,8 +382,9 @@ void main() {
       );
     });
 
-    testWidgets('shows all category chips from active categories',
-        (tester) async {
+    testWidgets('shows all category chips from active categories', (
+      tester,
+    ) async {
       await openSheetToReviewing(tester);
 
       // CategoryConfig.defaults has 5 categories
@@ -385,8 +403,7 @@ void main() {
       expect(chip.selected, isTrue);
     });
 
-    testWidgets('tapping a different category chip selects it',
-        (tester) async {
+    testWidgets('tapping a different category chip selects it', (tester) async {
       await openSheetToReviewing(tester, category: 'positive');
 
       // Tap the "Gratitude" chip
@@ -413,8 +430,9 @@ void main() {
       expect(find.text('Review your note'), findsNothing);
     });
 
-    testWidgets('Save button is enabled when category is selected',
-        (tester) async {
+    testWidgets('Save button is enabled when category is selected', (
+      tester,
+    ) async {
       await openSheetToReviewing(tester, category: 'positive');
 
       await tester.ensureVisible(find.text('Save'));
@@ -426,8 +444,9 @@ void main() {
       expect(saveButton.onPressed, isNotNull);
     });
 
-    testWidgets('transcript expandable is collapsed by default',
-        (tester) async {
+    testWidgets('transcript expandable is collapsed by default', (
+      tester,
+    ) async {
       await openSheetToReviewing(tester);
 
       // "Transcript" label should be visible
@@ -477,33 +496,40 @@ void main() {
   });
 
   group('Processing state', () {
-    testWidgets('shows transcript text and categorizing indicator',
-        (tester) async {
+    testWidgets('shows transcript text and categorizing indicator', (
+      tester,
+    ) async {
       await openSheetToTranscriptReview(
-          tester, 'Today I noticed a beautiful sunset');
+        tester,
+        'Today I noticed a beautiful sunset',
+      );
 
       // Use a Completer so the future never completes (no pending timer)
       final completer = Completer<CategorizationResult>();
-      when(() => mockLlm.categorizeEntry(any(),
-              categoryIds: any(named: 'categoryIds')))
-          .thenAnswer((_) => completer.future);
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenAnswer((_) => completer.future);
 
       await tester.tap(find.text('Summarize'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('Processing...'), findsOneWidget);
-      expect(
-          find.text('Today I noticed a beautiful sunset'), findsOneWidget);
+      expect(find.text('Today I noticed a beautiful sunset'), findsOneWidget);
       expect(find.text('Categorizing...'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       // Complete the future to clean up
-      completer.complete(const CategorizationResult(
-        suggestedCategory: 'beauty',
-        summary: 'Beautiful sunset',
-        confidence: 0.9,
-      ));
+      completer.complete(
+        const CategorizationResult(
+          suggestedCategory: 'beauty',
+          summary: 'Beautiful sunset',
+          confidence: 0.9,
+        ),
+      );
       await tester.pump(const Duration(seconds: 1));
     });
   });
@@ -512,9 +538,12 @@ void main() {
     testWidgets('shows error state when LLM throws', (tester) async {
       await openSheetToTranscriptReview(tester, 'Some text');
 
-      when(() => mockLlm.categorizeEntry(any(),
-              categoryIds: any(named: 'categoryIds')))
-          .thenThrow(Exception('LLM API error'));
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenThrow(Exception('LLM API error'));
 
       await tester.tap(find.text('Summarize'));
       await tester.pump();

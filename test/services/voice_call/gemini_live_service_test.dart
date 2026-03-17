@@ -127,10 +127,7 @@ void main() {
 
   group('GeminiLiveService connection constants', () {
     test('connectionTimeout is 15 seconds', () {
-      expect(
-        GeminiLiveService.connectionTimeout,
-        const Duration(seconds: 15),
-      );
+      expect(GeminiLiveService.connectionTimeout, const Duration(seconds: 15));
     });
   });
 
@@ -291,18 +288,24 @@ void main() {
       expect(service.lastLatencyMs, isNull);
     });
 
-    test('sendText multiple times when disconnected completes normally',
-        () async {
-      await service.sendText('first');
-      await service.sendText('second');
-      await service.sendText('third');
-      // No errors thrown
-    });
+    test(
+      'sendText multiple times when disconnected completes normally',
+      () async {
+        await service.sendText('first');
+        await service.sendText('second');
+        await service.sendText('third');
+        // No errors thrown
+      },
+    );
 
     test('sendToolResponse with various argument types is a no-op', () async {
       await service.sendToolResponse('fn', null, {});
-      await service.sendToolResponse('fn', 'id-123', {'nested': {'a': 1}});
-      await service.sendToolResponse('fn', '', {'list': [1, 2, 3]});
+      await service.sendToolResponse('fn', 'id-123', {
+        'nested': {'a': 1},
+      });
+      await service.sendToolResponse('fn', '', {
+        'list': [1, 2, 3],
+      });
       // No errors thrown
     });
 
@@ -346,10 +349,7 @@ void main() {
       // Broadcast controllers allow listening after close but
       // immediately fire onDone
       final completer = Completer<void>();
-      service.stateStream.listen(
-        (_) {},
-        onDone: completer.complete,
-      );
+      service.stateStream.listen((_) {}, onDone: completer.complete);
 
       // onDone fires immediately since the controller is closed
       await expectLater(completer.future, completes);

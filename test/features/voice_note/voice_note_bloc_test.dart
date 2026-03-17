@@ -537,7 +537,9 @@ void main() {
         // Simulate a final speech result with empty text
         speechService.lastOnResult?.call(
           SpeechRecognitionResult(
-            [SpeechRecognitionWords('', [''], 0.0)],
+            [
+              SpeechRecognitionWords('', [''], 0.0),
+            ],
             true, // finalResult
           ),
         );
@@ -568,7 +570,9 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         speechService.lastOnResult?.call(
           SpeechRecognitionResult(
-            [SpeechRecognitionWords('Hello wor', ['Hello wor'], 0.8)],
+            [
+              SpeechRecognitionWords('Hello wor', ['Hello wor'], 0.8),
+            ],
             false, // not final
           ),
         );
@@ -633,7 +637,10 @@ void main() {
 
   group('VoiceNoteEvent props', () {
     test('UpdateCategory instances with same id are equal', () {
-      expect(const UpdateCategory('positive'), const UpdateCategory('positive'));
+      expect(
+        const UpdateCategory('positive'),
+        const UpdateCategory('positive'),
+      );
     });
 
     test('UpdateCategory instances with different ids are not equal', () {

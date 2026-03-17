@@ -108,9 +108,9 @@ void main() {
 
     testWidgets('previous day button dispatches SelectDate', (tester) async {
       final mockJournalBloc = MockJournalBloc();
-      when(() => mockJournalBloc.state).thenReturn(
-        JournalState(status: JournalStatus.loaded),
-      );
+      when(
+        () => mockJournalBloc.state,
+      ).thenReturn(JournalState(status: JournalStatus.loaded));
 
       await tester.pumpApp(
         const DailyJournalScreen(),
@@ -131,9 +131,9 @@ void main() {
 
     testWidgets('next day button dispatches SelectDate', (tester) async {
       final mockJournalBloc = MockJournalBloc();
-      when(() => mockJournalBloc.state).thenReturn(
-        JournalState(status: JournalStatus.loaded),
-      );
+      when(
+        () => mockJournalBloc.state,
+      ).thenReturn(JournalState(status: JournalStatus.loaded));
 
       await tester.pumpApp(
         const DailyJournalScreen(),
@@ -152,8 +152,9 @@ void main() {
       verify(() => mockJournalBloc.add(any(that: isA<SelectDate>()))).called(1);
     });
 
-    testWidgets('shows "Today" title when selected date is today',
-        (tester) async {
+    testWidgets('shows "Today" title when selected date is today', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const DailyJournalScreen(),
         journalState: JournalState(status: JournalStatus.loaded),
@@ -182,8 +183,9 @@ void main() {
       expect(find.text('Positive Things'), findsNothing);
     });
 
-    testWidgets('shows hidden entry placeholder when hideEntries is true',
-        (tester) async {
+    testWidgets('shows hidden entry placeholder when hideEntries is true', (
+      tester,
+    ) async {
       await tester.pumpApp(
         const DailyJournalScreen(),
         journalState: JournalState(

@@ -1082,11 +1082,7 @@ void main() {
           VoiceCallStatus.active,
         ),
         // latency update (from LatencyUpdated dispatched in _stateSub listener)
-        isA<VoiceCallState>().having(
-          (s) => s.latencyMs,
-          'latencyMs',
-          42,
-        ),
+        isA<VoiceCallState>().having((s) => s.latencyMs, 'latencyMs', 42),
       ],
     );
   });
