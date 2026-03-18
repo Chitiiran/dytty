@@ -23,8 +23,6 @@ import 'package:dytty/services/audio/pcm_sound_playback_service.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
-import 'package:dytty/core/theme/app_colors.dart';
-import 'package:dytty/core/utils/date_utils.dart' as app_date;
 import 'package:intl/intl.dart';
 
 class CategoryDetailScreen extends StatelessWidget {
@@ -37,9 +35,9 @@ class CategoryDetailScreen extends StatelessWidget {
     final journalBloc = context.read<JournalBloc>();
 
     return BlocProvider(
-      create: (_) =>
-          CategoryDetailBloc(repository: journalBloc.repository)
-            ..add(LoadCategoryDetail(categoryId)),
+      create: (_) => CategoryDetailBloc(
+        repository: journalBloc.repository,
+      )..add(LoadCategoryDetail(categoryId)),
       child: _CategoryDetailView(categoryId: categoryId),
     );
   }
@@ -65,8 +63,6 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
   bool _callActive = false;
   int _processedEntryCount = 0;
   bool _postCallHandled = false;
-  bool _lastMuted = false;
-  Duration? _lastElapsed;
 
   @override
   void dispose() {
@@ -136,7 +132,11 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     );
     final questions = reviewQuestions[widget.categoryId] ?? [];
     final entries = _allRecentEntries();
-    final prompt = buildReviewPrompt(category.displayName, questions, entries);
+    final prompt = buildReviewPrompt(
+      category.displayName,
+      questions,
+      entries,
+    );
 
     // Start the call with review-specific prompt and tools
     bloc.add(const StartCall());
@@ -186,27 +186,23 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
 
     // Process only newly added entries (avoid re-dispatching on every state change)
     if (voiceState.savedEntries.length > _processedEntryCount) {
-      for (
-        int i = _processedEntryCount;
-        i < voiceState.savedEntries.length;
-        i++
-      ) {
+      for (int i = _processedEntryCount;
+          i < voiceState.savedEntries.length;
+          i++) {
         final entry = voiceState.savedEntries[i];
         if (entry.categoryId == widget.categoryId) {
           final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-          detailBloc.add(
-            EntryAddedFromCall(
-              entry: CategoryEntry(
-                id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
-                categoryId: entry.categoryId,
-                text: entry.text,
-                source: 'voice',
-                transcript: entry.transcript,
-                createdAt: DateTime.now(),
-              ),
-              date: today,
+          detailBloc.add(EntryAddedFromCall(
+            entry: CategoryEntry(
+              id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
+              categoryId: entry.categoryId,
+              text: entry.text,
+              source: 'voice',
+              transcript: entry.transcript,
+              createdAt: DateTime.now(),
             ),
-          );
+            date: today,
+          ));
         }
       }
       _processedEntryCount = voiceState.savedEntries.length;
@@ -217,19 +213,10 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
       _postCallHandled = true;
       setState(() => _callActive = false);
       _performPostCallActions(detailBloc, voiceState);
-      return;
     }
 
-    // Only rebuild when call controls state actually changed
-    if (_callActive && mounted) {
-      final mutedChanged = voiceState.isMuted != _lastMuted;
-      final elapsedChanged = voiceState.elapsed != _lastElapsed;
-      if (mutedChanged || elapsedChanged) {
-        _lastMuted = voiceState.isMuted;
-        _lastElapsed = voiceState.elapsed;
-        setState(() {});
-      }
-    }
+    // Refresh UI for mute/elapsed changes
+    if (mounted) setState(() {});
   }
 
   /// Post-call: mark all recent entries as reviewed, generate and save review summary.
@@ -237,25 +224,30 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     CategoryDetailBloc detailBloc,
     VoiceCallState voiceState,
   ) async {
-    // Capture context-dependent values before async gap
-    final llmService = context.read<LlmService>();
     final state = detailBloc.state;
 
     // 1. Mark all recent entries as reviewed
-    final refs = <EntryReference>[];
+    final entryIds = <String>[];
+    final dates = <String>[];
     for (final group in state.recentEntries) {
       for (final entry in group.entries) {
-        refs.add(EntryReference(date: group.date, entryId: entry.id));
+        entryIds.add(entry.id);
+        dates.add(group.date);
       }
     }
-    if (refs.isNotEmpty) {
-      detailBloc.add(MarkEntriesReviewed(entries: refs));
+    if (entryIds.isNotEmpty) {
+      detailBloc.add(MarkEntriesReviewed(
+        entryIds: entryIds,
+        dates: dates,
+      ));
     }
 
     // 2. Generate review summary via LlmService
     if (voiceState.transcripts.isNotEmpty) {
+      final llmService = context.read<LlmService>();
       final transcript = voiceState.transcripts
-          .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
+          .map((t) =>
+              '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
           .join('\n');
 
       final category = JournalCategory.values.firstWhere(
@@ -278,7 +270,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
         final summaryText = response.text.trim();
         if (summaryText.isNotEmpty && mounted) {
           final now = DateTime.now();
-          final weekStart = app_date.mondayOfWeek(now);
+          final weekStart = _mondayOfWeek(now);
           final summary = ReviewSummary(
             id: '',
             categoryId: widget.categoryId,
@@ -293,6 +285,11 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
         debugPrint('Failed to generate review summary: $e');
       }
     }
+  }
+
+  DateTime _mondayOfWeek(DateTime date) {
+    final weekday = date.weekday; // Monday = 1
+    return DateTime(date.year, date.month, date.day - (weekday - 1));
   }
 
   Future<void> _endReviewCall() async {
@@ -379,7 +376,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
                         height: 8,
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.callActiveRed,
+                          color: const Color(0xFFEF4444),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -400,7 +397,8 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               if (_callActive && _voiceCallBloc != null)
                 CallControlsOverlay(
                   isMuted: _voiceCallBloc!.state.isMuted,
-                  onToggleMute: () => _voiceCallBloc!.add(const ToggleMute()),
+                  onToggleMute: () =>
+                      _voiceCallBloc!.add(const ToggleMute()),
                   onEndCall: _endReviewCall,
                   elapsed: _voiceCallBloc!.state.elapsed,
                 ),
@@ -412,108 +410,142 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
   }
 
   Widget _buildEntryList(BuildContext context, CategoryDetailState state) {
-    final items = _buildFlatItems(state);
-
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: items.length,
+      itemCount: _itemCount(state),
       itemBuilder: (context, index) {
-        final item = items[index];
-        return switch (item) {
-          _SummaryItem(:final summary) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: ReviewSummaryCard(
-              summary: summary,
-              categoryId: widget.categoryId,
-            ),
-          ),
-          _HeaderItem(:final group) => DateGroupHeader(
-            displayDate: group.displayDate,
-            entryCount: group.entries.length,
-            isCollapsed: group.isCollapsed,
-            onTap: () {
-              context.read<CategoryDetailBloc>().add(
-                ToggleDateGroup(group.date),
-              );
-            },
-          ),
-          _EntryItem(:final entry, :final date, :final isOlder) =>
-            InlineEntryTile(
-              entry: entry,
-              isEditing: state.editingEntryId == entry.id,
-              isOlderEntry: isOlder,
-              onTapEdit: () {
-                context.read<CategoryDetailBloc>().add(
-                  StartInlineEdit(entry.id),
-                );
+        int currentIndex = 0;
+
+        // Review summary card at the top
+        if (state.reviewSummary != null) {
+          if (index == currentIndex) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: ReviewSummaryCard(
+                summary: state.reviewSummary!,
+                categoryId: widget.categoryId,
+              ),
+            );
+          }
+          currentIndex++;
+        }
+
+        // Recent entries grouped by date
+        for (final group in state.recentEntries) {
+          // Date group header
+          if (index == currentIndex) {
+            return DateGroupHeader(
+              displayDate: group.displayDate,
+              entryCount: group.entries.length,
+              isCollapsed: group.isCollapsed,
+              onTap: () {
+                context
+                    .read<CategoryDetailBloc>()
+                    .add(ToggleDateGroup(group.date));
               },
-              onSaveEdit: (newText) {
-                context.read<CategoryDetailBloc>().add(
-                  SaveInlineEdit(
-                    date: date,
-                    entryId: entry.id,
-                    newText: newText,
-                  ),
+            );
+          }
+          currentIndex++;
+
+          // Entries (if not collapsed)
+          if (!group.isCollapsed) {
+            for (final entry in group.entries) {
+              if (index == currentIndex) {
+                return InlineEntryTile(
+                  entry: entry,
+                  isEditing: state.editingEntryId == entry.id,
+                  onTapEdit: () {
+                    context
+                        .read<CategoryDetailBloc>()
+                        .add(StartInlineEdit(entry.id));
+                  },
+                  onSaveEdit: (newText) {
+                    context.read<CategoryDetailBloc>().add(SaveInlineEdit(
+                      date: group.date,
+                      entryId: entry.id,
+                      newText: newText,
+                    ));
+                  },
+                  onCancelEdit: () {
+                    context
+                        .read<CategoryDetailBloc>()
+                        .add(const CancelInlineEdit());
+                  },
                 );
+              }
+              currentIndex++;
+            }
+          }
+        }
+
+        // Older entries (greyed)
+        for (final group in state.olderEntries) {
+          if (index == currentIndex) {
+            return DateGroupHeader(
+              displayDate: group.displayDate,
+              entryCount: group.entries.length,
+              isCollapsed: group.isCollapsed,
+              onTap: () {
+                context
+                    .read<CategoryDetailBloc>()
+                    .add(ToggleDateGroup(group.date));
               },
-              onCancelEdit: () {
-                context.read<CategoryDetailBloc>().add(
-                  const CancelInlineEdit(),
+            );
+          }
+          currentIndex++;
+
+          if (!group.isCollapsed) {
+            for (final entry in group.entries) {
+              if (index == currentIndex) {
+                return InlineEntryTile(
+                  entry: entry,
+                  isEditing: state.editingEntryId == entry.id,
+                  isOlderEntry: true,
+                  onTapEdit: () {
+                    context
+                        .read<CategoryDetailBloc>()
+                        .add(StartInlineEdit(entry.id));
+                  },
+                  onSaveEdit: (newText) {
+                    context.read<CategoryDetailBloc>().add(SaveInlineEdit(
+                      date: group.date,
+                      entryId: entry.id,
+                      newText: newText,
+                    ));
+                  },
+                  onCancelEdit: () {
+                    context
+                        .read<CategoryDetailBloc>()
+                        .add(const CancelInlineEdit());
+                  },
                 );
-              },
-            ),
-        };
+              }
+              currentIndex++;
+            }
+          }
+        }
+
+        return const SizedBox.shrink();
       },
     );
   }
 
-  List<_ListItem> _buildFlatItems(CategoryDetailState state) {
-    final items = <_ListItem>[];
-
-    if (state.reviewSummary != null) {
-      items.add(_SummaryItem(state.reviewSummary!));
-    }
+  int _itemCount(CategoryDetailState state) {
+    int count = 0;
+    if (state.reviewSummary != null) count++;
 
     for (final group in state.recentEntries) {
-      items.add(_HeaderItem(group));
-      if (!group.isCollapsed) {
-        for (final entry in group.entries) {
-          items.add(_EntryItem(entry: entry, date: group.date));
-        }
-      }
+      count++; // header
+      if (!group.isCollapsed) count += group.entries.length;
     }
 
     for (final group in state.olderEntries) {
-      items.add(_HeaderItem(group));
-      if (!group.isCollapsed) {
-        for (final entry in group.entries) {
-          items.add(_EntryItem(entry: entry, date: group.date, isOlder: true));
-        }
-      }
+      count++;
+      if (!group.isCollapsed) count += group.entries.length;
     }
 
-    return items;
+    return count;
   }
-}
-
-/// Flat list items for the heterogeneous entry list.
-sealed class _ListItem {}
-
-class _SummaryItem extends _ListItem {
-  final ReviewSummary summary;
-  _SummaryItem(this.summary);
-}
-
-class _HeaderItem extends _ListItem {
-  final DateGroup group;
-  _HeaderItem(this.group);
-}
-
-class _EntryItem extends _ListItem {
-  final CategoryEntry entry;
-  final String date;
-  final bool isOlder;
-  _EntryItem({required this.entry, required this.date, this.isOlder = false});
 }
 
 /// Call badge icon for the AppBar.
@@ -541,7 +573,7 @@ class _CallBadge extends StatelessWidget {
 
     final Color badgeColor;
     if (isCallActive) {
-      badgeColor = AppColors.callActiveRed; // red during call
+      badgeColor = const Color(0xFFEF4444); // red during call
     } else if (hasRecentEntries) {
       badgeColor = Colors.green;
     } else {
@@ -558,7 +590,11 @@ class _CallBadge extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(category.icon, color: category.color, size: 28),
+              Icon(
+                category.icon,
+                color: category.color,
+                size: 28,
+              ),
               Positioned(
                 right: 2,
                 bottom: 4,
