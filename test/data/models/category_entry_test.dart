@@ -161,5 +161,104 @@ void main() {
       expect(entry.transcript, isNull);
       expect(entry.tags, isEmpty);
     });
+
+    group('isReviewed field', () {
+      test('defaults to false', () {
+        final entry = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+        );
+
+        expect(entry.isReviewed, false);
+      });
+
+      test('can be set to true', () {
+        final entry = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+          isReviewed: true,
+        );
+
+        expect(entry.isReviewed, true);
+      });
+
+      test('toFirestore includes isReviewed when true', () {
+        final entry = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+          isReviewed: true,
+        );
+
+        final map = entry.toFirestore();
+        expect(map['isReviewed'], true);
+      });
+
+      test('toFirestore omits isReviewed when false', () {
+        final entry = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+        );
+
+        final map = entry.toFirestore();
+        expect(map.containsKey('isReviewed'), false);
+      });
+
+      test('fromFirestore reads isReviewed true', () async {
+        final firestore = FakeFirebaseFirestore();
+        await firestore.collection('test').doc('reviewed').set({
+          'category': 'positive',
+          'text': 'reviewed entry',
+          'createdAt': Timestamp.fromDate(DateTime(2026, 3, 18)),
+          'isReviewed': true,
+        });
+
+        final snapshot =
+            await firestore.collection('test').doc('reviewed').get();
+        final entry = CategoryEntry.fromFirestore(snapshot);
+
+        expect(entry.isReviewed, true);
+      });
+
+      test('fromFirestore defaults isReviewed to false when missing', () async {
+        final firestore = FakeFirebaseFirestore();
+        await firestore.collection('test').doc('old').set({
+          'category': 'positive',
+          'text': 'old entry',
+          'createdAt': Timestamp.fromDate(DateTime(2026, 3, 18)),
+        });
+
+        final snapshot = await firestore.collection('test').doc('old').get();
+        final entry = CategoryEntry.fromFirestore(snapshot);
+
+        expect(entry.isReviewed, false);
+      });
+
+      test('isReviewed included in equatable props', () {
+        final a = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+          isReviewed: false,
+        );
+        final b = CategoryEntry(
+          id: 'id',
+          categoryId: 'positive',
+          text: 'hello',
+          createdAt: DateTime(2026, 3, 18),
+          isReviewed: true,
+        );
+
+        expect(a, isNot(equals(b)));
+      });
+    });
   });
 }

@@ -167,6 +167,9 @@ class JournalState extends Equatable {
 class JournalBloc extends Bloc<JournalEvent, JournalState> {
   final JournalRepository _repository;
 
+  /// Exposes the repository for sibling blocs that share the same data source.
+  JournalRepository get repository => _repository;
+
   JournalBloc({required JournalRepository repository})
     : _repository = repository,
       super(JournalState()) {

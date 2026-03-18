@@ -198,6 +198,12 @@ class _SaveEntryArgs {
   static const transcript = 'transcript';
 }
 
+/// Tool call argument keys for the edit_entry function.
+class _EditEntryArgs {
+  static const entryId = 'entry_id';
+  static const text = 'text';
+}
+
 class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   final GeminiLiveService _service;
   final JournalBloc? _journalBloc;
@@ -445,6 +451,23 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       });
 
       debugPrint('Tool call: save_entry → $categoryName: $text');
+    } else if (call.name == 'edit_entry') {
+      final args = call.args;
+      final entryId = args[_EditEntryArgs.entryId] as String? ?? '';
+      final text = args[_EditEntryArgs.text] as String? ?? '';
+
+      // Persist edit via JournalBloc
+      if (entryId.isNotEmpty) {
+        _journalBloc?.add(UpdateEntry(entryId: entryId, text: text));
+      }
+
+      // Acknowledge the tool call to the model
+      await _service.sendToolResponse(call.name, call.id, {
+        'status': 'edited',
+        _EditEntryArgs.entryId: entryId,
+      });
+
+      debugPrint('Tool call: edit_entry → $entryId: $text');
     }
   }
 

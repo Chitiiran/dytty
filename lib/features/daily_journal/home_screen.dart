@@ -282,6 +282,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         entries: journalState.entries,
                         categories: categoryState.activeCategories,
                         currentStreak: journalState.currentStreak,
+                        onCategoryTap: (categoryId) {
+                          Navigator.pushNamed(
+                            context,
+                            '/category-detail',
+                            arguments: categoryId,
+                          );
+                        },
                       ),
                     )
                     .animate()
@@ -457,11 +464,13 @@ class _ProgressCard extends StatelessWidget {
   final List<CategoryEntry> entries;
   final List<CategoryConfig> categories;
   final int currentStreak;
+  final void Function(String categoryId)? onCategoryTap;
 
   const _ProgressCard({
     required this.entries,
     required this.categories,
     this.currentStreak = 0,
+    this.onCategoryTap,
   });
 
   @override
@@ -552,41 +561,44 @@ class _ProgressCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: categories.map((cat) {
                   final isFilled = filledCategoryIds.contains(cat.id);
-                  return Column(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isFilled
-                              ? cat.color.withValues(alpha: 0.15)
-                              : theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          cat.icon,
-                          size: 20,
-                          color: isFilled
-                              ? cat.color
-                              : theme.colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.3,
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      if (isFilled)
+                  return GestureDetector(
+                    onTap: () => onCategoryTap?.call(cat.id),
+                    child: Column(
+                      children: [
                         Container(
-                          width: 6,
-                          height: 6,
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
-                            color: cat.color,
+                            color: isFilled
+                                ? cat.color.withValues(alpha: 0.15)
+                                : theme.colorScheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
                             shape: BoxShape.circle,
                           ),
-                        )
-                      else
-                        const SizedBox(height: 6),
-                    ],
+                          child: Icon(
+                            cat.icon,
+                            size: 20,
+                            color: isFilled
+                                ? cat.color
+                                : theme.colorScheme.onSurfaceVariant.withValues(
+                                    alpha: 0.3,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        if (isFilled)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: cat.color,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 6),
+                      ],
+                    ),
                   );
                 }).toList(),
               ),

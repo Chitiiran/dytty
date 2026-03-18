@@ -10,6 +10,7 @@ class CategoryEntry extends Equatable {
   final String? audioUrl;
   final String? transcript;
   final List<String> tags;
+  final bool isReviewed;
 
   const CategoryEntry({
     required this.id,
@@ -20,6 +21,7 @@ class CategoryEntry extends Equatable {
     this.audioUrl,
     this.transcript,
     this.tags = const [],
+    this.isReviewed = false,
   });
 
   @override
@@ -32,6 +34,7 @@ class CategoryEntry extends Equatable {
     audioUrl,
     transcript,
     tags,
+    isReviewed,
   ];
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
@@ -45,6 +48,7 @@ class CategoryEntry extends Equatable {
       audioUrl: data['audioUrl'] as String?,
       transcript: data['transcript'] as String?,
       tags: (data['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+      isReviewed: data['isReviewed'] as bool? ?? false,
     );
   }
 
@@ -57,6 +61,7 @@ class CategoryEntry extends Equatable {
       if (audioUrl != null) 'audioUrl': audioUrl,
       if (transcript != null) 'transcript': transcript,
       if (tags.isNotEmpty) 'tags': tags,
+      if (isReviewed) 'isReviewed': true,
     };
   }
 }

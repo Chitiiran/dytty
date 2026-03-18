@@ -12,6 +12,7 @@ import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
+import 'package:dytty/features/category_detail/category_detail_screen.dart';
 import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/main.dart' show geminiApiKey, notificationService;
 import 'package:dytty/services/notification/notification_service.dart';
@@ -180,10 +181,14 @@ Widget _themedApp(
 }
 
 Route<dynamic>? _generateRoute(RouteSettings settings) {
+  final categoryId = settings.arguments as String?;
+
   final routes = <String, WidgetBuilder>{
     '/daily-journal': (_) => const DailyJournalScreen(),
     '/settings': (_) => const SettingsScreen(),
     '/voice-call': (_) => const VoiceCallScreen(),
+    if (categoryId != null)
+      '/category-detail': (_) => CategoryDetailScreen(categoryId: categoryId),
   };
 
   final builder = routes[settings.name];

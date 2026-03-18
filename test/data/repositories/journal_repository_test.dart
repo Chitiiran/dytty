@@ -1,5 +1,6 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
 void main() {
@@ -286,6 +287,165 @@ void main() {
 
         final settings = await repository.getUserSettings();
         expect(settings['hideEntries'], true);
+      });
+    });
+
+    group('getCategoryEntriesForDateRange', () {
+      test('returns entries grouped by date for a category', () async {
+        await repository.addCategoryEntry(
+          '2026-03-17', 'positive', 'Good day');
+        await repository.addCategoryEntry(
+          '2026-03-17', 'negative', 'Bad day');
+        await repository.addCategoryEntry(
+          '2026-03-18', 'positive', 'Another good day');
+
+        final result = await repository.getCategoryEntriesForDateRange(
+          'positive', ['2026-03-17', '2026-03-18'],
+        );
+
+        expect(result.keys, containsAll(['2026-03-17', '2026-03-18']));
+        expect(result['2026-03-17']!.length, 1);
+        expect(result['2026-03-17']!.first.text, 'Good day');
+        expect(result['2026-03-18']!.length, 1);
+        expect(result['2026-03-18']!.first.text, 'Another good day');
+      });
+
+      test('returns empty map for dates with no matching entries', () async {
+        await repository.addCategoryEntry(
+          '2026-03-17', 'negative', 'Bad day');
+
+        final result = await repository.getCategoryEntriesForDateRange(
+          'positive', ['2026-03-17'],
+        );
+
+        expect(result['2026-03-17'], isEmpty);
+      });
+
+      test('returns empty lists for dates with no entries at all', () async {
+        final result = await repository.getCategoryEntriesForDateRange(
+          'positive', ['2026-03-01'],
+        );
+
+        expect(result['2026-03-01'], isEmpty);
+      });
+
+      test('handles multiple entries same date same category', () async {
+        await repository.addCategoryEntry(
+          '2026-03-18', 'gratitude', 'First');
+        await repository.addCategoryEntry(
+          '2026-03-18', 'gratitude', 'Second');
+
+        final result = await repository.getCategoryEntriesForDateRange(
+          'gratitude', ['2026-03-18'],
+        );
+
+        expect(result['2026-03-18']!.length, 2);
+      });
+    });
+
+    group('markEntryReviewed', () {
+      test('sets isReviewed to true on an entry', () async {
+        final entry = await repository.addCategoryEntry(
+          '2026-03-18', 'positive', 'Test entry');
+
+        await repository.markEntryReviewed('2026-03-18', entry.id);
+
+        final entries = await repository.getCategoryEntries('2026-03-18');
+        expect(entries.first.isReviewed, true);
+      });
+    });
+
+    group('saveReviewSummary', () {
+      test('creates a new review summary', () async {
+        final now = DateTime(2026, 3, 18);
+        final summary = ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: 'Great week!',
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await repository.saveReviewSummary(summary);
+
+        final retrieved = await repository.getReviewSummary(
+          'positive', '2026-03-16');
+        expect(retrieved, isNotNull);
+        expect(retrieved!.summary, 'Great week!');
+        expect(retrieved.categoryId, 'positive');
+        expect(retrieved.weekStart, '2026-03-16');
+      });
+
+      test('upserts existing review summary for same category and week',
+          () async {
+        final now = DateTime(2026, 3, 18);
+        final first = ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: 'First review',
+          createdAt: now,
+          updatedAt: now,
+        );
+        await repository.saveReviewSummary(first);
+
+        final updated = ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: 'Updated review',
+          createdAt: now,
+          updatedAt: DateTime(2026, 3, 19),
+        );
+        await repository.saveReviewSummary(updated);
+
+        final retrieved = await repository.getReviewSummary(
+          'positive', '2026-03-16');
+        expect(retrieved!.summary, 'Updated review');
+
+        // Verify only one doc exists (upsert, not duplicate)
+        final allDocs = await firestore
+            .collection('users')
+            .doc('test-user')
+            .collection('reviewSummaries')
+            .where('categoryId', isEqualTo: 'positive')
+            .where('weekStart', isEqualTo: '2026-03-16')
+            .get();
+        expect(allDocs.docs.length, 1);
+      });
+    });
+
+    group('getReviewSummary', () {
+      test('returns null when no summary exists', () async {
+        final result = await repository.getReviewSummary(
+          'positive', '2026-03-16');
+        expect(result, isNull);
+      });
+
+      test('returns summary for matching category and week', () async {
+        final now = DateTime(2026, 3, 18);
+        // Add summaries for different categories
+        await repository.saveReviewSummary(ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: 'Positive review',
+          createdAt: now,
+          updatedAt: now,
+        ));
+        await repository.saveReviewSummary(ReviewSummary(
+          id: '',
+          categoryId: 'negative',
+          weekStart: '2026-03-16',
+          summary: 'Negative review',
+          createdAt: now,
+          updatedAt: now,
+        ));
+
+        final result = await repository.getReviewSummary(
+          'positive', '2026-03-16');
+        expect(result!.summary, 'Positive review');
       });
     });
 
