@@ -1,15 +1,15 @@
 # Dytty Progress
 
 ## Current Status
-**Test report upgrade (#60) complete. PR #100 open.**
+**Category Detail Page — Phases 1-4 complete on main. Phases 5-7 (embedded review call, post-call summary, polish) in progress.**
 
 **Latest on main:**
-- Category Detail Page (#71): full feature — data layer, bloc, embedded review call, post-call summary + reviewed badges, 6 widgets, route + navigation
+- Category Detail Page (#71): data layer, bloc, GeminiLiveService parameterization, edit_entry tool, full UI shell with 5 widgets, route + navigation wired
 - Version: 0.1.6+8 (distributed to testers via `scripts/distribute.sh`)
 
-**Open PRs:** #100 — test report upgrade (folder grouping, richer cards, coverage breakdown, parallel E2E)
+**Open PRs:** None
 
-**Test status:** 628 Flutter + 32 Playwright + 9 Maestro = 669 tests. Coverage: 80.7% line, 8/8 screens E2E, 14 flows. (CI gate: 50%)
+**Test status:** 609 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: ~82% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -28,7 +28,7 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 | Milestone | Status |
 |-----------|--------|
 | M0–M4 | Done |
-| M5: Weekly Review | In progress — #71 Category Detail Page (all 7 phases done, needs manual testing) |
+| M5: Weekly Review | In progress — #71 Category Detail Page (Phases 1-4 done, 5-7 remaining) |
 | M6: Categories + Polish | Data model done. UI settings page pending |
 | M7: Launch Prep | Not started |
 
@@ -46,35 +46,11 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 - **#91**: Speaker toggle icon UX
 - **#95**: Enable CI auto-distribution (infra)
 - **#48**: Golden test CI failures (cross-platform fonts)
-- Coverage at 80.7% — ahead of ratchet schedule, bump CI gate
+- Coverage at 81.7% — ahead of ratchet schedule, bump CI gate
 
 ---
 
 ## Log
-
-### 2026-03-19 (session 26)
-- **#60 Test Report Upgrade — PR #100**
-  - Report UI: boxed category cards with color-coded left borders (blue=Flutter, green=Playwright, orange=Maestro), proportional timing bars, collapsible sections, folder-grouped test suites, coverage folder rollups with zero-coverage callout, E2E screen/flow coverage checklist table
-  - Per-category metrics: duration + throughput per layer, environment badges (Flutter version, browser, device/API level)
-  - Parallel E2E: Playwright + Maestro now run concurrently (pre-build web first to avoid Flutter lock conflict)
-  - Coverage: 77.5% → 80.7% (+3.2%) via 10 new CategoryDetailScreen widget tests (screen was at 0%)
-  - E2E: 24 → 32 Playwright tests (+8: settings, voice-note, category-detail), screen coverage 6/8 → 8/8
-  - Key decisions:
-    - **Port 4200 for Playwright web server** — port 5555 collided with Android emulator adb (root cause of all Playwright timeouts when emulator was running)
-    - **Per-flow Maestro XML merge** — each `maestro test` overwrites results.xml; now writes per-flow XMLs then merges, so all 9 flows appear in report (was showing 1/1)
-    - **E2E coverage as manual checklist** — Playwright/Maestro are black-box tests with no code coverage; created `tool/screen-coverage.yaml` mapping screens/flows to spec files, report shows coverage %
-    - **Collapsible category sections** — sections collapsed by default (auto-expand on failures) to reduce visual noise; screenshots also collapsed
-    - **Pre-build web before parallel fork** — `flutter build web` locks the project, preventing Maestro APK install; building first then forking both E2E layers avoids the race
-    - **`dart_test.yaml`** — registers `golden` tag to suppress unknown tag warning
-  - 669 total tests passing, 0 failures, 5 data sources
-
-### 2026-03-18 (session 25)
-- **#71 Category Detail Page — Phases 5-7 complete (all done)**
-  - Phase 5 (Embedded Review Call): `_CategoryDetailView` converted to `StatefulWidget` with full call lifecycle (VoiceCallBloc + GeminiLiveService + AudioRecorder + AudioPlaybackService), `CallControlsOverlay` widget (mute/end/elapsed), `_CallBadge` (red during call, green with entries, grey empty), category-tinted status banner, entry dedup via `_processedEntryCount`
-  - Phase 6 (Post-Call): `_performPostCallActions()` marks all 7-day entries reviewed + generates review summary via LlmService, saves via `SaveReviewSummaryEvent`, handles empty/NoOp gracefully
-  - Phase 7 (Integration): JournalBloc sync via existing VoiceCallBloc tool call handlers, connect failure cleanup, resource teardown in dispose
-  - 619 tests passing (+10 new), 0 analysis warnings
-  - Distributed to testers
 
 ### 2026-03-18 (session 24)
 - **#71 Category Detail Page — Phases 1-4 complete**
@@ -85,6 +61,7 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
   - ADR-008 and `PLAN-071-category-detail-page.md` documented
   - Key decisions: N-query approach (1 per date, max 7) vs collection group to avoid Firestore migration, `JournalBloc.repository` getter for sibling bloc access, injectable clock on `CategoryDetailBloc`
   - 609 tests passing (+64 new), 0 analysis warnings
+- Phases 5-7 remaining: embedded review call, post-call summary + reviewed badges, integration polish
 
 ### 2026-03-17 (session 23)
 - **#51 Patrol setup — ready for closure**
