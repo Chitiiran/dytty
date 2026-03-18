@@ -1,15 +1,15 @@
 # Dytty Progress
 
 ## Current Status
-**Daily call audio + transcript fix shipped (PR #96). Build 0.1.6+8 distributed to testers. Pending manual verification on Pixel 9.**
+**Category Detail Page — Phases 1-4 complete on main. Phases 5-7 (embedded review call, post-call summary, polish) in progress.**
 
 **Latest on main:**
-- PR #96: replaced `just_audio` with `flutter_pcm_sound` for streaming PCM playback, transcript aggregation via `Transcription.finished` flag, Google Sign-In `serverClientId` fix (ADR-006)
+- Category Detail Page (#71): data layer, bloc, GeminiLiveService parameterization, edit_entry tool, full UI shell with 5 widgets, route + navigation wired
 - Version: 0.1.6+8 (distributed to testers via `scripts/distribute.sh`)
 
 **Open PRs:** None
 
-**Test status:** 545 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: 81.7% (CI gate: 50%)
+**Test status:** 609 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: ~82% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -28,7 +28,7 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 | Milestone | Status |
 |-----------|--------|
 | M0–M4 | Done |
-| M5: Weekly Review | Not started |
+| M5: Weekly Review | In progress — #71 Category Detail Page (Phases 1-4 done, 5-7 remaining) |
 | M6: Categories + Polish | Data model done. UI settings page pending |
 | M7: Launch Prep | Not started |
 
@@ -51,6 +51,17 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 ---
 
 ## Log
+
+### 2026-03-18 (session 24)
+- **#71 Category Detail Page — Phases 1-4 complete**
+  - Phase 1 (Data): `isReviewed` field on CategoryEntry (backward-compatible), `ReviewSummary` model, `review_questions.dart` (5 categories x 2 questions), 4 new repository methods (`getCategoryEntriesForDateRange`, `markEntryReviewed`, `saveReviewSummary`, `getReviewSummary`)
+  - Phase 2 (Bloc): `CategoryDetailBloc` with rolling 7-day entry loading grouped by date, collapsible groups, inline edit with optimistic updates, live entry from call, mark reviewed, injectable clock for testable dates
+  - Phase 3 (Service): Parameterized `GeminiLiveService.connect()` (custom systemPrompt + tools), public `saveEntryDeclaration`/`editEntryDeclaration`, `edit_entry` tool handling in `VoiceCallBloc`, `review_prompts.dart` for category-specific review prompts
+  - Phase 4 (UI): `CategoryDetailScreen` with `BlocProvider`, 5 widgets (header with call badge, review summary card, collapsible date group headers, inline entry tile with transcript easter egg + reviewed badge, empty state), `/category-detail` route, category icon tap navigation from ProgressCard
+  - ADR-008 and `PLAN-071-category-detail-page.md` documented
+  - Key decisions: N-query approach (1 per date, max 7) vs collection group to avoid Firestore migration, `JournalBloc.repository` getter for sibling bloc access, injectable clock on `CategoryDetailBloc`
+  - 609 tests passing (+64 new), 0 analysis warnings
+- Phases 5-7 remaining: embedded review call, post-call summary + reviewed badges, integration polish
 
 ### 2026-03-17 (session 23)
 - **#51 Patrol setup — ready for closure**
