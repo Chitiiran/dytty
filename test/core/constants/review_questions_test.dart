@@ -4,13 +4,16 @@ import 'package:dytty/core/constants/review_questions.dart';
 void main() {
   group('reviewQuestions', () {
     test('contains all 5 journal categories', () {
-      expect(reviewQuestions.keys, containsAll([
-        'positive',
-        'negative',
-        'gratitude',
-        'beauty',
-        'identity',
-      ]));
+      expect(
+        reviewQuestions.keys,
+        containsAll([
+          'positive',
+          'negative',
+          'gratitude',
+          'beauty',
+          'identity',
+        ]),
+      );
       expect(reviewQuestions.length, 5);
     });
 
@@ -27,8 +30,11 @@ void main() {
     test('all questions are non-empty strings', () {
       for (final entry in reviewQuestions.entries) {
         for (final question in entry.value) {
-          expect(question, isNotEmpty,
-              reason: '${entry.key} has an empty question');
+          expect(
+            question,
+            isNotEmpty,
+            reason: '${entry.key} has an empty question',
+          );
         }
       }
     });

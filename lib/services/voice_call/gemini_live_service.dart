@@ -81,9 +81,7 @@ class GeminiLiveService {
           speechConfig: SpeechConfig(voiceName: 'Aoede'),
         ),
         systemInstruction: Content.text(effectivePrompt),
-        tools: [
-          Tool.functionDeclarations(effectiveTools),
-        ],
+        tools: [Tool.functionDeclarations(effectiveTools)],
       );
 
       _session = await liveModel.connect().timeout(
@@ -256,9 +254,7 @@ class GeminiLiveService {
     'Edit an existing journal entry. Call this when the user wants to '
         'modify, correct, or rephrase something they previously shared.',
     parameters: {
-      'entry_id': Schema.string(
-        description: 'The ID of the entry to edit.',
-      ),
+      'entry_id': Schema.string(description: 'The ID of the entry to edit.'),
       'text': Schema.string(
         description: 'The new text for the entry, written in first person.',
       ),

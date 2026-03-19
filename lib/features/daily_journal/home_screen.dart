@@ -583,9 +583,8 @@ class _ProgressCard extends StatelessWidget {
                               size: 20,
                               color: isFilled
                                   ? cat.color
-                                  : theme.colorScheme.onSurfaceVariant.withValues(
-                                      alpha: 0.3,
-                                    ),
+                                  : theme.colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.3),
                             ),
                           ),
                           const SizedBox(height: 4),

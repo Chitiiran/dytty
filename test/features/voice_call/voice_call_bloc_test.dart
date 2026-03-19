@@ -39,9 +39,7 @@ void main() {
     registerFallbackValue(
       const AddVoiceEntry(categoryId: '', text: '', transcript: ''),
     );
-    registerFallbackValue(
-      const UpdateEntry(entryId: '', text: ''),
-    );
+    registerFallbackValue(const UpdateEntry(entryId: '', text: ''));
     registerFallbackValue(Uint8List(0));
   });
 

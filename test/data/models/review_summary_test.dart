@@ -81,8 +81,7 @@ void main() {
         'updatedAt': Timestamp.fromDate(now),
       });
 
-      final snapshot =
-          await firestore.collection('test').doc('minimal').get();
+      final snapshot = await firestore.collection('test').doc('minimal').get();
       final summary = ReviewSummary.fromFirestore(snapshot);
 
       expect(summary.audioUrl, isNull);

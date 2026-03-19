@@ -220,8 +220,10 @@ void main() {
           'isReviewed': true,
         });
 
-        final snapshot =
-            await firestore.collection('test').doc('reviewed').get();
+        final snapshot = await firestore
+            .collection('test')
+            .doc('reviewed')
+            .get();
         final entry = CategoryEntry.fromFirestore(snapshot);
 
         expect(entry.isReviewed, true);

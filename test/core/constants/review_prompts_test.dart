@@ -39,11 +39,10 @@ void main() {
         ),
       ];
 
-      final prompt = buildReviewPrompt(
-        'Positive Things',
-        ['Q1?', 'Q2?'],
-        entries,
-      );
+      final prompt = buildReviewPrompt('Positive Things', [
+        'Q1?',
+        'Q2?',
+      ], entries);
 
       expect(prompt, contains('Had a great morning run'));
       expect(prompt, contains('Got promoted at work'));

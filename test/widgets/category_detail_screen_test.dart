@@ -30,8 +30,7 @@ class MockCategoryDetailBloc
 class MockJournalBloc extends MockBloc<JournalEvent, JournalState>
     implements JournalBloc {}
 
-class MockAuthBloc extends MockBloc<AuthEvent, AuthState>
-    implements AuthBloc {}
+class MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
 
 class MockLlmService extends Mock implements LlmService {}
 
@@ -58,9 +57,7 @@ void main() {
     Widget widget, {
     CategoryDetailState? state,
   }) async {
-    when(() => mockBloc.state).thenReturn(
-      state ?? const CategoryDetailState(),
-    );
+    when(() => mockBloc.state).thenReturn(state ?? const CategoryDetailState());
     await tester.pumpWidget(
       MaterialApp(
         home: BlocProvider<CategoryDetailBloc>.value(
@@ -156,12 +153,7 @@ void main() {
     testWidgets('renders entry text', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: InlineEntryTile(
-              entry: entry,
-              isEditing: false,
-            ),
-          ),
+          home: Scaffold(body: InlineEntryTile(entry: entry, isEditing: false)),
         ),
       );
 
@@ -180,10 +172,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: InlineEntryTile(
-              entry: reviewedEntry,
-              isEditing: false,
-            ),
+            body: InlineEntryTile(entry: reviewedEntry, isEditing: false),
           ),
         ),
       );
@@ -237,10 +226,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: InlineEntryTile(
-              entry: entryWithTranscript,
-              isEditing: false,
-            ),
+            body: InlineEntryTile(entry: entryWithTranscript, isEditing: false),
           ),
         ),
       );
@@ -259,9 +245,7 @@ void main() {
     testWidgets('shows empty message with category name', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: EmptyCategoryState(categoryId: 'gratitude'),
-          ),
+          home: Scaffold(body: EmptyCategoryState(categoryId: 'gratitude')),
         ),
       );
 
@@ -284,10 +268,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ReviewSummaryCard(
-              summary: summary,
-              categoryId: 'positive',
-            ),
+            body: ReviewSummaryCard(summary: summary, categoryId: 'positive'),
           ),
         ),
       );
@@ -400,8 +381,9 @@ void main() {
       robot.expectEntryTileCount(3);
     });
 
-    testWidgets('shows review summary card when summary exists',
-        (tester) async {
+    testWidgets('shows review summary card when summary exists', (
+      tester,
+    ) async {
       final now = DateTime(2026, 3, 18);
       final state = CategoryDetailState(
         status: CategoryDetailStatus.loaded,
@@ -461,8 +443,9 @@ void main() {
       robot.expectReviewSummaryCard();
     });
 
-    testWidgets('collapsible date header hides entries when collapsed',
-        (tester) async {
+    testWidgets('collapsible date header hides entries when collapsed', (
+      tester,
+    ) async {
       final state = CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -500,10 +483,7 @@ void main() {
                   ),
                   if (!group.isCollapsed)
                     for (final entry in group.entries)
-                      InlineEntryTile(
-                        entry: entry,
-                        isEditing: false,
-                      ),
+                      InlineEntryTile(entry: entry, isEditing: false),
                 ],
               ],
             );
@@ -574,8 +554,9 @@ void main() {
       );
     }
 
-    testWidgets('shows loading indicator when status is loading',
-        (tester) async {
+    testWidgets('shows loading indicator when status is loading', (
+      tester,
+    ) async {
       // Use a repository that never completes so the bloc stays in loading
       final hangingRepo = _HangingJournalRepository();
       when(() => mockJournalBloc.repository).thenReturn(hangingRepo);
@@ -587,8 +568,9 @@ void main() {
       robot.expectLoading();
     });
 
-    testWidgets('shows empty state when loaded with no entries',
-        (tester) async {
+    testWidgets('shows empty state when loaded with no entries', (
+      tester,
+    ) async {
       await pumpScreen(tester);
       await tester.pumpAndSettle();
 
@@ -604,8 +586,9 @@ void main() {
       robot.expectCategoryName('Positive Things');
     });
 
-    testWidgets('AppBar shows correct name for gratitude category',
-        (tester) async {
+    testWidgets('AppBar shows correct name for gratitude category', (
+      tester,
+    ) async {
       await pumpScreen(tester, categoryId: 'gratitude');
       await tester.pumpAndSettle();
 
@@ -620,8 +603,9 @@ void main() {
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     });
 
-    testWidgets('shows date group headers and entries when loaded with data',
-        (tester) async {
+    testWidgets('shows date group headers and entries when loaded with data', (
+      tester,
+    ) async {
       // Pre-populate Firestore with entries for today
       await repository.addCategoryEntry(
         '2026-03-19',
@@ -669,38 +653,35 @@ void main() {
       robot.expectEntryTileCount(2);
     });
 
-    testWidgets('shows review summary card when reviewSummary is set',
-        (tester) async {
+    testWidgets('shows review summary card when reviewSummary is set', (
+      tester,
+    ) async {
       // Pre-populate an entry so the screen renders the list view
-      await repository.addCategoryEntry(
-        '2026-03-19',
-        'positive',
-        'An entry',
-      );
+      await repository.addCategoryEntry('2026-03-19', 'positive', 'An entry');
       // Save a review summary for the current week
       // 2026-03-19 is Thursday, Monday of that week is 2026-03-16
-      await repository.saveReviewSummary(ReviewSummary(
-        id: '',
-        categoryId: 'positive',
-        weekStart: '2026-03-16',
-        summary: 'A thoughtful week of reflection.',
-        createdAt: DateTime(2026, 3, 19),
-        updatedAt: DateTime(2026, 3, 19),
-      ));
+      await repository.saveReviewSummary(
+        ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: 'A thoughtful week of reflection.',
+          createdAt: DateTime(2026, 3, 19),
+          updatedAt: DateTime(2026, 3, 19),
+        ),
+      );
 
       await pumpScreen(tester);
       await tester.pumpAndSettle();
 
       robot = CategoryDetailScreenRobot(tester);
       robot.expectReviewSummaryCard();
-      expect(
-        find.text('A thoughtful week of reflection.'),
-        findsOneWidget,
-      );
+      expect(find.text('A thoughtful week of reflection.'), findsOneWidget);
     });
 
-    testWidgets('tapping a date group header dispatches ToggleDateGroup',
-        (tester) async {
+    testWidgets('tapping a date group header dispatches ToggleDateGroup', (
+      tester,
+    ) async {
       await repository.addCategoryEntry(
         '2026-03-19',
         'positive',

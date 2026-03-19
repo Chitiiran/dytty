@@ -51,18 +51,15 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
   }
 
   bool get _hasTranscript =>
-      widget.entry.transcript != null &&
-      widget.entry.transcript!.isNotEmpty;
+      widget.entry.transcript != null && widget.entry.transcript!.isNotEmpty;
 
-  String get _displayText =>
-      _showTranscript && _hasTranscript
-          ? widget.entry.transcript!
-          : widget.entry.text;
+  String get _displayText => _showTranscript && _hasTranscript
+      ? widget.entry.transcript!
+      : widget.entry.text;
 
-  IconData get _sourceIcon =>
-      widget.entry.source == 'voice'
-          ? Icons.mic_rounded
-          : Icons.edit_note_rounded;
+  IconData get _sourceIcon => widget.entry.source == 'voice'
+      ? Icons.mic_rounded
+      : Icons.edit_note_rounded;
 
   String get _relativeTime {
     final now = DateTime.now();
@@ -83,7 +80,9 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
       opacity: opacity,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: widget.isEditing ? _buildEditMode(theme) : _buildDisplayMode(theme),
+        child: widget.isEditing
+            ? _buildEditMode(theme)
+            : _buildDisplayMode(theme),
       ),
     );
   }
@@ -185,10 +184,7 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
         ),
         const SizedBox(width: 8),
         IconButton(
-          icon: Icon(
-            Icons.check_rounded,
-            color: theme.colorScheme.primary,
-          ),
+          icon: Icon(Icons.check_rounded, color: theme.colorScheme.primary),
           tooltip: 'Save edit',
           onPressed: () {
             final text = _editController.text.trim();
@@ -199,10 +195,7 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
           visualDensity: VisualDensity.compact,
         ),
         IconButton(
-          icon: Icon(
-            Icons.close_rounded,
-            color: theme.colorScheme.error,
-          ),
+          icon: Icon(Icons.close_rounded, color: theme.colorScheme.error),
           tooltip: 'Cancel edit',
           onPressed: widget.onCancelEdit,
           visualDensity: VisualDensity.compact,
