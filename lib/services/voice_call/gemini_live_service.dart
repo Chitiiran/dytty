@@ -23,7 +23,7 @@ class Transcript {
 ///
 /// Manages session lifecycle, audio I/O, tool calling, and latency tracking.
 class GeminiLiveService {
-  static const _model = 'gemini-2.5-flash-native-audio-preview-12-2025';
+  static const _model = 'gemini-2.5-flash-preview-native-audio';
 
   /// Connection timeout for the initial Gemini Live session.
   static const connectionTimeout = Duration(seconds: 15);

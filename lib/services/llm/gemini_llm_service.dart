@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:firebase_ai/firebase_ai.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// Strips markdown code fences from LLM JSON responses.
@@ -18,8 +18,10 @@ String extractJson(String text) {
 class GeminiLlmService implements LlmService {
   late final GenerativeModel _model;
 
-  GeminiLlmService({required String apiKey}) {
-    _model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
+  static const _modelName = 'gemini-2.5-flash';
+
+  GeminiLlmService() {
+    _model = FirebaseAI.googleAI().generativeModel(model: _modelName);
   }
 
   @override

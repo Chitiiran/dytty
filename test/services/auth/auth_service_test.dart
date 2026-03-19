@@ -73,13 +73,11 @@ void main() {
       final mockGoogleAuth = MockGoogleSignInAuthentication();
       final mockCredential = MockUserCredential();
 
+      when(() => mockGoogleSignIn.supportsAuthenticate()).thenReturn(true);
       when(
-        () => mockGoogleSignIn.signIn(),
+        () => mockGoogleSignIn.authenticate(),
       ).thenAnswer((_) async => mockAccount);
-      when(
-        () => mockAccount.authentication,
-      ).thenAnswer((_) async => mockGoogleAuth);
-      when(() => mockGoogleAuth.accessToken).thenReturn('access-token');
+      when(() => mockAccount.authentication).thenReturn(mockGoogleAuth);
       when(() => mockGoogleAuth.idToken).thenReturn('id-token');
       when(
         () => mockAuth.signInWithCredential(any()),
@@ -88,12 +86,12 @@ void main() {
       final result = await service.signInWithGoogle();
 
       expect(result, equals(mockCredential));
-      verify(() => mockGoogleSignIn.signIn()).called(1);
+      verify(() => mockGoogleSignIn.authenticate()).called(1);
       verify(() => mockAuth.signInWithCredential(any())).called(1);
     });
 
-    test('throws when Google Sign-In is cancelled', () async {
-      when(() => mockGoogleSignIn.signIn()).thenAnswer((_) async => null);
+    test('throws when platform does not support authenticate', () async {
+      when(() => mockGoogleSignIn.supportsAuthenticate()).thenReturn(false);
 
       expect(
         () => service.signInWithGoogle(),
@@ -101,7 +99,25 @@ void main() {
           isA<Exception>().having(
             (e) => e.toString(),
             'message',
-            contains('Google Sign-In was cancelled'),
+            contains('not supported'),
+          ),
+        ),
+      );
+    });
+
+    test('throws when authenticate fails', () async {
+      when(() => mockGoogleSignIn.supportsAuthenticate()).thenReturn(true);
+      when(
+        () => mockGoogleSignIn.authenticate(),
+      ).thenThrow(Exception('authenticate failed'));
+
+      expect(
+        () => service.signInWithGoogle(),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('authenticate failed'),
           ),
         ),
       );
@@ -125,7 +141,7 @@ void main() {
   group('AuthService.signOut', () {
     test('signs out of both Firebase and Google', () async {
       when(() => mockAuth.signOut()).thenAnswer((_) async {});
-      when(() => mockGoogleSignIn.signOut()).thenAnswer((_) async => null);
+      when(() => mockGoogleSignIn.signOut()).thenAnswer((_) async {});
 
       await service.signOut();
 
