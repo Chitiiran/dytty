@@ -15,16 +15,20 @@ android/app/google-services.json
 
 # Node.js (Playwright E2E tests)
 node_modules/
-test-results/
-playwright-report/
 
-# Test report artifacts
-test-results.json
-test-report.html
+# Unified test output (all layers, timestamped runs)
+test-output/
 
-# Maestro E2E test output
+# Maestro E2E test output (standalone runs)
 .maestro/screenshots/
 maestro-output/
+
+# Legacy test artifacts (migration period)
+test-results/
+playwright-report/
+test-results.json
+test-report.html
+playwright-results.json
 
 # Miscellaneous
 *.class

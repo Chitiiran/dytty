@@ -65,7 +65,7 @@ flutter test --coverage               # With coverage report
 
 ### Unit Test Gotchas & Lessons Learned
 
-1. **`FakeFirebaseFirestore` does not enforce security rules** — Your tests will pass even if Firestore rules would block the operation in production. Test rules separately or accept this gap.
+1. **`FakeFirebaseFirestore` does not enforce security rules or composite indexes** — Your tests will pass even if Firestore rules would block the operation in production, and queries that require composite indexes will succeed without them. Firebase emulators also skip index enforcement. The only way to catch missing indexes is to test against real Firestore. **Mitigation:** whenever you add a query with `.where() + .orderBy()` or multiple `.where()` clauses, update `firestore.indexes.json` and deploy with `firebase deploy --only firestore:indexes`.
 
 2. **`blocTest` runs events synchronously by default** — If your Bloc uses `await` in event handlers, use `wait: Duration(...)` or the `build`/`act`/`expect` pattern carefully. Missing `wait` leads to flaky tests that pass locally but fail in CI.
 
@@ -696,6 +696,7 @@ Branch protection on `main` requires "Analyze, Test & Build" to pass.
 - [ ] Unit tests for Bloc events/states
 - [ ] Unit tests for repository methods (if new)
 - [ ] Unit tests for model serialization (if new model)
+- [ ] Firestore composite indexes updated in `firestore.indexes.json` (if new compound queries added) and deployed with `firebase deploy --only firestore:indexes`
 - [ ] Widget tests with Robot pattern for new screens/widgets
 - [ ] Golden tests for key visual states
 - [ ] Playwright E2E if the feature involves cross-screen state changes (web)

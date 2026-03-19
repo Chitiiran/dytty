@@ -26,8 +26,15 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos lib test
 
+      - name: Create test output directory
+        run: mkdir -p test-output/latest/flutter
+
       - name: Test with coverage
-        run: flutter test --coverage --exclude-tags=golden --machine > test-results.json
+        run: flutter test --coverage --exclude-tags=golden --machine > test-output/latest/flutter/results.json
+
+      - name: Copy coverage data
+        if: always()
+        run: cp coverage/lcov.info test-output/latest/flutter/lcov.info 2>/dev/null || true
 
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
@@ -36,14 +43,14 @@ jobs:
 
       - name: Generate test report
         if: always()
-        run: dart run tool/test_report.dart
+        run: dart run tool/test_report.dart --run-dir test-output/latest
 
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: test-report.html
+          path: test-output/latest/report.html
           retention-days: 14
 
       - name: Build web
@@ -168,13 +175,13 @@ jobs:
           disable-animations: true
           script: |
             adb install build/app/outputs/flutter-apk/app-debug.apk
-            mkdir -p maestro-output
-            maestro test --debug-output maestro-output --format junit --output maestro-output/results.xml --include-tags=smoke,state .maestro/
+            mkdir -p test-output/latest/device-e2e/maestro
+            maestro test --debug-output test-output/latest/device-e2e/maestro --format junit --output test-output/latest/device-e2e/maestro/results.xml --include-tags=smoke,state .maestro/
 
       - name: Upload Maestro screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: maestro-screenshots
-          path: maestro-output/
+          path: test-output/latest/device-e2e/maestro/
           retention-days: 14

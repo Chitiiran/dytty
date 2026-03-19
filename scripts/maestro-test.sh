@@ -17,7 +17,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAESTRO_DIR="$PROJECT_DIR/.maestro"
-SCREENSHOT_DIR="$PROJECT_DIR/.maestro/screenshots/latest"
+DEFAULT_SCREENSHOT_DIR="$PROJECT_DIR/.maestro/screenshots/latest"
+SCREENSHOT_DIR="$DEFAULT_SCREENSHOT_DIR"
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 
 # Parse arguments
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
     --skip-build)
       SKIP_BUILD=true
       shift
+      ;;
+    --output-dir)
+      SCREENSHOT_DIR="$2"
+      shift 2
       ;;
     *)
       echo "Unknown option: $1"
