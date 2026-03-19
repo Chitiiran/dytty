@@ -12,9 +12,7 @@ extension AnimatedPump on WidgetTester {
   /// animations (pulse, shimmer, orbit) or physics-based animations.
   ///
   /// Default 500ms is enough for most enter/exit transitions.
-  Future<void> pumpFor({
-    Duration duration = const Duration(milliseconds: 500),
-  }) async {
+  Future<void> pumpFor({Duration duration = const Duration(milliseconds: 500)}) async {
     await pump(duration);
     await pump();
   }
