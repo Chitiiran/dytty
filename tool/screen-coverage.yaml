@@ -1,0 +1,130 @@
+# Screen/Flow E2E Coverage Checklist
+# Maps app screens and user flows to their E2E test coverage.
+# Update this file when adding new screens or E2E tests.
+#
+# Fields:
+#   id:         unique identifier
+#   name:       human-readable name
+#   path:       source file (screens only, for reference)
+#   playwright: Playwright spec file that covers this, or null
+#   maestro:    Maestro flow file that covers this, or null
+
+screens:
+  - id: login
+    name: Login Screen
+    path: lib/features/auth/login_screen.dart
+    playwright: e2e/auth.spec.ts
+    maestro: .maestro/auth/login-flow.yaml
+
+  - id: home
+    name: Home Screen (Dashboard)
+    path: lib/features/daily_journal/home_screen.dart
+    playwright: e2e/home-state.spec.ts
+    maestro: .maestro/journal/dashboard-flow.yaml
+
+  - id: daily-journal
+    name: Daily Journal Screen
+    path: lib/features/daily_journal/daily_journal_screen.dart
+    playwright: e2e/journal.spec.ts
+    maestro: .maestro/journal/add-entry-flow.yaml
+
+  - id: settings
+    name: Settings Screen
+    path: lib/features/settings/settings_screen.dart
+    playwright: e2e/settings.spec.ts
+    maestro: null
+
+  - id: voice-call
+    name: Voice Call Screen
+    path: lib/features/voice_call/voice_call_screen.dart
+    playwright: e2e/voice-call.spec.ts
+    maestro: null
+
+  - id: category-detail
+    name: Category Detail Screen
+    path: lib/features/category_detail/category_detail_screen.dart
+    playwright: e2e/category-detail.spec.ts
+    maestro: null
+
+  - id: voice-note-sheet
+    name: Voice Recording Sheet
+    path: lib/features/voice_note/widgets/voice_recording_sheet.dart
+    playwright: e2e/voice-note.spec.ts
+    maestro: null
+
+  - id: entry-bottom-sheet
+    name: Entry Bottom Sheet
+    path: lib/features/daily_journal/widgets/entry_bottom_sheet.dart
+    playwright: e2e/journal.spec.ts
+    maestro: .maestro/journal/add-entry-flow.yaml
+
+flows:
+  - id: auth-login
+    name: Login Flow
+    playwright: e2e/auth.spec.ts
+    maestro: .maestro/auth/login-flow.yaml
+
+  - id: auth-logout
+    name: Logout Flow
+    playwright: e2e/auth.spec.ts
+    maestro: .maestro/auth/logout-flow.yaml
+
+  - id: journal-add
+    name: Add Journal Entry
+    playwright: e2e/journal.spec.ts
+    maestro: .maestro/journal/add-entry-flow.yaml
+
+  - id: journal-edit
+    name: Edit Journal Entry
+    playwright: e2e/journal.spec.ts
+    maestro: null
+
+  - id: journal-delete
+    name: Delete Journal Entry
+    playwright: e2e/journal.spec.ts
+    maestro: null
+
+  - id: journal-navigate-days
+    name: Navigate Between Days
+    playwright: e2e/journal.spec.ts
+    maestro: .maestro/journal/navigate-days-flow.yaml
+
+  - id: state-nudge
+    name: Nudge Disappears After Entry
+    playwright: e2e/home-state.spec.ts
+    maestro: .maestro/state/nudge-disappears-after-entry.yaml
+
+  - id: state-progress
+    name: Progress Updates After Entry
+    playwright: e2e/home-state.spec.ts
+    maestro: .maestro/state/progress-updates-after-entry.yaml
+
+  - id: state-streak
+    name: Streak Updates After Entry
+    playwright: e2e/home-state.spec.ts
+    maestro: .maestro/state/streak-updates-after-entry.yaml
+
+  - id: state-all-complete
+    name: All Categories Complete
+    playwright: null
+    maestro: .maestro/state/all-categories-complete.yaml
+
+  - id: voice-call-navigate
+    name: Navigate to Voice Call
+    playwright: e2e/voice-call.spec.ts
+    maestro: null
+
+  - id: category-detail-navigate
+    name: Navigate to Category Detail
+    playwright: e2e/category-detail.spec.ts
+    maestro: null
+
+  - id: category-detail-empty-state
+    name: Category Detail Empty State
+    playwright: e2e/category-detail.spec.ts
+    maestro: null
+
+  - id: category-detail-entries
+    name: Category Detail Shows Entries
+    playwright: e2e/category-detail.spec.ts
+    maestro: null

@@ -42,6 +42,11 @@ if [[ "$RUN_ALL" == true ]]; then
   RUN_MAESTRO=true
 fi
 
+# Add Android SDK tools to PATH if available
+if [[ -d "$LOCALAPPDATA/Android/Sdk/platform-tools" ]]; then
+  export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+fi
+
 # Generate Windows-safe timestamp (no colons)
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H%M%S")
 RUN_DIR="$OUTPUT_BASE/runs/$TIMESTAMP"
@@ -77,6 +82,11 @@ if [[ "$RUN_FLUTTER" == true ]]; then
   echo ""
   echo "=== Flutter tests ==="
   cd "$PROJECT_DIR"
+  # Record environment metadata
+  FLUTTER_VER=$(flutter --version --machine 2>/dev/null | grep 'frameworkVersion' | grep -o '"[0-9][^"]*"' | tr -d '"' || echo "unknown")
+  DART_VER=$(dart --version 2>&1 | grep -oP 'Dart SDK version: \K[^ ]+' || echo "unknown")
+  echo "{\"platform\":\"$(uname -s)\",\"flutter\":\"$FLUTTER_VER\",\"dart\":\"$DART_VER\"}" > "$RUN_DIR/flutter/env.json"
+
   if flutter test --coverage --machine > "$RUN_DIR/flutter/results.json" 2>"$RUN_DIR/flutter/stderr.log"; then
     echo "  Flutter tests passed"
   else
@@ -90,28 +100,72 @@ if [[ "$RUN_FLUTTER" == true ]]; then
   fi
 fi
 
-# --- Playwright ---
+# --- Playwright & Maestro (parallel after web build completes) ---
+PW_PID=""
+MAESTRO_PID=""
+
+# Pre-build web app if Playwright is enabled, so the build lock is released
+# before Maestro tries to install/launch the Android app.
 if [[ "$RUN_PLAYWRIGHT" == true ]]; then
   echo ""
-  echo "=== Playwright tests ==="
+  echo "=== Building web app for Playwright ==="
   cd "$PROJECT_DIR"
-  if npx playwright test 2>&1; then
-    echo "  Playwright tests passed"
-  else
-    echo "  Playwright tests had failures"
+  source .env 2>/dev/null || true
+  flutter build web --no-tree-shake-icons \
+    --dart-define=USE_EMULATORS=true \
+    --dart-define=FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}" 2>&1 | tail -3
+fi
+
+# Now launch both E2E layers in parallel
+if [[ "$RUN_PLAYWRIGHT" == true ]]; then
+  (
+    echo ""
+    echo "=== Playwright tests ==="
+    cd "$PROJECT_DIR"
+    if npx playwright test 2>&1; then
+      echo "  Playwright tests passed"
+    else
+      echo "  Playwright tests had failures"
+      exit 1
+    fi
+    # Extract browser info from results
+    if [[ -f "$RUN_DIR/playwright/results.json" ]]; then
+      BROWSER=$(node -e "const r=require('./$RUN_DIR/playwright/results.json'); console.log(r.config?.projects?.[0]?.name || 'chromium')" 2>/dev/null || echo "chromium")
+      echo "{\"browser\":\"$BROWSER\",\"platform\":\"$(uname -s)\"}" > "$RUN_DIR/playwright/env.json"
+    fi
+  ) &
+  PW_PID=$!
+fi
+
+if [[ "$RUN_MAESTRO" == true ]]; then
+  (
+    echo ""
+    echo "=== Maestro tests ==="
+    cd "$PROJECT_DIR"
+    # Record device info
+    DEVICE_NAME=$(adb shell getprop ro.product.model 2>/dev/null | tr -d '\r' || echo "unknown")
+    DEVICE_SDK=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || echo "unknown")
+    DEVICE_SERIAL=$(adb get-serialno 2>/dev/null | tr -d '\r' || echo "unknown")
+    echo "{\"device\":\"$DEVICE_NAME\",\"sdk\":\"$DEVICE_SDK\",\"serial\":\"$DEVICE_SERIAL\",\"platform\":\"android\"}" > "$RUN_DIR/device-e2e/maestro/env.json"
+
+    if bash scripts/maestro-test.sh --output-dir "$RUN_DIR/device-e2e/maestro" --skip-build 2>&1; then
+      echo "  Maestro tests completed"
+    else
+      echo "  Maestro tests had failures"
+      exit 1
+    fi
+  ) &
+  MAESTRO_PID=$!
+fi
+
+# Wait for E2E layers to finish
+if [[ -n "$PW_PID" ]]; then
+  if ! wait "$PW_PID"; then
     FAILURES=$((FAILURES + 1))
   fi
 fi
-
-# --- Maestro ---
-if [[ "$RUN_MAESTRO" == true ]]; then
-  echo ""
-  echo "=== Maestro tests ==="
-  cd "$PROJECT_DIR"
-  if bash scripts/maestro-test.sh --output-dir "$RUN_DIR/device-e2e/maestro" --skip-build 2>&1; then
-    echo "  Maestro tests completed"
-  else
-    echo "  Maestro tests had failures"
+if [[ -n "$MAESTRO_PID" ]]; then
+  if ! wait "$MAESTRO_PID"; then
     FAILURES=$((FAILURES + 1))
   fi
 fi

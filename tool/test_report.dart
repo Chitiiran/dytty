@@ -35,6 +35,10 @@ void main(List<String> args) {
   final String maestroDir;
   final String playwrightScreenshotDir;
 
+  final String flutterEnvPath;
+  final String playwrightEnvPath;
+  final String maestroEnvPath;
+
   if (runDir != null) {
     inputPath = filteredArgs.isNotEmpty ? filteredArgs[0] : '$runDir/flutter/results.json';
     outputPath = filteredArgs.length > 1 ? filteredArgs[1] : '$runDir/report.html';
@@ -42,6 +46,9 @@ void main(List<String> args) {
     playwrightPath = '$runDir/playwright/results.json';
     maestroDir = '$runDir/device-e2e/maestro';
     playwrightScreenshotDir = '$runDir/playwright/screenshots';
+    flutterEnvPath = '$runDir/flutter/env.json';
+    playwrightEnvPath = '$runDir/playwright/env.json';
+    maestroEnvPath = '$runDir/device-e2e/maestro/env.json';
   } else {
     inputPath = filteredArgs.isNotEmpty ? filteredArgs[0] : 'test-results.json';
     outputPath = filteredArgs.length > 1 ? filteredArgs[1] : 'test-report.html';
@@ -49,17 +56,22 @@ void main(List<String> args) {
     playwrightPath = 'playwright-results.json';
     maestroDir = '.maestro/screenshots/latest';
     playwrightScreenshotDir = 'test-results';
+    flutterEnvPath = '';
+    playwrightEnvPath = '';
+    maestroEnvPath = '';
   }
 
   // --- Parse all data sources ---
-  final flutterSuites = _parseFlutterResults(inputPath);
+  final flutterResults = _parseFlutterResults(inputPath);
+  final flutterSuites = flutterResults.suites;
   final covFiles = _parseLcov(covPath);
-  final playwrightSuites = _parsePlaywrightResults(playwrightPath);
-  final maestroResult = _parseMaestroResults(maestroDir);
+  final playwrightResults = _parsePlaywrightResults(playwrightPath);
+  final maestroResults = _parseMaestroResults(maestroDir);
   final maestroScreenshots =
       noScreenshots ? <_Screenshot>[] : _collectScreenshots(maestroDir);
   final playwrightScreenshots =
       noScreenshots ? <_Screenshot>[] : _collectScreenshots(playwrightScreenshotDir);
+  final e2eCoverage = _parseScreenCoverage('tool/screen-coverage.yaml');
 
   // --- Categorize Flutter suites ---
   final unitSuites = <String, List<_Test>>{};
@@ -77,16 +89,21 @@ void main(List<String> args) {
     }
   }
 
+  // --- Read environment metadata ---
+  final flutterEnv = _readEnvLabel(flutterEnvPath);
+  final playwrightEnv = _readEnvLabel(playwrightEnvPath);
+  final maestroEnv = _readEnvLabel(maestroEnvPath);
+
   // --- Build category stats ---
   final categories = <_Category>[
     _buildCategory('Unit Tests', 'unit', unitSuites,
-        'flutter test --machine > test-results.json'),
+        'flutter test --machine > test-results.json', flutterEnv),
     _buildCategory('Widget Tests', 'widget', widgetSuites,
-        'flutter test test/widgets/ --machine > test-results.json'),
+        'flutter test test/widgets/ --machine > test-results.json', flutterEnv),
     _buildCategory('Golden Tests', 'golden', goldenSuites,
-        'flutter test test/goldens/ --machine > test-results.json'),
-    _buildPlaywrightCategory(playwrightSuites, playwrightScreenshots),
-    _buildMaestroCategory(maestroResult, maestroScreenshots),
+        'flutter test test/goldens/ --machine > test-results.json', flutterEnv),
+    _buildPlaywrightCategory(playwrightResults, playwrightScreenshots, playwrightEnv),
+    _buildMaestroCategory(maestroResults, maestroScreenshots, maestroEnv),
   ];
 
   // --- Overall stats ---
@@ -140,83 +157,133 @@ void main(List<String> args) {
     buf.writeln(
       '<div class="card"><div class="num" style="color:$cc">'
       '${covPct.toStringAsFixed(1)}%</div>'
-      '<div class="label">Coverage</div></div>',
+      '<div class="label">Line Coverage</div></div>',
     );
+  }
+  if (e2eCoverage.screens.isNotEmpty) {
+    final covScreens = e2eCoverage.screens.where((s) => s.hasCoverage).length;
+    final screenPct = covScreens / e2eCoverage.screens.length * 100;
+    final sc = _pctColor(screenPct);
+    buf.writeln(
+      '<div class="card"><div class="num" style="color:$sc">'
+      '${screenPct.toStringAsFixed(0)}%</div>'
+      '<div class="label">Screen E2E</div></div>',
+    );
+  }
+  if (e2eCoverage.flows.isNotEmpty) {
+    final covFlows = e2eCoverage.flows.where((f) => f.hasCoverage).length;
+    final flowPct = covFlows / e2eCoverage.flows.length * 100;
+    final fc = _pctColor(flowPct);
+    buf.writeln(
+      '<div class="card"><div class="num" style="color:$fc">'
+      '${flowPct.toStringAsFixed(0)}%</div>'
+      '<div class="label">Flow E2E</div></div>',
+    );
+  }
+  final totalDurationMs = categories.fold<int>(0, (s, c) => s + c.durationMs);
+  if (totalDurationMs > 0) {
+    buf.writeln(
+      '<div class="card"><div class="num">'
+      '${_formatDuration(totalDurationMs)}</div>'
+      '<div class="label">Duration</div></div>',
+    );
+    if (totalTests > 0) {
+      final throughput = totalTests / (totalDurationMs / 1000);
+      buf.writeln(
+        '<div class="card"><div class="num">'
+        '${throughput.toStringAsFixed(1)}/s</div>'
+        '<div class="label">Throughput</div></div>',
+      );
+    }
   }
   buf.writeln('</div>');
 
-  // Category summary cards (clickable)
-  buf.writeln('<div class="summary">');
+  // Category summary cards (boxed with timing bars)
+  final maxDur = categories.fold<int>(0, (m, c) => c.durationMs > m ? c.durationMs : m);
+  buf.writeln('<div class="cat-grid">');
   for (final c in categories) {
     final cls = c.failed > 0
         ? 'fail'
         : c.total == 0
             ? 'muted'
             : 'pass';
+    final layerColor = _layerColor(c.id);
+    final durStr = c.durationMs > 0 ? _formatDuration(c.durationMs) : '';
+    final barPct = maxDur > 0 && c.durationMs > 0
+        ? (c.durationMs / maxDur * 100).clamp(0, 100)
+        : 0.0;
+    final envStr = c.environment.isNotEmpty
+        ? '<div class="cat-env">${_esc(c.environment)}</div>'
+        : '';
+
     buf.writeln(
-      '<a href="#${c.id}" class="card cat-card $cls" style="text-decoration:none;color:inherit">'
-      '<div class="num">${c.total > 0 ? '${c.passed}/${c.total}' : '--'}</div>'
-      '<div class="label">${_esc(c.name)}</div></a>',
+      '<a href="#${c.id}" class="cat-box $cls" style="border-left:4px solid $layerColor;text-decoration:none;color:inherit">'
+      '<div class="cat-box-top">'
+      '<div class="cat-box-num">${c.total > 0 ? '${c.passed}/${c.total}' : '--'}</div>'
+      '<div class="cat-box-name">${_esc(c.name)}</div>'
+      '</div>',
     );
+    if (durStr.isNotEmpty) {
+      buf.writeln(
+        '<div class="cat-box-dur">'
+        '<div class="dur-bar"><div class="dur-fill" style="width:${barPct.toStringAsFixed(0)}%;background:$layerColor"></div></div>'
+        '<span class="dur-label">$durStr</span>'
+        '</div>',
+      );
+    }
+    if (envStr.isNotEmpty) buf.writeln(envStr);
+    buf.writeln('</a>');
   }
   buf.writeln('</div>');
 
-  // Category sections
+  // Category sections (collapsible)
   for (final c in categories) {
-    buf.writeln('<h2 id="${c.id}">${_esc(c.name)}</h2>');
+    final secDur = c.durationMs > 0 ? ' — ${_formatDuration(c.durationMs)}' : '';
+    final secEnv = c.environment.isNotEmpty
+        ? ' <span class="env-badge">${_esc(c.environment)}</span>'
+        : '';
+    final hasFails = c.failed > 0;
+    final hasData = c.total > 0 || c.screenshots.isNotEmpty;
 
-    if (c.total == 0 && c.screenshots.isEmpty) {
+    if (!hasData) {
+      buf.writeln('<h2 id="${c.id}">${_esc(c.name)}$secDur$secEnv</h2>');
       buf.writeln(
         '<div class="no-data">No data available. Run: <code>${_esc(c.generateCmd)}</code></div>',
       );
       continue;
     }
 
-    // Test suites
-    for (final suitePath in c.suiteKeys) {
-      final suiteTests = c.suites[suitePath]!;
-      final sp = suiteTests.where((t) => t.result == 'success').length;
-      final sf = suiteTests.where((t) => t.result == 'failure').length;
-      final shortPath = _shortenPath(suitePath);
-      final hasFails = sf > 0;
+    // Collapsible section — auto-expand if failures
+    buf.writeln('<details class="cat-section"${hasFails ? ' open' : ''}>');
+    buf.writeln(
+      '<summary><h2 id="${c.id}" class="cat-section-header">'
+      '${_esc(c.name)}$secDur$secEnv</h2></summary>',
+    );
 
-      buf.writeln('<details class="suite"${hasFails ? ' open' : ''}>');
-      buf.writeln(
-        '<summary class="suite-header"><span>${_esc(shortPath)}</span>'
-        '<span class="counts">$sp/${suiteTests.length} passed</span></summary>',
-      );
-
-      for (final t in suiteTests) {
-        final cls = t.result == 'success' ? 'pass' : 'fail';
-        final icon = t.result == 'success' ? '&#10003;' : '&#10007;';
-        final timeStr = t.time > 0 ? '${t.time}ms' : '';
-        buf.writeln(
-          '<div class="test $cls"><span class="icon">$icon</span>'
-          '<span class="name">${_esc(t.name)}</span>'
-          '<span class="time">$timeStr</span></div>',
-        );
-        if (t.error != null && t.error!.isNotEmpty) {
-          buf.writeln('<div class="error">${_esc(t.error!)}</div>');
-        }
-      }
-      buf.writeln('</details>');
+    // Test suites — folder-grouped for Flutter, flat for others
+    final isFlutter = const ['unit', 'widget', 'golden'].contains(c.id);
+    if (isFlutter && c.suiteKeys.length > 1) {
+      _writeFolderGroupedSuites(buf, c);
+    } else {
+      _writeFlatSuites(buf, c);
     }
 
-    // Screenshots for Maestro
+    // Screenshots (collapsed by default)
     if (c.screenshots.isNotEmpty) {
       final grouped = <String, List<_Screenshot>>{};
       for (final s in c.screenshots) {
         grouped.putIfAbsent(s.folder, () => []).add(s);
       }
       final folders = grouped.keys.toList()..sort();
+      final totalScreenshots = c.screenshots.length;
 
-      buf.writeln('<h3 style="margin-top:16px">Screenshots</h3>');
+      buf.writeln('<details class="suite">');
+      buf.writeln(
+        '<summary class="suite-header"><span>Screenshots</span>'
+        '<span class="counts">$totalScreenshots screenshots</span></summary>',
+      );
       for (final folder in folders) {
-        buf.writeln('<details class="suite" open>');
-        buf.writeln(
-          '<summary class="suite-header"><span>$folder/</span>'
-          '<span class="counts">${grouped[folder]!.length} screenshots</span></summary>',
-        );
+        buf.writeln('<div class="screenshot-folder-label">${_esc(folder)}/</div>');
         buf.writeln('<div class="screenshot-grid">');
         for (final s in grouped[folder]!) {
           buf.writeln(
@@ -225,9 +292,17 @@ void main(List<String> args) {
             '<div class="screenshot-label">${_esc(s.name)}</div></div>',
           );
         }
-        buf.writeln('</div></details>');
+        buf.writeln('</div>');
       }
+      buf.writeln('</details>');
     }
+
+    buf.writeln('</details>');
+  }
+
+  // E2E screen/flow coverage
+  if (e2eCoverage.screens.isNotEmpty || e2eCoverage.flows.isNotEmpty) {
+    _writeE2eCoverage(buf, e2eCoverage);
   }
 
   // Coverage by file
@@ -242,26 +317,62 @@ void main(List<String> args) {
     );
     buf.writeln('</div>');
 
-    covFiles.sort((a, b) => a.pct.compareTo(b.pct));
-    buf.writeln('<details class="suite" open>');
-    buf.writeln(
-      '<summary class="suite-header"><span>Coverage by file</span>'
-      '<span class="counts">${covFiles.length} files</span></summary>',
-    );
-    for (final f in covFiles) {
-      final pctStr = f.pct.toStringAsFixed(0);
-      final barColor = _pctColor(f.pct);
-      buf.writeln('<div class="cov-row">');
-      buf.writeln('<span class="file">${_esc(f.path)}</span>');
-      buf.writeln(
-        '<div class="coverage-bar"><div class="fill" '
-        'style="width:${f.pct.clamp(0, 100)}%;background:$barColor"></div></div>',
-      );
-      buf.writeln('<span class="pct" style="color:$barColor">$pctStr%</span>');
-      buf.writeln('<span class="ratio">${f.hit}/${f.total}</span>');
-      buf.writeln('</div>');
+    // Zero-coverage callout
+    final zeroCov = covFiles.where((f) => f.pct == 0).toList();
+    if (zeroCov.isNotEmpty) {
+      buf.writeln('<div class="zero-cov-callout">');
+      buf.writeln('<strong>0% coverage (${zeroCov.length} files)</strong>');
+      buf.writeln('<ul>');
+      for (final f in zeroCov) {
+        final name = f.path.split('/').last;
+        buf.writeln('<li><code>${_esc(name)}</code> — ${f.total} lines</li>');
+      }
+      buf.writeln('</ul></div>');
     }
-    buf.writeln('</details>');
+
+    // Group coverage by folder
+    covFiles.sort((a, b) => a.pct.compareTo(b.pct));
+    final covFolders = <String, List<_CovFile>>{};
+    for (final f in covFiles) {
+      final parts = f.path.split('/');
+      final folder = parts.length > 2
+          ? parts.sublist(0, parts.length - 1).join('/')
+          : 'lib';
+      covFolders.putIfAbsent(folder, () => []).add(f);
+    }
+
+    final covFolderKeys = covFolders.keys.toList()..sort();
+    for (final folder in covFolderKeys) {
+      final files = covFolders[folder]!;
+      var fHit = 0, fTotal = 0;
+      for (final f in files) {
+        fHit += f.hit;
+        fTotal += f.total;
+      }
+      final fPct = fTotal > 0 ? (fHit / fTotal * 100) : 0.0;
+      final fColor = _pctColor(fPct);
+      final autoOpen = fPct < 50;
+
+      buf.writeln('<details class="suite folder-group"${autoOpen ? ' open' : ''}>');
+      buf.writeln(
+        '<summary class="suite-header folder-header"><span>${_esc(folder)}/</span>'
+        '<span class="counts" style="color:$fColor">${fPct.toStringAsFixed(0)}% — ${files.length} files</span></summary>',
+      );
+      for (final f in files) {
+        final pctStr = f.pct.toStringAsFixed(0);
+        final barColor = _pctColor(f.pct);
+        buf.writeln('<div class="cov-row">');
+        buf.writeln('<span class="file">${_esc(f.path.split('/').last)}</span>');
+        buf.writeln(
+          '<div class="coverage-bar"><div class="fill" '
+          'style="width:${f.pct.clamp(0, 100)}%;background:$barColor"></div></div>',
+        );
+        buf.writeln('<span class="pct" style="color:$barColor">$pctStr%</span>');
+        buf.writeln('<span class="ratio">${f.hit}/${f.total}</span>');
+        buf.writeln('</div>');
+      }
+      buf.writeln('</details>');
+    }
   }
 
   buf.writeln('</body></html>');
@@ -290,6 +401,20 @@ class _Test {
   String? stackTrace;
 }
 
+class _FlutterResults {
+  _FlutterResults(this.suites, this.durationMs);
+
+  final Map<String, List<_Test>> suites;
+  final int durationMs;
+}
+
+class _ParsedResults {
+  _ParsedResults(this.suites, this.durationMs);
+
+  final Map<String, List<_Test>> suites;
+  final int durationMs;
+}
+
 class _CovFile {
   _CovFile(this.path, this.hit, this.total);
 
@@ -314,6 +439,8 @@ class _Category {
     required this.suites,
     required this.generateCmd,
     this.screenshots = const [],
+    this.durationMs = 0,
+    this.environment = '',
   });
 
   final String name;
@@ -321,6 +448,8 @@ class _Category {
   final Map<String, List<_Test>> suites;
   final String generateCmd;
   final List<_Screenshot> screenshots;
+  final int durationMs;
+  final String environment;
 
   late final suiteKeys = suites.keys.toList()..sort();
   late final total = suites.values.fold<int>(0, (s, v) => s + v.length);
@@ -332,11 +461,38 @@ class _Category {
       suites.values.fold<int>(0, (s, v) => s + v.where((t) => t.skipped).length);
 }
 
+class _E2eItem {
+  _E2eItem({
+    required this.id,
+    required this.name,
+    this.path,
+    this.playwright,
+    this.maestro,
+  });
+
+  final String id;
+  final String name;
+  final String? path;
+  final String? playwright;
+  final String? maestro;
+
+  bool get hasPlaywright => playwright != null;
+  bool get hasMaestro => maestro != null;
+  bool get hasCoverage => hasPlaywright || hasMaestro;
+}
+
+class _E2eCoverage {
+  _E2eCoverage(this.screens, this.flows);
+
+  final List<_E2eItem> screens;
+  final List<_E2eItem> flows;
+}
+
 // --- Flutter test JSON parser ---
 
-Map<String, List<_Test>> _parseFlutterResults(String path) {
+_FlutterResults _parseFlutterResults(String path) {
   final file = File(path);
-  if (!file.existsSync()) return {};
+  if (!file.existsSync()) return _FlutterResults({}, 0);
 
   final lines = file.readAsLinesSync().where((l) => l.trim().isNotEmpty);
   final events = <Map<String, dynamic>>[];
@@ -348,6 +504,7 @@ Map<String, List<_Test>> _parseFlutterResults(String path) {
 
   final tests = <int, _Test>{};
   final suiteNames = <int, String>{};
+  var durationMs = 0;
 
   for (final e in events) {
     final type = e['type'] as String?;
@@ -377,6 +534,8 @@ Map<String, List<_Test>> _parseFlutterResults(String path) {
         t.error = e['error'] as String? ?? '';
         t.stackTrace = e['stackTrace'] as String? ?? '';
       }
+    } else if (type == 'done') {
+      durationMs = e['time'] as int? ?? 0;
     }
   }
 
@@ -388,19 +547,25 @@ Map<String, List<_Test>> _parseFlutterResults(String path) {
     final suite = suiteNames[t.suiteId] ?? 'unknown';
     grouped.putIfAbsent(suite, () => []).add(t);
   }
-  return grouped;
+  return _FlutterResults(grouped, durationMs);
 }
 
 // --- Playwright JSON parser ---
 
-Map<String, List<_Test>> _parsePlaywrightResults(String path) {
+_ParsedResults _parsePlaywrightResults(String path) {
   final file = File(path);
-  if (!file.existsSync()) return {};
+  if (!file.existsSync()) return _ParsedResults({}, 0);
 
   try {
     final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     final suites = json['suites'] as List<dynamic>? ?? [];
     final result = <String, List<_Test>>{};
+
+    // Extract total duration from stats.duration (ms, may be double)
+    final stats = json['stats'] as Map<String, dynamic>?;
+    final durationMs = stats != null
+        ? (stats['duration'] as num?)?.round() ?? 0
+        : 0;
 
     void walkSuite(Map<String, dynamic> suite, String parentTitle) {
       final title = suite['title'] as String? ?? '';
@@ -457,22 +622,31 @@ Map<String, List<_Test>> _parsePlaywrightResults(String path) {
     for (final suite in suites) {
       walkSuite(suite as Map<String, dynamic>, '');
     }
-    return result;
+    return _ParsedResults(result, durationMs);
   } catch (e) {
     stderr.writeln('Warning: Could not parse playwright-results.json: $e');
-    return {};
+    return _ParsedResults({}, 0);
   }
 }
 
 // --- Maestro JUnit XML parser ---
 
-Map<String, List<_Test>> _parseMaestroResults(String dirPath) {
+_ParsedResults _parseMaestroResults(String dirPath) {
   final xmlFile = File('$dirPath/results.xml');
-  if (!xmlFile.existsSync()) return {};
+  if (!xmlFile.existsSync()) return _ParsedResults({}, 0);
 
   try {
     final content = xmlFile.readAsStringSync();
     final result = <String, List<_Test>>{};
+
+    // Extract total duration by summing all <testsuite> time attributes (seconds)
+    var durationMs = 0;
+    final suiteTimeMatches =
+        RegExp(r'<testsuite\s+[^>]*time="([^"]*)"').allMatches(content);
+    for (final m in suiteTimeMatches) {
+      durationMs +=
+          ((double.tryParse(m.group(1)!) ?? 0) * 1000).round();
+    }
 
     // Simple XML parsing — extract <testcase> elements
     final testCasePattern =
@@ -510,10 +684,20 @@ Map<String, List<_Test>> _parseMaestroResults(String dirPath) {
 
       result.putIfAbsent(className, () => []).add(t);
     }
-    return result;
+
+    // Fallback: sum individual test times if no suite-level time
+    if (durationMs == 0) {
+      for (final tests in result.values) {
+        for (final t in tests) {
+          durationMs += t.time;
+        }
+      }
+    }
+
+    return _ParsedResults(result, durationMs);
   } catch (e) {
     stderr.writeln('Warning: Could not parse Maestro results.xml: $e');
-    return {};
+    return _ParsedResults({}, 0);
   }
 }
 
@@ -554,38 +738,54 @@ _Category _buildCategory(
   String id,
   Map<String, List<_Test>> suites,
   String generateCmd,
+  String environment,
 ) {
+  // Compute duration as max test time (tests report wall-clock offsets)
+  var maxTime = 0;
+  for (final tests in suites.values) {
+    for (final t in tests) {
+      if (t.time > maxTime) maxTime = t.time;
+    }
+  }
   return _Category(
     name: name,
     id: id,
     suites: suites,
     generateCmd: generateCmd,
+    durationMs: maxTime,
+    environment: environment,
   );
 }
 
 _Category _buildPlaywrightCategory(
-  Map<String, List<_Test>> suites,
+  _ParsedResults results,
   List<_Screenshot> screenshots,
+  String environment,
 ) {
   return _Category(
     name: 'Web E2E — Playwright',
     id: 'playwright',
-    suites: suites,
+    suites: results.suites,
     generateCmd: 'npx playwright test',
     screenshots: screenshots,
+    durationMs: results.durationMs,
+    environment: environment,
   );
 }
 
 _Category _buildMaestroCategory(
-  Map<String, List<_Test>> suites,
+  _ParsedResults results,
   List<_Screenshot> screenshots,
+  String environment,
 ) {
   return _Category(
     name: 'Device E2E — Maestro',
     id: 'maestro',
-    suites: suites,
+    suites: results.suites,
     generateCmd: 'bash scripts/maestro-test.sh',
     screenshots: screenshots,
+    durationMs: results.durationMs,
+    environment: environment,
   );
 }
 
@@ -625,6 +825,66 @@ List<_CovFile> _parseLcov(String path) {
   return results;
 }
 
+// --- Screen/flow coverage parser ---
+
+_E2eCoverage _parseScreenCoverage(String path) {
+  final file = File(path);
+  if (!file.existsSync()) return _E2eCoverage([], []);
+
+  final lines = file.readAsLinesSync();
+  final screens = <_E2eItem>[];
+  final flows = <_E2eItem>[];
+  List<_E2eItem>? currentList;
+  Map<String, String?>? currentItem;
+
+  void flushItem() {
+    final item = currentItem;
+    final list = currentList;
+    if (item != null && list != null) {
+      list.add(_E2eItem(
+        id: item['id'] ?? '',
+        name: item['name'] ?? '',
+        path: item['path'],
+        playwright: item['playwright'],
+        maestro: item['maestro'],
+      ));
+    }
+    currentItem = null;
+  }
+
+  for (final line in lines) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+
+    if (trimmed == 'screens:') {
+      flushItem();
+      currentList = screens;
+      continue;
+    }
+    if (trimmed == 'flows:') {
+      flushItem();
+      currentList = flows;
+      continue;
+    }
+
+    if (trimmed.startsWith('- id:')) {
+      flushItem();
+      currentItem = {'id': trimmed.substring(5).trim()};
+      continue;
+    }
+
+    if (currentItem != null && trimmed.contains(':')) {
+      final colonIdx = trimmed.indexOf(':');
+      final key = trimmed.substring(0, colonIdx).trim();
+      final value = trimmed.substring(colonIdx + 1).trim();
+      currentItem![key] = value == 'null' ? null : value;
+    }
+  }
+  flushItem();
+
+  return _E2eCoverage(screens, flows);
+}
+
 // --- Helpers ---
 
 String _esc(String s) =>
@@ -633,12 +893,208 @@ String _esc(String s) =>
 String _pctColor(double pct) =>
     pct >= 80 ? '#2e7d32' : pct >= 50 ? '#f57f17' : '#c62828';
 
+String _layerColor(String id) {
+  switch (id) {
+    case 'unit':
+    case 'widget':
+    case 'golden':
+      return '#1565c0'; // blue — Flutter
+    case 'playwright':
+      return '#2e7d32'; // green — Web E2E
+    case 'maestro':
+      return '#e65100'; // orange — Device E2E
+    default:
+      return '#666';
+  }
+}
+
 String _summaryCard(int value, String label, String cls) =>
     '<div class="card $cls"><div class="num">$value</div>'
     '<div class="label">$label</div></div>';
 
 String _shortenPath(String path) =>
     path.replaceAll('\\', '/').replaceAll(RegExp(r'^.*[/\\]test[/\\]'), 'test/');
+
+void _writeFlatSuites(StringBuffer buf, _Category c) {
+  for (final suitePath in c.suiteKeys) {
+    final suiteTests = c.suites[suitePath]!;
+    final sp = suiteTests.where((t) => t.result == 'success').length;
+    final sf = suiteTests.where((t) => t.result == 'failure').length;
+    final shortPath = _shortenPath(suitePath);
+    final hasFails = sf > 0;
+
+    buf.writeln('<details class="suite"${hasFails ? ' open' : ''}>');
+    buf.writeln(
+      '<summary class="suite-header"><span>${_esc(shortPath)}</span>'
+      '<span class="counts">$sp/${suiteTests.length} passed</span></summary>',
+    );
+    _writeTests(buf, suiteTests);
+    buf.writeln('</details>');
+  }
+}
+
+void _writeFolderGroupedSuites(StringBuffer buf, _Category c) {
+  // Group suites by parent folder
+  final folders = <String, List<String>>{};
+  for (final suitePath in c.suiteKeys) {
+    final shortPath = _shortenPath(suitePath);
+    final parts = shortPath.split('/');
+    // Folder is everything except filename: e.g. test/core/constants/
+    final folder = parts.length > 1
+        ? parts.sublist(0, parts.length - 1).join('/')
+        : 'test';
+    folders.putIfAbsent(folder, () => []).add(suitePath);
+  }
+
+  final folderKeys = folders.keys.toList()..sort();
+  for (final folder in folderKeys) {
+    final suitePaths = folders[folder]!;
+    var folderTotal = 0;
+    var folderPassed = 0;
+    var folderFailed = 0;
+    for (final sp in suitePaths) {
+      final tests = c.suites[sp]!;
+      folderTotal += tests.length;
+      folderPassed += tests.where((t) => t.result == 'success').length;
+      folderFailed += tests.where((t) => t.result == 'failure').length;
+    }
+    final hasFails = folderFailed > 0;
+
+    buf.writeln('<details class="suite folder-group"${hasFails ? ' open' : ''}>');
+    buf.writeln(
+      '<summary class="suite-header folder-header"><span>${_esc(folder)}/</span>'
+      '<span class="counts">$folderPassed/$folderTotal passed</span></summary>',
+    );
+
+    for (final suitePath in suitePaths) {
+      final suiteTests = c.suites[suitePath]!;
+      final sp = suiteTests.where((t) => t.result == 'success').length;
+      final sf = suiteTests.where((t) => t.result == 'failure').length;
+      final shortPath = _shortenPath(suitePath).split('/').last;
+      final suiteHasFails = sf > 0;
+
+      buf.writeln('<details class="suite nested-suite"${suiteHasFails ? ' open' : ''}>');
+      buf.writeln(
+        '<summary class="suite-header"><span>${_esc(shortPath)}</span>'
+        '<span class="counts">$sp/${suiteTests.length} passed</span></summary>',
+      );
+      _writeTests(buf, suiteTests);
+      buf.writeln('</details>');
+    }
+    buf.writeln('</details>');
+  }
+}
+
+void _writeTests(StringBuffer buf, List<_Test> tests) {
+  for (final t in tests) {
+    final cls = t.result == 'success' ? 'pass' : 'fail';
+    final icon = t.result == 'success' ? '&#10003;' : '&#10007;';
+    final timeStr = t.time > 0 ? '${t.time}ms' : '';
+    buf.writeln(
+      '<div class="test $cls"><span class="icon">$icon</span>'
+      '<span class="name">${_esc(t.name)}</span>'
+      '<span class="time">$timeStr</span></div>',
+    );
+    if (t.error != null && t.error!.isNotEmpty) {
+      buf.writeln('<div class="error">${_esc(t.error!)}</div>');
+    }
+  }
+}
+
+void _writeE2eCoverage(StringBuffer buf, _E2eCoverage cov) {
+  final covScreens = cov.screens.where((s) => s.hasCoverage).length;
+  final covFlows = cov.flows.where((f) => f.hasCoverage).length;
+  final screenPct = cov.screens.isNotEmpty
+      ? covScreens / cov.screens.length * 100
+      : 0.0;
+  final flowPct = cov.flows.isNotEmpty
+      ? covFlows / cov.flows.length * 100
+      : 0.0;
+
+  buf.writeln('<h2 id="e2e-coverage">E2E Screen/Flow Coverage</h2>');
+  buf.writeln('<div class="summary">');
+  buf.writeln(
+    '<div class="card"><div class="num" style="color:${_pctColor(screenPct)}">'
+    '${screenPct.toStringAsFixed(0)}%</div>'
+    '<div class="label">Screens ($covScreens/${cov.screens.length})</div></div>',
+  );
+  buf.writeln(
+    '<div class="card"><div class="num" style="color:${_pctColor(flowPct)}">'
+    '${flowPct.toStringAsFixed(0)}%</div>'
+    '<div class="label">Flows ($covFlows/${cov.flows.length})</div></div>',
+  );
+  buf.writeln('</div>');
+
+  void writeTable(String title, List<_E2eItem> items) {
+    if (items.isEmpty) return;
+    buf.writeln('<details class="suite" open>');
+    buf.writeln(
+      '<summary class="suite-header"><span>$title</span>'
+      '<span class="counts">${items.where((i) => i.hasCoverage).length}/${items.length} covered</span></summary>',
+    );
+    buf.writeln('<table class="e2e-table">');
+    buf.writeln(
+      '<tr><th style="text-align:left">Name</th>'
+      '<th>Playwright</th><th>Maestro</th></tr>',
+    );
+    for (final item in items) {
+      final pw = item.hasPlaywright
+          ? '<td class="check">&#10003;</td>'
+          : '<td class="miss">&#10007;</td>';
+      final ma = item.hasMaestro
+          ? '<td class="check">&#10003;</td>'
+          : '<td class="miss">&#10007;</td>';
+      final rowCls = item.hasCoverage ? '' : ' class="uncovered-row"';
+      buf.writeln('<tr$rowCls><td>${_esc(item.name)}</td>$pw$ma</tr>');
+    }
+    buf.writeln('</table></details>');
+  }
+
+  writeTable('Screens', cov.screens);
+  writeTable('Flows', cov.flows);
+}
+
+String _formatDuration(int ms) {
+  final sec = ms ~/ 1000;
+  if (sec < 60) return '${sec}s';
+  return '${sec ~/ 60}m ${sec % 60}s';
+}
+
+String _readEnvLabel(String path) {
+  if (path.isEmpty) return '';
+  final file = File(path);
+  if (!file.existsSync()) return '';
+  try {
+    final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    final parts = <String>[];
+    // Flutter: platform + flutter version
+    if (json.containsKey('flutter')) {
+      parts.add('Flutter ${json['flutter']}');
+      if (json.containsKey('dart')) parts.add('Dart ${json['dart']}');
+    }
+    // Playwright: browser
+    if (json.containsKey('browser')) {
+      parts.add(json['browser'] as String);
+    }
+    // Maestro: device + SDK
+    if (json.containsKey('device')) {
+      final device = json['device'] as String;
+      final sdk = json['sdk'] as String? ?? '';
+      parts.add(device);
+      if (sdk.isNotEmpty && sdk != 'unknown') parts.add('API $sdk');
+    }
+    // Platform
+    if (json.containsKey('platform') && !json.containsKey('flutter')) {
+      final p = json['platform'] as String;
+      if (p != 'android') {
+        parts.add(p.startsWith('MINGW') || p.startsWith('MSYS') ? 'Windows' : p);
+      }
+    }
+    return parts.join(' · ');
+  } catch (_) {
+    return '';
+  }
+}
 
 const _css = '''
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -650,11 +1106,26 @@ const _css = '''
   .card { background: white; border-radius: 8px; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 120px; }
   .card .num { font-size: 32px; font-weight: bold; }
   .card .label { font-size: 14px; color: #666; }
+  .card .label-sub { font-size: 12px; color: #999; }
   .card.pass .num { color: #2e7d32; }
   .card.fail .num { color: #c62828; }
   .card.skip .num { color: #f57f17; }
   .card.total .num { color: #1565c0; }
   .card.muted .num { color: #bbb; }
+  .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .cat-box { background: white; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s; display: flex; flex-direction: column; gap: 8px; }
+  .cat-box:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+  .cat-box-top { display: flex; align-items: baseline; gap: 10px; }
+  .cat-box-num { font-size: 24px; font-weight: bold; }
+  .cat-box-name { font-size: 13px; color: #555; }
+  .cat-box.pass .cat-box-num { color: #2e7d32; }
+  .cat-box.fail .cat-box-num { color: #c62828; }
+  .cat-box.muted .cat-box-num { color: #bbb; }
+  .cat-box-dur { display: flex; align-items: center; gap: 8px; }
+  .dur-bar { flex: 1; height: 6px; background: #e8e8e8; border-radius: 3px; overflow: hidden; }
+  .dur-fill { height: 100%; border-radius: 3px; }
+  .dur-label { font-size: 12px; font-weight: 600; color: #666; white-space: nowrap; }
+  .cat-env { font-size: 11px; color: #999; }
   .cat-card { cursor: pointer; transition: transform 0.1s; }
   .cat-card:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
   .no-data { background: white; border-radius: 8px; padding: 24px; color: #999; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px; }
@@ -685,6 +1156,31 @@ const _css = '''
   .screenshot img { width: 100%; border-radius: 4px; border: 1px solid #e0e0e0; cursor: pointer; }
   .screenshot img:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
   .screenshot-label { font-size: 11px; color: #777; margin-top: 4px; word-break: break-all; }
+  .cat-section { margin-bottom: 8px; }
+  .cat-section > summary { list-style: none; cursor: pointer; }
+  .cat-section > summary::-webkit-details-marker { display: none; }
+  .cat-section > summary h2 { display: inline; }
+  .cat-section > summary::before { content: "\\25B6"; font-size: 12px; margin-right: 8px; color: #999; }
+  .cat-section[open] > summary::before { content: "\\25BC"; }
+  .cat-section-header { display: inline; }
+  .screenshot-folder-label { font-size: 13px; font-weight: 600; color: #555; padding: 8px 16px 4px; }
+  .env-badge { font-size: 12px; font-weight: normal; color: #666; background: #e8eaf6; padding: 2px 10px; border-radius: 12px; vertical-align: middle; }
+  .folder-header { background: #e8eaf6; }
+  .folder-header:hover { background: #dde0f0; }
+  .nested-suite { margin: 0 0 0 16px; border-radius: 0; box-shadow: none; border-left: 3px solid #c5cae9; }
+  .nested-suite .suite-header { background: #fafafa; }
+  .e2e-table { width: 100%; border-collapse: collapse; }
+  .e2e-table th { padding: 8px 16px; font-size: 13px; color: #555; border-bottom: 2px solid #eee; }
+  .e2e-table td { padding: 6px 16px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  .e2e-table .check { color: #2e7d32; text-align: center; font-size: 16px; }
+  .e2e-table .miss { color: #ccc; text-align: center; font-size: 16px; }
+  .e2e-table .uncovered-row { background: #fff5f5; }
+  .e2e-table .uncovered-row .miss { color: #c62828; }
+  .zero-cov-callout { background: #fff3e0; border: 1px solid #ffb74d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .zero-cov-callout strong { color: #e65100; }
+  .zero-cov-callout ul { margin: 8px 0 0 20px; font-size: 13px; }
+  .zero-cov-callout li { margin-bottom: 4px; }
+  .zero-cov-callout code { background: #fff8e1; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
   details > summary { list-style: none; }
   details > summary::-webkit-details-marker { display: none; }
 ''';
