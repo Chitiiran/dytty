@@ -16,7 +16,7 @@ export default defineConfig({
   timeout: 120_000,
 
   use: {
-    baseURL: 'http://localhost:4200',
+    baseURL: 'http://localhost:5555',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 720 },
@@ -39,8 +39,8 @@ export default defineConfig({
 
   webServer: {
     command:
-      'flutter build web --no-tree-shake-icons --dart-define=USE_EMULATORS=true --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY && npx serve build/web -l 4200 --no-clipboard',
-    url: 'http://localhost:4200',
+      'flutter build web --no-tree-shake-icons --dart-define=USE_EMULATORS=true --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY && npx serve build/web -l 5555 --no-clipboard',
+    url: 'http://localhost:5555',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
