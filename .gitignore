@@ -23,13 +23,6 @@ test-output/
 .maestro/screenshots/
 maestro-output/
 
-# Legacy test artifacts (migration period)
-test-results/
-playwright-report/
-test-results.json
-test-report.html
-playwright-results.json
-
 # Miscellaneous
 *.class
 *.log

@@ -110,7 +110,8 @@ if [[ "$RUN_PLAYWRIGHT" == true ]]; then
   echo ""
   echo "=== Building web app for Playwright ==="
   cd "$PROJECT_DIR"
-  source .env 2>/dev/null || true
+  FIREBASE_WEB_API_KEY=$(grep -oP 'FIREBASE_WEB_API_KEY=\K.*' .env 2>/dev/null || echo "")
+  export FIREBASE_WEB_API_KEY
   flutter build web --no-tree-shake-icons \
     --dart-define=USE_EMULATORS=true \
     --dart-define=FIREBASE_WEB_API_KEY="${FIREBASE_WEB_API_KEY:-}" 2>&1 | tail -3

@@ -15,8 +15,10 @@ class ReviewSummaryCard extends StatelessWidget {
     required this.categoryId,
   });
 
-  JournalCategory get _category =>
-      JournalCategory.values.firstWhere((c) => c.name == categoryId);
+  JournalCategory get _category => JournalCategory.values.firstWhere(
+        (c) => c.name == categoryId,
+        orElse: () => JournalCategory.positive,
+      );
 
   @override
   Widget build(BuildContext context) {

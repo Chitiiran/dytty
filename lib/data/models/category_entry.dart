@@ -24,6 +24,32 @@ class CategoryEntry extends Equatable {
     this.isReviewed = false,
   });
 
+  CategoryEntry copyWith({
+    String? id,
+    String? categoryId,
+    String? text,
+    String? source,
+    DateTime? createdAt,
+    String? audioUrl,
+    String? transcript,
+    List<String>? tags,
+    bool? isReviewed,
+    bool clearAudioUrl = false,
+    bool clearTranscript = false,
+  }) {
+    return CategoryEntry(
+      id: id ?? this.id,
+      categoryId: categoryId ?? this.categoryId,
+      text: text ?? this.text,
+      source: source ?? this.source,
+      createdAt: createdAt ?? this.createdAt,
+      audioUrl: clearAudioUrl ? null : (audioUrl ?? this.audioUrl),
+      transcript: clearTranscript ? null : (transcript ?? this.transcript),
+      tags: tags ?? this.tags,
+      isReviewed: isReviewed ?? this.isReviewed,
+    );
+  }
+
   @override
   List<Object?> get props => [
     id,

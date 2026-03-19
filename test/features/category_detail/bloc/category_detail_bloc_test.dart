@@ -203,16 +203,31 @@ void main() {
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'SaveInlineEdit updates entry text optimistically',
       setUp: () async {
-        await repository.addCategoryEntry(
-          '2026-03-18', 'positive', 'Original text');
+        // Create parent daily entry doc + category entry so persist succeeds
+        final dayDoc = firestore
+            .collection('users')
+            .doc('test-user')
+            .collection('dailyEntries')
+            .doc('2026-03-18');
+        await dayDoc.set({
+          'createdAt': DateTime(2026, 3, 18),
+          'updatedAt': DateTime(2026, 3, 18),
+        });
+        await dayDoc
+            .collection('categoryEntries')
+            .doc('e1')
+            .set({
+          'category': 'positive',
+          'text': 'Original text',
+          'source': 'manual',
+          'createdAt': DateTime(2026, 3, 18),
+        });
       },
       build: () => CategoryDetailBloc(
         repository: repository,
         clock: fixedClock,
       ),
       seed: () {
-        // We need to get the entry ID from Firestore, but since we're seeding
-        // we'll use a known entry structure
         return CategoryDetailState(
           status: CategoryDetailStatus.loaded,
           categoryId: 'positive',
@@ -246,6 +261,58 @@ void main() {
               (s) => s.recentEntries.first.entries.first.text,
               'entry text',
               'Updated text',
+            ),
+      ],
+    );
+
+    blocTest<CategoryDetailBloc, CategoryDetailState>(
+      'SaveInlineEdit reverts on Firestore failure',
+      build: () => CategoryDetailBloc(
+        repository: repository,
+        clock: fixedClock,
+      ),
+      seed: () {
+        // Entry not in Firestore — update will fail
+        return CategoryDetailState(
+          status: CategoryDetailStatus.loaded,
+          categoryId: 'positive',
+          editingEntryId: 'e-missing',
+          recentEntries: [
+            DateGroup(
+              date: '2026-03-18',
+              displayDate: 'Today',
+              entries: [
+                CategoryEntry(
+                  id: 'e-missing',
+                  categoryId: 'positive',
+                  text: 'Original',
+                  createdAt: DateTime(2026, 3, 18),
+                ),
+              ],
+            ),
+          ],
+          hasRecentEntries: true,
+        );
+      },
+      act: (bloc) => bloc.add(const SaveInlineEdit(
+        date: '2026-03-18',
+        entryId: 'e-missing',
+        newText: 'Should revert',
+      )),
+      expect: () => [
+        // 1. Optimistic update
+        isA<CategoryDetailState>()
+            .having(
+              (s) => s.recentEntries.first.entries.first.text,
+              'optimistic text',
+              'Should revert',
+            ),
+        // 2. Revert after Firestore failure
+        isA<CategoryDetailState>()
+            .having(
+              (s) => s.recentEntries.first.entries.first.text,
+              'reverted text',
+              'Original',
             ),
       ],
     );
@@ -409,8 +476,10 @@ void main() {
         hasRecentEntries: true,
       ),
       act: (bloc) => bloc.add(const MarkEntriesReviewed(
-        entryIds: ['e1', 'e2'],
-        dates: ['2026-03-18', '2026-03-18'],
+        entries: [
+          EntryReference(date: '2026-03-18', entryId: 'e1'),
+          EntryReference(date: '2026-03-18', entryId: 'e2'),
+        ],
       )),
       expect: () => [
         isA<CategoryDetailState>()

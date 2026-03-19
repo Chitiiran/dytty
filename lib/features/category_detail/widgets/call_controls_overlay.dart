@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dytty/core/theme/app_colors.dart';
 
 /// Minimal bottom bar for the embedded review call.
 /// Shows mute toggle, end call FAB, and optional elapsed time.
@@ -76,7 +77,7 @@ class CallControlsOverlay extends StatelessWidget {
             child: FloatingActionButton.small(
               onPressed: onEndCall,
               tooltip: 'End call',
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: AppColors.callActiveRed,
               child: const Icon(
                 Icons.call_end_rounded,
                 color: Colors.white,

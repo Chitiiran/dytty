@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:dytty/core/utils/date_utils.dart' as app_date;
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
@@ -21,10 +23,6 @@ class LoadCategoryDetail extends CategoryDetailEvent {
 
   @override
   List<Object?> get props => [categoryId];
-}
-
-class LoadOlderEntries extends CategoryDetailEvent {
-  const LoadOlderEntries();
 }
 
 class ToggleDateGroup extends CategoryDetailEvent {
@@ -84,14 +82,23 @@ class EntryEditedFromCall extends CategoryDetailEvent {
   List<Object?> get props => [entryId, newText];
 }
 
-class MarkEntriesReviewed extends CategoryDetailEvent {
-  final List<String> entryIds;
-  final List<String> dates;
+class EntryReference extends Equatable {
+  final String date;
+  final String entryId;
 
-  const MarkEntriesReviewed({required this.entryIds, required this.dates});
+  const EntryReference({required this.date, required this.entryId});
 
   @override
-  List<Object?> get props => [entryIds, dates];
+  List<Object?> get props => [date, entryId];
+}
+
+class MarkEntriesReviewed extends CategoryDetailEvent {
+  final List<EntryReference> entries;
+
+  const MarkEntriesReviewed({required this.entries});
+
+  @override
+  List<Object?> get props => [entries];
 }
 
 class SaveReviewSummaryEvent extends CategoryDetailEvent {
@@ -282,7 +289,7 @@ class CategoryDetailBloc
       }
 
       // Get review summary for this week
-      final weekStart = _mondayOfWeek(now);
+      final weekStart = app_date.mondayOfWeek(now);
       final summary = await _repository.getReviewSummary(
         event.categoryId,
         _dateFormat.format(weekStart),
@@ -331,22 +338,14 @@ class CategoryDetailBloc
     SaveInlineEdit event,
     Emitter<CategoryDetailState> emit,
   ) async {
+    final previousGroups = state.recentEntries;
+
     // Optimistic update
     final updatedGroups = state.recentEntries.map((group) {
       if (group.date == event.date) {
         final updatedEntries = group.entries.map((entry) {
           if (entry.id == event.entryId) {
-            return CategoryEntry(
-              id: entry.id,
-              categoryId: entry.categoryId,
-              text: event.newText,
-              source: entry.source,
-              createdAt: entry.createdAt,
-              audioUrl: entry.audioUrl,
-              transcript: entry.transcript,
-              tags: entry.tags,
-              isReviewed: entry.isReviewed,
-            );
+            return entry.copyWith(text: event.newText);
           }
           return entry;
         }).toList();
@@ -367,8 +366,9 @@ class CategoryDetailBloc
         event.entryId,
         event.newText,
       );
-    } catch (_) {
-      // Revert on failure would go here
+    } catch (e) {
+      debugPrint('Failed to persist inline edit: $e');
+      emit(state.copyWith(recentEntries: previousGroups));
     }
   }
 
@@ -415,17 +415,7 @@ class CategoryDetailBloc
     final updatedGroups = state.recentEntries.map((group) {
       final updatedEntries = group.entries.map((entry) {
         if (entry.id == event.entryId) {
-          return CategoryEntry(
-            id: entry.id,
-            categoryId: entry.categoryId,
-            text: event.newText,
-            source: entry.source,
-            createdAt: entry.createdAt,
-            audioUrl: entry.audioUrl,
-            transcript: entry.transcript,
-            tags: entry.tags,
-            isReviewed: entry.isReviewed,
-          );
+          return entry.copyWith(text: event.newText);
         }
         return entry;
       }).toList();
@@ -440,21 +430,11 @@ class CategoryDetailBloc
     Emitter<CategoryDetailState> emit,
   ) async {
     // Optimistic update
-    final entryIdSet = event.entryIds.toSet();
+    final entryIdSet = event.entries.map((e) => e.entryId).toSet();
     final updatedGroups = state.recentEntries.map((group) {
       final updatedEntries = group.entries.map((entry) {
         if (entryIdSet.contains(entry.id)) {
-          return CategoryEntry(
-            id: entry.id,
-            categoryId: entry.categoryId,
-            text: entry.text,
-            source: entry.source,
-            createdAt: entry.createdAt,
-            audioUrl: entry.audioUrl,
-            transcript: entry.transcript,
-            tags: entry.tags,
-            isReviewed: true,
-          );
+          return entry.copyWith(isReviewed: true);
         }
         return entry;
       }).toList();
@@ -464,13 +444,11 @@ class CategoryDetailBloc
     emit(state.copyWith(recentEntries: updatedGroups));
 
     // Persist to Firestore
-    for (int i = 0; i < event.entryIds.length; i++) {
-      final date = event.dates[i];
-      final entryId = event.entryIds[i];
+    for (final ref in event.entries) {
       try {
-        await _repository.markEntryReviewed(date, entryId);
-      } catch (_) {
-        // Non-critical — badge is optimistic
+        await _repository.markEntryReviewed(ref.date, ref.entryId);
+      } catch (e) {
+        debugPrint('Failed to mark entry ${ref.entryId} as reviewed: $e');
       }
     }
   }
@@ -483,8 +461,8 @@ class CategoryDetailBloc
 
     try {
       await _repository.saveReviewSummary(event.summary);
-    } catch (_) {
-      // Non-critical
+    } catch (e) {
+      debugPrint('Failed to save review summary: $e');
     }
   }
 
@@ -504,8 +482,4 @@ class CategoryDetailBloc
     return DateFormat('MMM d').format(date);
   }
 
-  DateTime _mondayOfWeek(DateTime date) {
-    final weekday = date.weekday; // Monday = 1
-    return DateTime(date.year, date.month, date.day - (weekday - 1));
-  }
 }

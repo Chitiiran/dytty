@@ -19,8 +19,10 @@ class CategoryDetailHeader extends StatelessWidget
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
-  JournalCategory get _category =>
-      JournalCategory.values.firstWhere((c) => c.name == categoryId);
+  JournalCategory get _category => JournalCategory.values.firstWhere(
+        (c) => c.name == categoryId,
+        orElse: () => JournalCategory.positive,
+      );
 
   @override
   Widget build(BuildContext context) {
