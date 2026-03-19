@@ -35,9 +35,9 @@ class CategoryDetailScreen extends StatelessWidget {
     final journalBloc = context.read<JournalBloc>();
 
     return BlocProvider(
-      create: (_) => CategoryDetailBloc(
-        repository: journalBloc.repository,
-      )..add(LoadCategoryDetail(categoryId)),
+      create: (_) =>
+          CategoryDetailBloc(repository: journalBloc.repository)
+            ..add(LoadCategoryDetail(categoryId)),
       child: _CategoryDetailView(categoryId: categoryId),
     );
   }
@@ -132,11 +132,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     );
     final questions = reviewQuestions[widget.categoryId] ?? [];
     final entries = _allRecentEntries();
-    final prompt = buildReviewPrompt(
-      category.displayName,
-      questions,
-      entries,
-    );
+    final prompt = buildReviewPrompt(category.displayName, questions, entries);
 
     // Start the call with review-specific prompt and tools
     bloc.add(const StartCall());
@@ -186,23 +182,27 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
 
     // Process only newly added entries (avoid re-dispatching on every state change)
     if (voiceState.savedEntries.length > _processedEntryCount) {
-      for (int i = _processedEntryCount;
-          i < voiceState.savedEntries.length;
-          i++) {
+      for (
+        int i = _processedEntryCount;
+        i < voiceState.savedEntries.length;
+        i++
+      ) {
         final entry = voiceState.savedEntries[i];
         if (entry.categoryId == widget.categoryId) {
           final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-          detailBloc.add(EntryAddedFromCall(
-            entry: CategoryEntry(
-              id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
-              categoryId: entry.categoryId,
-              text: entry.text,
-              source: 'voice',
-              transcript: entry.transcript,
-              createdAt: DateTime.now(),
+          detailBloc.add(
+            EntryAddedFromCall(
+              entry: CategoryEntry(
+                id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
+                categoryId: entry.categoryId,
+                text: entry.text,
+                source: 'voice',
+                transcript: entry.transcript,
+                createdAt: DateTime.now(),
+              ),
+              date: today,
             ),
-            date: today,
-          ));
+          );
         }
       }
       _processedEntryCount = voiceState.savedEntries.length;
@@ -227,27 +227,21 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     final state = detailBloc.state;
 
     // 1. Mark all recent entries as reviewed
-    final entryIds = <String>[];
-    final dates = <String>[];
+    final entries = <EntryReference>[];
     for (final group in state.recentEntries) {
       for (final entry in group.entries) {
-        entryIds.add(entry.id);
-        dates.add(group.date);
+        entries.add(EntryReference(date: group.date, entryId: entry.id));
       }
     }
-    if (entryIds.isNotEmpty) {
-      detailBloc.add(MarkEntriesReviewed(
-        entryIds: entryIds,
-        dates: dates,
-      ));
+    if (entries.isNotEmpty) {
+      detailBloc.add(MarkEntriesReviewed(entries: entries));
     }
 
     // 2. Generate review summary via LlmService
     if (voiceState.transcripts.isNotEmpty) {
       final llmService = context.read<LlmService>();
       final transcript = voiceState.transcripts
-          .map((t) =>
-              '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
+          .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
           .join('\n');
 
       final category = JournalCategory.values.firstWhere(
@@ -397,8 +391,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               if (_callActive && _voiceCallBloc != null)
                 CallControlsOverlay(
                   isMuted: _voiceCallBloc!.state.isMuted,
-                  onToggleMute: () =>
-                      _voiceCallBloc!.add(const ToggleMute()),
+                  onToggleMute: () => _voiceCallBloc!.add(const ToggleMute()),
                   onEndCall: _endReviewCall,
                   elapsed: _voiceCallBloc!.state.elapsed,
                 ),
@@ -439,9 +432,9 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               entryCount: group.entries.length,
               isCollapsed: group.isCollapsed,
               onTap: () {
-                context
-                    .read<CategoryDetailBloc>()
-                    .add(ToggleDateGroup(group.date));
+                context.read<CategoryDetailBloc>().add(
+                  ToggleDateGroup(group.date),
+                );
               },
             );
           }
@@ -455,21 +448,23 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
                   entry: entry,
                   isEditing: state.editingEntryId == entry.id,
                   onTapEdit: () {
-                    context
-                        .read<CategoryDetailBloc>()
-                        .add(StartInlineEdit(entry.id));
+                    context.read<CategoryDetailBloc>().add(
+                      StartInlineEdit(entry.id),
+                    );
                   },
                   onSaveEdit: (newText) {
-                    context.read<CategoryDetailBloc>().add(SaveInlineEdit(
-                      date: group.date,
-                      entryId: entry.id,
-                      newText: newText,
-                    ));
+                    context.read<CategoryDetailBloc>().add(
+                      SaveInlineEdit(
+                        date: group.date,
+                        entryId: entry.id,
+                        newText: newText,
+                      ),
+                    );
                   },
                   onCancelEdit: () {
-                    context
-                        .read<CategoryDetailBloc>()
-                        .add(const CancelInlineEdit());
+                    context.read<CategoryDetailBloc>().add(
+                      const CancelInlineEdit(),
+                    );
                   },
                 );
               }
@@ -486,9 +481,9 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               entryCount: group.entries.length,
               isCollapsed: group.isCollapsed,
               onTap: () {
-                context
-                    .read<CategoryDetailBloc>()
-                    .add(ToggleDateGroup(group.date));
+                context.read<CategoryDetailBloc>().add(
+                  ToggleDateGroup(group.date),
+                );
               },
             );
           }
@@ -502,21 +497,23 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
                   isEditing: state.editingEntryId == entry.id,
                   isOlderEntry: true,
                   onTapEdit: () {
-                    context
-                        .read<CategoryDetailBloc>()
-                        .add(StartInlineEdit(entry.id));
+                    context.read<CategoryDetailBloc>().add(
+                      StartInlineEdit(entry.id),
+                    );
                   },
                   onSaveEdit: (newText) {
-                    context.read<CategoryDetailBloc>().add(SaveInlineEdit(
-                      date: group.date,
-                      entryId: entry.id,
-                      newText: newText,
-                    ));
+                    context.read<CategoryDetailBloc>().add(
+                      SaveInlineEdit(
+                        date: group.date,
+                        entryId: entry.id,
+                        newText: newText,
+                      ),
+                    );
                   },
                   onCancelEdit: () {
-                    context
-                        .read<CategoryDetailBloc>()
-                        .add(const CancelInlineEdit());
+                    context.read<CategoryDetailBloc>().add(
+                      const CancelInlineEdit(),
+                    );
                   },
                 );
               }
@@ -590,11 +587,7 @@ class _CallBadge extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(
-                category.icon,
-                color: category.color,
-                size: 28,
-              ),
+              Icon(category.icon, color: category.color, size: 28),
               Positioned(
                 right: 2,
                 bottom: 4,

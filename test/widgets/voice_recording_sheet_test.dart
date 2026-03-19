@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
@@ -131,31 +130,28 @@ void main() {
       expect(find.byIcon(Icons.mic_off_rounded), findsOneWidget);
     });
 
-    testWidgets(
-      'shows listening state when STT is available',
-      (tester) async {
-        when(() => mockStt.initialize()).thenAnswer((_) async => true);
-        when(
-          () => mockStt.listen(
-            onResult: any(named: 'onResult'),
-            pauseFor: any(named: 'pauseFor'),
-            listenFor: any(named: 'listenFor'),
-          ),
-        ).thenAnswer((_) async {});
+    testWidgets('shows listening state when STT is available', (tester) async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+      when(
+        () => mockStt.listen(
+          onResult: any(named: 'onResult'),
+          pauseFor: any(named: 'pauseFor'),
+          listenFor: any(named: 'listenFor'),
+        ),
+      ).thenAnswer((_) async {});
 
-        await openSheet(tester);
+      await openSheet(tester);
 
-        // Should transition through ready -> listening (auto-start)
-        expect(find.text('Listening...'), findsOneWidget);
-        expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
-        expect(find.text('Start speaking...'), findsOneWidget);
-        expect(find.text('Done'), findsOneWidget);
+      // Should transition through ready -> listening (auto-start)
+      expect(find.text('Listening...'), findsOneWidget);
+      expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
+      expect(find.text('Start speaking...'), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
 
-        // Flush any pending zero-duration animation timers from flutter_animate
-        // so the test framework's teardown doesn't assert on pending timers.
-        await tester.pump(const Duration(seconds: 1));
-      },
-    );
+      // Flush any pending zero-duration animation timers from flutter_animate
+      // so the test framework's teardown doesn't assert on pending timers.
+      await tester.pump(const Duration(seconds: 1));
+    });
 
     testWidgets('shows error state with error message', (tester) async {
       // Make init throw an error
