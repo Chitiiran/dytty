@@ -1,15 +1,15 @@
 # Dytty Progress
 
 ## Current Status
-**Category Detail Page — All 7 phases complete on main. Ready for manual testing + distribution.**
+**Test report upgrade (#60) complete. PR #100 open.**
 
 **Latest on main:**
 - Category Detail Page (#71): full feature — data layer, bloc, embedded review call, post-call summary + reviewed badges, 6 widgets, route + navigation
 - Version: 0.1.6+8 (distributed to testers via `scripts/distribute.sh`)
 
-**Open PRs:** None
+**Open PRs:** #100 — test report upgrade (folder grouping, richer cards, coverage breakdown, parallel E2E)
 
-**Test status:** 619 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: ~82% (CI gate: 50%)
+**Test status:** 628 Flutter + 32 Playwright + 9 Maestro = 669 tests. Coverage: 80.7% line, 8/8 screens E2E, 14 flows. (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -46,11 +46,27 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 - **#91**: Speaker toggle icon UX
 - **#95**: Enable CI auto-distribution (infra)
 - **#48**: Golden test CI failures (cross-platform fonts)
-- Coverage at 81.7% — ahead of ratchet schedule, bump CI gate
+- Coverage at 80.7% — ahead of ratchet schedule, bump CI gate
 
 ---
 
 ## Log
+
+### 2026-03-19 (session 26)
+- **#60 Test Report Upgrade — PR #100**
+  - Report UI: boxed category cards with color-coded left borders (blue=Flutter, green=Playwright, orange=Maestro), proportional timing bars, collapsible sections, folder-grouped test suites, coverage folder rollups with zero-coverage callout, E2E screen/flow coverage checklist table
+  - Per-category metrics: duration + throughput per layer, environment badges (Flutter version, browser, device/API level)
+  - Parallel E2E: Playwright + Maestro now run concurrently (pre-build web first to avoid Flutter lock conflict)
+  - Coverage: 77.5% → 80.7% (+3.2%) via 10 new CategoryDetailScreen widget tests (screen was at 0%)
+  - E2E: 24 → 32 Playwright tests (+8: settings, voice-note, category-detail), screen coverage 6/8 → 8/8
+  - Key decisions:
+    - **Port 4200 for Playwright web server** — port 5555 collided with Android emulator adb (root cause of all Playwright timeouts when emulator was running)
+    - **Per-flow Maestro XML merge** — each `maestro test` overwrites results.xml; now writes per-flow XMLs then merges, so all 9 flows appear in report (was showing 1/1)
+    - **E2E coverage as manual checklist** — Playwright/Maestro are black-box tests with no code coverage; created `tool/screen-coverage.yaml` mapping screens/flows to spec files, report shows coverage %
+    - **Collapsible category sections** — sections collapsed by default (auto-expand on failures) to reduce visual noise; screenshots also collapsed
+    - **Pre-build web before parallel fork** — `flutter build web` locks the project, preventing Maestro APK install; building first then forking both E2E layers avoids the race
+    - **`dart_test.yaml`** — registers `golden` tag to suppress unknown tag warning
+  - 669 total tests passing, 0 failures, 5 data sources
 
 ### 2026-03-18 (session 25)
 - **#71 Category Detail Page — Phases 5-7 complete (all done)**
