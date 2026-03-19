@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -41,6 +42,8 @@ void main() async {
     FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, 8080);
     FirebaseStorage.instance.useStorageEmulator(emulatorHost, 9199);
   }
+
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   notificationService = NotificationService();
   await notificationService.init();

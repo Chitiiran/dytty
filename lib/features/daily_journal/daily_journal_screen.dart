@@ -348,14 +348,16 @@ class _CategoryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (entries.isEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        category.prompt,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontStyle: FontStyle.italic,
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
+                    GestureDetector(
+                      onTap: () => _showAddSheet(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          category.prompt,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
                           ),
                         ),
                       ),

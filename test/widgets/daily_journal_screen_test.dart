@@ -276,6 +276,27 @@ void main() {
       ).called(1);
     });
 
+    testWidgets('tapping empty category prompt opens bottom sheet', (
+      tester,
+    ) async {
+      await tester.pumpApp(
+        const DailyJournalScreen(),
+        journalState: JournalState(status: JournalStatus.loaded),
+        categoryState: CategoryState(
+          categories: CategoryConfig.defaults,
+          loaded: true,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      // Tap the prompt text on the first empty category
+      await tester.tap(find.text('What good things happened today?'));
+      await tester.pumpAndSettle();
+
+      // Bottom sheet should open
+      expect(find.text('Save'), findsOneWidget);
+    });
+
     testWidgets('shows entry text in category card', (tester) async {
       await tester.pumpApp(
         const DailyJournalScreen(),
