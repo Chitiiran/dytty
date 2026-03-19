@@ -27,8 +27,8 @@ test.describe('Auth Flow', () => {
 
     await signInAnonymously(page);
 
-    // Should be on the home screen — button text changed in redesign
-    await expectTextVisible(page, "Write Today's Journal");
+    // Should be on the home screen
+    await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 15_000 });
   });
 
   test('sign out returns to login screen', async ({ page }) => {

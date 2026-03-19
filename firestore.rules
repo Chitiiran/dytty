@@ -15,6 +15,11 @@ service cloud.firestore {
           allow read, write: if request.auth != null && request.auth.uid == userId;
         }
       }
+
+      // Review summaries subcollection (category review call summaries)
+      match /reviewSummaries/{summaryId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Deny all other access
