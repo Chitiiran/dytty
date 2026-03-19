@@ -8,6 +8,8 @@
 > **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section.
 >
 > **Feedback process:** See `docs/planning/FEEDBACK_PROCESS.md` for converting user/tester feedback into GitHub Issues.
+>
+> **Plans:** When exiting plan mode, ALWAYS save the plan to `docs/planning/PLAN-{issue#}-{short-name}.md`. Plans must live with other planning docs, not in `.claude/plans/`. Do this immediately after finalizing the plan, before starting implementation.
 
 ## Project Overview
 Daily journaling app with 5 structured categories. Cross-platform Flutter app backed by Firebase (Auth + Firestore). First target: web app with Playwright E2E tests.
@@ -61,6 +63,15 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 - `firebase emulators:start` - Start Firebase emulators for local dev
 
 ### Testing (5-layer pyramid)
+
+**Unified runner** (outputs to `test-output/runs/<timestamp>/`, creates `test-output/latest` symlink):
+- `bash scripts/test-run.sh` - Run all test layers, timestamped
+- `bash scripts/test-run.sh --flutter` - Flutter only
+- `bash scripts/test-run.sh --playwright` - Playwright only
+- `bash scripts/test-run.sh --maestro` - Maestro only
+- `bash scripts/test-run.sh --keep 5` - Keep only last 5 runs
+
+**Individual layers** (for quick iteration):
 - `flutter test` - Run all unit + widget + golden tests
 - `flutter test test/widgets/` - Widget tests only
 - `flutter test test/goldens/` - Golden tests only (verify visual regression)

@@ -15,14 +15,11 @@ android/app/google-services.json
 
 # Node.js (Playwright E2E tests)
 node_modules/
-test-results/
-playwright-report/
 
-# Test report artifacts
-test-results.json
-test-report.html
+# Unified test output (all layers, timestamped runs)
+test-output/
 
-# Maestro E2E test output
+# Maestro E2E test output (standalone runs)
 .maestro/screenshots/
 maestro-output/
 
@@ -72,3 +69,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 test/goldens/failures/
+
+# Error screenshots (local debugging)
+Error Screenshots/

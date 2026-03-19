@@ -39,6 +39,7 @@ void main() {
     registerFallbackValue(
       const AddVoiceEntry(categoryId: '', text: '', transcript: ''),
     );
+    registerFallbackValue(const UpdateEntry(entryId: '', text: ''));
     registerFallbackValue(Uint8List(0));
   });
 
@@ -543,7 +544,40 @@ void main() {
     );
 
     blocTest<VoiceCallBloc, VoiceCallState>(
-      'non-save_entry tool calls are ignored',
+      'edit_entry tool call dispatches UpdateEntry to JournalBloc',
+      build: () => buildBloc(journalBloc: mockJournalBloc),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) => bloc.add(
+        ToolCallReceived(
+          FunctionCall('edit_entry', {
+            'entry_id': 'entry-42',
+            'text': 'Updated entry text',
+          }, id: 'edit-1'),
+        ),
+      ),
+      expect: () => [],
+      verify: (_) {
+        verify(
+          () => mockJournalBloc.add(
+            any(
+              that: isA<UpdateEntry>()
+                  .having((e) => e.entryId, 'entryId', 'entry-42')
+                  .having((e) => e.text, 'text', 'Updated entry text'),
+            ),
+          ),
+        ).called(1);
+
+        verify(
+          () => mockService.sendToolResponse('edit_entry', 'edit-1', {
+            'status': 'edited',
+            'entry_id': 'entry-42',
+          }),
+        ).called(1);
+      },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'non-save_entry/edit_entry tool calls are ignored',
       build: () => buildBloc(),
       seed: () => const VoiceCallState(status: VoiceCallStatus.active),
       act: (bloc) => bloc.add(

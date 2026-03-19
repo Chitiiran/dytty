@@ -59,8 +59,17 @@ class GeminiLiveService {
   int? lastLatencyMs;
 
   /// Connect to the Gemini Live API and start a session.
-  Future<void> connect() async {
+  ///
+  /// Accepts optional [systemPrompt] and [tools] to customize the session.
+  /// When null, defaults to the daily call prompt and save_entry tool.
+  Future<void> connect({
+    String? systemPrompt,
+    List<FunctionDeclaration>? tools,
+  }) async {
     _stateController.add(GeminiLiveState.connecting);
+
+    final effectivePrompt = systemPrompt ?? _systemPrompt;
+    final effectiveTools = tools ?? [saveEntryDeclaration];
 
     try {
       final liveModel = FirebaseAI.googleAI().liveGenerativeModel(
@@ -71,10 +80,8 @@ class GeminiLiveService {
           outputAudioTranscription: AudioTranscriptionConfig(),
           speechConfig: SpeechConfig(voiceName: 'Aoede'),
         ),
-        systemInstruction: Content.text(_systemPrompt),
-        tools: [
-          Tool.functionDeclarations([_saveEntryDeclaration]),
-        ],
+        systemInstruction: Content.text(effectivePrompt),
+        tools: [Tool.functionDeclarations(effectiveTools)],
       );
 
       _session = await liveModel.connect().timeout(
@@ -220,7 +227,7 @@ class GeminiLiveService {
     }
   }
 
-  static final _saveEntryDeclaration = FunctionDeclaration(
+  static final saveEntryDeclaration = FunctionDeclaration(
     'save_entry',
     'Save a journal entry for the user. Call this when the user shares '
         'something they want to remember — a thought, feeling, experience, or '
@@ -238,6 +245,18 @@ class GeminiLiveService {
       'transcript': Schema.string(
         description:
             'The raw transcript of what the user said that led to this entry.',
+      ),
+    },
+  );
+
+  static final editEntryDeclaration = FunctionDeclaration(
+    'edit_entry',
+    'Edit an existing journal entry. Call this when the user wants to '
+        'modify, correct, or rephrase something they previously shared.',
+    parameters: {
+      'entry_id': Schema.string(description: 'The ID of the entry to edit.'),
+      'text': Schema.string(
+        description: 'The new text for the entry, written in first person.',
       ),
     },
   );

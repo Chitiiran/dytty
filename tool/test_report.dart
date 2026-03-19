@@ -1,302 +1,169 @@
-// Converts flutter test --machine JSON output + lcov.info to an HTML report.
-// Usage: dart run tool/test_report.dart [input] [output]
-//   input  defaults to test-results.json
-//   output defaults to test-report.html
-// Also reads coverage/lcov.info if present.
+// Unified test report dashboard — combines Flutter, Playwright, and Maestro results.
+// Usage: dart run tool/test_report.dart [--run-dir <path>] [input] [output] [--no-screenshots]
+//   --run-dir   resolve all paths relative to this directory (e.g. test-output/runs/<timestamp>)
+//   input       defaults to test-results.json (legacy) or <run-dir>/flutter/results.json
+//   output      defaults to test-report.html (legacy) or <run-dir>/report.html
 
-import 'dart:convert';
 import 'dart:io';
 
+import 'test_report/models.dart';
+import 'test_report/parsers.dart';
+import 'test_report/html_renderer.dart';
+
 void main(List<String> args) {
-  final inputPath = args.isNotEmpty ? args[0] : 'test-results.json';
-  final outputPath = args.length > 1 ? args[1] : 'test-report.html';
+  final noScreenshots = args.contains('--no-screenshots');
 
-  final file = File(inputPath);
-  if (!file.existsSync()) {
-    stderr.writeln('Input file not found: $inputPath');
-    exit(1);
-  }
-
-  final lines = file.readAsLinesSync().where((l) => l.trim().isNotEmpty);
-  final events = <Map<String, dynamic>>[];
-  for (final line in lines) {
-    try {
-      events.add(jsonDecode(line) as Map<String, dynamic>);
-    } catch (_) {
-      // skip non-JSON lines
+  // Parse --run-dir flag
+  String? runDir;
+  final filteredArgs = <String>[];
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '--run-dir' && i + 1 < args.length) {
+      runDir = args[i + 1];
+      i++; // skip value
+    } else if (!args[i].startsWith('--')) {
+      filteredArgs.add(args[i]);
     }
   }
 
-  // Build test info from events
-  final tests = <int, _Test>{};
-  final suites = <int, String>{};
+  // Auto-detect run-dir: if not provided, try test-output/latest
+  if (runDir == null && Directory('test-output/latest').existsSync()) {
+    runDir = 'test-output/latest';
+  }
 
-  for (final e in events) {
-    final type = e['type'] as String?;
-    if (type == 'suite') {
-      final suite = e['suite'] as Map<String, dynamic>;
-      suites[suite['id'] as int] = suite['path'] as String? ?? '';
-    } else if (type == 'testStart') {
-      final test = e['test'] as Map<String, dynamic>;
-      final id = test['id'] as int;
-      tests[id] = _Test(
-        name: test['name'] as String? ?? '',
-        suiteId: test['suiteID'] as int? ?? 0,
-      );
-    } else if (type == 'testDone') {
-      final id = e['testID'] as int;
-      final t = tests[id];
-      if (t != null) {
-        t.result = e['result'] as String? ?? 'unknown';
-        t.hidden = e['hidden'] as bool? ?? false;
-        t.skipped = e['skipped'] as bool? ?? false;
-        t.time = e['time'] as int? ?? 0;
-      }
-    } else if (type == 'error') {
-      final id = e['testID'] as int;
-      final t = tests[id];
-      if (t != null) {
-        t.error = e['error'] as String? ?? '';
-        t.stackTrace = e['stackTrace'] as String? ?? '';
-      }
+  // Resolve paths based on run-dir or legacy defaults
+  final String inputPath;
+  final String outputPath;
+  final String covPath;
+  final String playwrightPath;
+  final String maestroDir;
+  final String playwrightScreenshotDir;
+  final String flutterEnvPath;
+  final String playwrightEnvPath;
+  final String maestroEnvPath;
+
+  if (runDir != null) {
+    inputPath = filteredArgs.isNotEmpty
+        ? filteredArgs[0]
+        : '$runDir/flutter/results.json';
+    outputPath = filteredArgs.length > 1
+        ? filteredArgs[1]
+        : '$runDir/report.html';
+    covPath = '$runDir/flutter/lcov.info';
+    playwrightPath = '$runDir/playwright/results.json';
+    maestroDir = '$runDir/device-e2e/maestro';
+    playwrightScreenshotDir = '$runDir/playwright/screenshots';
+    flutterEnvPath = '$runDir/flutter/env.json';
+    playwrightEnvPath = '$runDir/playwright/env.json';
+    maestroEnvPath = '$runDir/device-e2e/maestro/env.json';
+  } else {
+    inputPath = filteredArgs.isNotEmpty ? filteredArgs[0] : 'test-results.json';
+    outputPath = filteredArgs.length > 1 ? filteredArgs[1] : 'test-report.html';
+    covPath = 'coverage/lcov.info';
+    playwrightPath = 'playwright-results.json';
+    maestroDir = '.maestro/screenshots/latest';
+    playwrightScreenshotDir = 'test-results';
+    flutterEnvPath = '';
+    playwrightEnvPath = '';
+    maestroEnvPath = '';
+  }
+
+  // --- Parse all data sources ---
+  final flutterResults = parseFlutterResults(inputPath);
+  final flutterSuites = flutterResults.suites;
+  final covFiles = parseLcov(covPath);
+  final playwrightResults = parsePlaywrightResults(playwrightPath);
+  final maestroResults = parseMaestroResults(maestroDir);
+  final maestroScreenshots = noScreenshots
+      ? <Screenshot>[]
+      : collectScreenshots(maestroDir);
+  final playwrightScreenshots = noScreenshots
+      ? <Screenshot>[]
+      : collectScreenshots(playwrightScreenshotDir);
+  final e2eCoverage = parseScreenCoverage('tool/screen-coverage.yaml');
+
+  // --- Categorize Flutter suites ---
+  final unitSuites = <String, List<Test>>{};
+  final widgetSuites = <String, List<Test>>{};
+  final goldenSuites = <String, List<Test>>{};
+
+  for (final entry in flutterSuites.entries) {
+    final path = entry.key;
+    if (path.contains('test/goldens/') || path.contains('test\\goldens\\')) {
+      goldenSuites[path] = entry.value;
+    } else if (path.contains('test/widgets/') ||
+        path.contains('test\\widgets\\')) {
+      widgetSuites[path] = entry.value;
+    } else {
+      unitSuites[path] = entry.value;
     }
   }
 
-  // Filter out hidden/loading tests
-  final visible = tests.values
-      .where((t) => !t.hidden && t.result != null)
-      .toList();
+  // --- Read environment metadata ---
+  final flutterEnv = readEnvLabel(flutterEnvPath);
+  final playwrightEnv = readEnvLabel(playwrightEnvPath);
+  final maestroEnv = readEnvLabel(maestroEnvPath);
 
-  final passed = visible.where((t) => t.result == 'success').length;
-  final failed = visible.where((t) => t.result == 'failure').length;
-  final skipped = visible.where((t) => t.skipped).length;
-  final total = visible.length;
+  // --- Build test layers ---
+  final layers = <TestLayer>[
+    buildFlutterLayer(
+      'Unit Tests',
+      'unit',
+      unitSuites,
+      'flutter test --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildFlutterLayer(
+      'Widget Tests',
+      'widget',
+      widgetSuites,
+      'flutter test test/widgets/ --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildFlutterLayer(
+      'Golden Tests',
+      'golden',
+      goldenSuites,
+      'flutter test test/goldens/ --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildPlaywrightLayer(
+      playwrightResults,
+      playwrightScreenshots,
+      playwrightEnv,
+    ),
+    buildMaestroLayer(maestroResults, maestroScreenshots, maestroEnv),
+  ];
 
-  // Group by suite
-  final grouped = <String, List<_Test>>{};
-  for (final t in visible) {
-    final suite = suites[t.suiteId] ?? 'unknown';
-    grouped.putIfAbsent(suite, () => []).add(t);
+  // --- Generate HTML ---
+  final html = renderReport(
+    layers: layers,
+    covFiles: covFiles,
+    e2eCoverage: e2eCoverage,
+  );
+
+  File(outputPath).writeAsStringSync(html);
+
+  // --- Summary ---
+  var covLineHit = 0, covLineTotal = 0;
+  for (final f in covFiles) {
+    covLineHit += f.lineHit;
+    covLineTotal += f.lineTotal;
+  }
+  final covPct = covLineTotal > 0 ? (covLineHit / covLineTotal * 100) : 0.0;
+
+  var totalTests = 0, totalPassed = 0, totalFailed = 0;
+  for (final c in layers) {
+    totalTests += c.total;
+    totalPassed += c.passed;
+    totalFailed += c.failed;
   }
 
-  final sortedSuites = grouped.keys.toList()..sort();
-
-  // Generate HTML
-  final buf = StringBuffer();
-  buf.writeln('<!DOCTYPE html>');
-  buf.writeln('<html lang="en"><head>');
-  buf.writeln('<meta charset="UTF-8">');
-  buf.writeln(
-    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-  );
-  buf.writeln('<title>Dytty Test Report</title>');
-  buf.writeln('<style>');
-  buf.writeln('''
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 24px; }
-    h1 { font-size: 24px; margin-bottom: 16px; }
-    .summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .card { background: white; border-radius: 8px; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 120px; }
-    .card .num { font-size: 32px; font-weight: bold; }
-    .card .label { font-size: 14px; color: #666; }
-    .card.pass .num { color: #2e7d32; }
-    .card.fail .num { color: #c62828; }
-    .card.skip .num { color: #f57f17; }
-    .card.total .num { color: #1565c0; }
-    h2 { font-size: 20px; margin: 32px 0 16px; }
-    .coverage-bar { background: #e0e0e0; border-radius: 4px; height: 8px; flex: 1; }
-    .coverage-bar .fill { height: 100%; border-radius: 4px; }
-    .cov-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-    .cov-row:last-child { border-bottom: none; }
-    .cov-row .file { flex: 2; font-family: monospace; font-size: 12px; }
-    .cov-row .pct { width: 50px; text-align: right; font-weight: 600; font-size: 13px; }
-    .cov-row .ratio { width: 80px; text-align: right; color: #999; font-size: 12px; }
-    .suite { background: white; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-    .suite-header { padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee; font-weight: 600; font-size: 13px; color: #555; cursor: pointer; display: flex; justify-content: space-between; }
-    .suite-header:hover { background: #f0f0f0; }
-    .suite-header .counts { font-weight: normal; }
-    .test { padding: 8px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 8px; font-size: 14px; }
-    .test:last-child { border-bottom: none; }
-    .test .icon { width: 20px; text-align: center; flex-shrink: 0; }
-    .test .name { flex: 1; }
-    .test .time { color: #999; font-size: 12px; flex-shrink: 0; }
-    .test.pass .icon { color: #2e7d32; }
-    .test.fail .icon { color: #c62828; }
-    .test.fail { background: #fff5f5; }
-    .error { padding: 8px 16px 12px 44px; background: #fff5f5; font-size: 12px; font-family: monospace; white-space: pre-wrap; color: #c62828; border-bottom: 1px solid #f0f0f0; }
-    .timestamp { font-size: 12px; color: #999; margin-bottom: 24px; }
-    details > summary { list-style: none; }
-    details > summary::-webkit-details-marker { display: none; }
-  ''');
-  buf.writeln('</style></head><body>');
-  buf.writeln('<h1>Dytty Test Report</h1>');
-  buf.writeln(
-    '<p class="timestamp">Generated: ${DateTime.now().toIso8601String()}</p>',
-  );
-
-  // Summary cards
-  buf.writeln('<div class="summary">');
-  buf.writeln(
-    '<div class="card total"><div class="num">$total</div><div class="label">Total</div></div>',
-  );
-  buf.writeln(
-    '<div class="card pass"><div class="num">$passed</div><div class="label">Passed</div></div>',
-  );
-  buf.writeln(
-    '<div class="card fail"><div class="num">$failed</div><div class="label">Failed</div></div>',
-  );
-  buf.writeln(
-    '<div class="card skip"><div class="num">$skipped</div><div class="label">Skipped</div></div>',
-  );
-  buf.writeln('</div>');
-
-  // Suites
-  for (final suitePath in sortedSuites) {
-    final suiteTests = grouped[suitePath]!;
-    final suitePassed = suiteTests.where((t) => t.result == 'success').length;
-    final suiteFailed = suiteTests.where((t) => t.result == 'failure').length;
-    final shortPath = suitePath.replaceAll(
-      RegExp(r'^.*[/\\]test[/\\]'),
-      'test/',
-    );
-    final hasFails = suiteFailed > 0;
-
-    buf.writeln('<details class="suite"${hasFails ? ' open' : ''}>');
-    buf.writeln(
-      '<summary class="suite-header"><span>$shortPath</span><span class="counts">$suitePassed/${suiteTests.length} passed</span></summary>',
-    );
-
-    for (final t in suiteTests) {
-      final cls = t.result == 'success' ? 'pass' : 'fail';
-      final icon = t.result == 'success' ? '&#10003;' : '&#10007;';
-      final timeMs = t.time;
-      final timeStr = timeMs > 0 ? '${timeMs}ms' : '';
-      // Strip suite prefix from test name for readability
-      final name = _escapeHtml(t.name);
-      buf.writeln(
-        '<div class="test $cls"><span class="icon">$icon</span><span class="name">$name</span><span class="time">$timeStr</span></div>',
-      );
-      if (t.error != null && t.error!.isNotEmpty) {
-        buf.writeln('<div class="error">${_escapeHtml(t.error!)}</div>');
-      }
-    }
-
-    buf.writeln('</details>');
-  }
-
-  // Coverage section
-  final covFiles = _parseLcov('coverage/lcov.info');
-  if (covFiles.isNotEmpty) {
-    var covHit = 0;
-    var covTotal = 0;
-    for (final f in covFiles) {
-      covHit += f.hit;
-      covTotal += f.total;
-    }
-    final covPct = covTotal > 0 ? (covHit / covTotal * 100) : 0.0;
-    final covColor = covPct >= 80
-        ? '#2e7d32'
-        : covPct >= 50
-        ? '#f57f17'
-        : '#c62828';
-
-    buf.writeln('<h2>Coverage: ${covPct.toStringAsFixed(1)}%</h2>');
-    buf.writeln('<div class="summary">');
-    buf.writeln(
-      '<div class="card" style="flex:1;max-width:400px"><div class="num" style="color:$covColor">${covPct.toStringAsFixed(1)}%</div><div class="label">$covHit / $covTotal lines</div></div>',
-    );
-    buf.writeln('</div>');
-
-    // Sort by coverage ascending (worst first)
-    covFiles.sort((a, b) => a.pct.compareTo(b.pct));
-
-    buf.writeln('<details class="suite" open>');
-    buf.writeln(
-      '<summary class="suite-header"><span>Coverage by file</span><span class="counts">${covFiles.length} files</span></summary>',
-    );
-    for (final f in covFiles) {
-      final pctStr = f.pct.toStringAsFixed(0);
-      final barColor = f.pct >= 80
-          ? '#2e7d32'
-          : f.pct >= 50
-          ? '#f57f17'
-          : '#c62828';
-      buf.writeln('<div class="cov-row">');
-      buf.writeln('<span class="file">${_escapeHtml(f.path)}</span>');
-      buf.writeln(
-        '<div class="coverage-bar"><div class="fill" style="width:${f.pct.clamp(0, 100)}%;background:$barColor"></div></div>',
-      );
-      buf.writeln('<span class="pct" style="color:$barColor">$pctStr%</span>');
-      buf.writeln('<span class="ratio">${f.hit}/${f.total}</span>');
-      buf.writeln('</div>');
-    }
-    buf.writeln('</details>');
-  }
-
-  buf.writeln('</body></html>');
-
-  File(outputPath).writeAsStringSync(buf.toString());
-  final covMsg = covFiles.isNotEmpty ? ', coverage included' : '';
+  final covMsg = covFiles.isNotEmpty
+      ? ', coverage ${covPct.toStringAsFixed(1)}%'
+      : '';
+  final srcCount = layers.where((c) => c.total > 0).length;
   print(
-    'Test report: $outputPath ($passed/$total passed, $failed failed$covMsg)',
+    'Test report: $outputPath '
+    '($totalPassed/$totalTests passed, $totalFailed failed$covMsg, $srcCount data sources)',
   );
-}
-
-String _escapeHtml(String s) =>
-    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-
-class _Test {
-  _Test({required this.name, required this.suiteId});
-
-  final String name;
-  final int suiteId;
-  String? result;
-  bool hidden = false;
-  bool skipped = false;
-  int time = 0;
-  String? error;
-  String? stackTrace;
-}
-
-class _CovFile {
-  _CovFile(this.path, this.hit, this.total);
-
-  final String path;
-  final int hit;
-  final int total;
-  double get pct => total > 0 ? (hit / total * 100) : 0;
-}
-
-List<_CovFile> _parseLcov(String path) {
-  final file = File(path);
-  if (!file.existsSync()) return [];
-
-  final results = <_CovFile>[];
-  String? currentFile;
-  var hit = 0;
-  var total = 0;
-
-  for (final line in file.readAsLinesSync()) {
-    if (line.startsWith('SF:')) {
-      currentFile = line
-          .substring(3)
-          .replaceAll(RegExp(r'^.*[/\\]lib[/\\]'), 'lib/');
-    } else if (line.startsWith('DA:')) {
-      final parts = line.substring(3).split(',');
-      if (parts.length >= 2) {
-        total++;
-        if (int.tryParse(parts[1]) case final count? when count > 0) {
-          hit++;
-        }
-      }
-    } else if (line == 'end_of_record') {
-      if (currentFile != null && total > 0) {
-        results.add(_CovFile(currentFile, hit, total));
-      }
-      currentFile = null;
-      hit = 0;
-      total = 0;
-    }
-  }
-  return results;
 }

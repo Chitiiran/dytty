@@ -17,7 +17,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAESTRO_DIR="$PROJECT_DIR/.maestro"
-SCREENSHOT_DIR="$PROJECT_DIR/.maestro/screenshots/latest"
+DEFAULT_SCREENSHOT_DIR="$PROJECT_DIR/.maestro/screenshots/latest"
+SCREENSHOT_DIR="$DEFAULT_SCREENSHOT_DIR"
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 
 # Parse arguments
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
     --skip-build)
       SKIP_BUILD=true
       shift
+      ;;
+    --output-dir)
+      SCREENSHOT_DIR="$2"
+      shift 2
       ;;
     *)
       echo "Unknown option: $1"
@@ -102,15 +107,35 @@ adb shell settings put secure show_stylus_handwriting_onboarding 0 2>/dev/null
 # Create screenshot output directory
 mkdir -p "$SCREENSHOT_DIR"
 
-# Build maestro command
-MAESTRO_CMD="maestro test"
-MAESTRO_CMD="$MAESTRO_CMD --debug-output $SCREENSHOT_DIR"
-MAESTRO_CMD="$MAESTRO_CMD --format junit"
-MAESTRO_CMD="$MAESTRO_CMD --output $SCREENSHOT_DIR/results.xml"
+# Point the hardcoded takeScreenshot paths to the run output directory
+# Maestro YAML flows use ".maestro/screenshots/latest/" as screenshot destination
+MAESTRO_SCREENSHOTS="$MAESTRO_DIR/screenshots/latest"
+if [[ "$SCREENSHOT_DIR" != "$DEFAULT_SCREENSHOT_DIR" ]]; then
+  rm -rf "$MAESTRO_SCREENSHOTS" 2>/dev/null || true
+  mkdir -p "$(dirname "$MAESTRO_SCREENSHOTS")"
+  if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    LINK_WIN=$(cygpath -w "$MAESTRO_SCREENSHOTS")
+    TARGET_WIN=$(cygpath -w "$SCREENSHOT_DIR")
+    cmd //c "mklink /J $LINK_WIN $TARGET_WIN" > /dev/null 2>&1 || \
+      ln -sf "$SCREENSHOT_DIR" "$MAESTRO_SCREENSHOTS" 2>/dev/null || true
+  else
+    ln -snf "$SCREENSHOT_DIR" "$MAESTRO_SCREENSHOTS"
+  fi
+fi
+
+# Build base maestro command (--output set per flow to avoid overwrites)
+MAESTRO_BASE="maestro test"
+MAESTRO_BASE="$MAESTRO_BASE --debug-output $SCREENSHOT_DIR"
+MAESTRO_BASE="$MAESTRO_BASE --format junit"
 
 if [[ -n "$TAGS" ]]; then
-  MAESTRO_CMD="$MAESTRO_CMD --include-tags=$TAGS"
+  MAESTRO_BASE="$MAESTRO_BASE --include-tags=$TAGS"
 fi
+
+# Per-flow XML results directory
+FLOW_RESULTS_DIR="$SCREENSHOT_DIR/flow-results"
+mkdir -p "$FLOW_RESULTS_DIR"
+FLOW_INDEX=0
 
 # Determine what to test
 echo ""
@@ -123,10 +148,12 @@ if [[ -n "$FLOW" ]]; then
   TARGET="$MAESTRO_DIR/$FLOW"
   if [[ -f "$TARGET" ]]; then
     echo "  Target: $TARGET"
-    $MAESTRO_CMD "$TARGET" 2>&1 || true
+    $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1 || true
+    FLOW_INDEX=$((FLOW_INDEX + 1))
   elif [[ -d "$TARGET" ]]; then
     echo "  Target: $TARGET"
-    $MAESTRO_CMD "$TARGET" 2>&1 || true
+    $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1 || true
+    FLOW_INDEX=$((FLOW_INDEX + 1))
   else
     echo "ERROR: $TARGET not found"
     exit 1
@@ -134,8 +161,6 @@ if [[ -n "$FLOW" ]]; then
 else
   # Run each flow file individually and sequentially to avoid parallel interference
   # (flows share a single emulator, so clearState in one flow can wipe another's data)
-  TOTAL_PASS=0
-  TOTAL_FAIL=0
   for dir in "$MAESTRO_DIR"/*/; do
     dirname=$(basename "$dir")
     # Skip helpers and screenshots directories
@@ -150,11 +175,24 @@ else
     for flow in "${yamls[@]}"; do
       flowname=$(basename "$flow")
       echo "  > $flowname"
-      $MAESTRO_CMD "$flow" 2>&1 || true
+      $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1 || true
+      FLOW_INDEX=$((FLOW_INDEX + 1))
     done
     echo ""
   done
 fi
+
+# Merge per-flow XMLs into a single results.xml
+{
+  echo '<?xml version="1.0" encoding="UTF-8"?>'
+  echo '<testsuites>'
+  for xml in "$FLOW_RESULTS_DIR"/*.xml; do
+    [[ -f "$xml" ]] || continue
+    # Extract <testsuite> content (strip XML declaration and <testsuites> wrapper)
+    sed -n '/<testsuite /,/<\/testsuite>/p' "$xml" 2>/dev/null
+  done
+  echo '</testsuites>'
+} > "$SCREENSHOT_DIR/results.xml"
 
 # Summary
 echo ""

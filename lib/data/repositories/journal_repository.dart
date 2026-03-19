@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/daily_entry.dart';
+import 'package:dytty/data/models/review_summary.dart';
 
 class JournalRepository {
   final FirebaseFirestore _firestore;
@@ -106,6 +107,67 @@ class JournalRepository {
         date,
       ).update({'updatedAt': Timestamp.fromDate(DateTime.now())});
     }
+  }
+
+  CollectionReference get _reviewSummariesCollection =>
+      _firestore.collection('users').doc(_uid).collection('reviewSummaries');
+
+  /// Gets category entries for a specific category across multiple dates.
+  /// Returns a map keyed by date string, with a list of entries per date.
+  Future<Map<String, List<CategoryEntry>>> getCategoryEntriesForDateRange(
+    String categoryId,
+    List<String> dates,
+  ) async {
+    final result = <String, List<CategoryEntry>>{};
+
+    for (final date in dates) {
+      final snapshot = await _categoryEntries(date)
+          .where('category', isEqualTo: categoryId)
+          .orderBy('createdAt', descending: false)
+          .get();
+
+      result[date] = snapshot.docs
+          .map((doc) => CategoryEntry.fromFirestore(doc))
+          .toList();
+    }
+
+    return result;
+  }
+
+  /// Marks a category entry as reviewed.
+  Future<void> markEntryReviewed(String date, String entryId) async {
+    await _categoryEntries(date).doc(entryId).update({'isReviewed': true});
+  }
+
+  /// Saves or updates a review summary.
+  /// Upserts by categoryId + weekStart — updates if exists, creates if not.
+  Future<void> saveReviewSummary(ReviewSummary summary) async {
+    final existing = await _reviewSummariesCollection
+        .where('categoryId', isEqualTo: summary.categoryId)
+        .where('weekStart', isEqualTo: summary.weekStart)
+        .limit(1)
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      await existing.docs.first.reference.update(summary.toFirestore());
+    } else {
+      await _reviewSummariesCollection.add(summary.toFirestore());
+    }
+  }
+
+  /// Gets the review summary for a category and week.
+  Future<ReviewSummary?> getReviewSummary(
+    String categoryId,
+    String weekStart,
+  ) async {
+    final snapshot = await _reviewSummariesCollection
+        .where('categoryId', isEqualTo: categoryId)
+        .where('weekStart', isEqualTo: weekStart)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) return null;
+    return ReviewSummary.fromFirestore(snapshot.docs.first);
   }
 
   /// Gets dates that have entries for a given year/month.

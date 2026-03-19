@@ -10,6 +10,7 @@ class CategoryEntry extends Equatable {
   final String? audioUrl;
   final String? transcript;
   final List<String> tags;
+  final bool isReviewed;
 
   const CategoryEntry({
     required this.id,
@@ -20,7 +21,34 @@ class CategoryEntry extends Equatable {
     this.audioUrl,
     this.transcript,
     this.tags = const [],
+    this.isReviewed = false,
   });
+
+  CategoryEntry copyWith({
+    String? id,
+    String? categoryId,
+    String? text,
+    String? source,
+    DateTime? createdAt,
+    String? audioUrl,
+    String? transcript,
+    List<String>? tags,
+    bool? isReviewed,
+    bool clearAudioUrl = false,
+    bool clearTranscript = false,
+  }) {
+    return CategoryEntry(
+      id: id ?? this.id,
+      categoryId: categoryId ?? this.categoryId,
+      text: text ?? this.text,
+      source: source ?? this.source,
+      createdAt: createdAt ?? this.createdAt,
+      audioUrl: clearAudioUrl ? null : (audioUrl ?? this.audioUrl),
+      transcript: clearTranscript ? null : (transcript ?? this.transcript),
+      tags: tags ?? this.tags,
+      isReviewed: isReviewed ?? this.isReviewed,
+    );
+  }
 
   @override
   List<Object?> get props => [
@@ -32,6 +60,7 @@ class CategoryEntry extends Equatable {
     audioUrl,
     transcript,
     tags,
+    isReviewed,
   ];
 
   factory CategoryEntry.fromFirestore(DocumentSnapshot doc) {
@@ -45,6 +74,7 @@ class CategoryEntry extends Equatable {
       audioUrl: data['audioUrl'] as String?,
       transcript: data['transcript'] as String?,
       tags: (data['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+      isReviewed: data['isReviewed'] as bool? ?? false,
     );
   }
 
@@ -57,6 +87,7 @@ class CategoryEntry extends Equatable {
       if (audioUrl != null) 'audioUrl': audioUrl,
       if (transcript != null) 'transcript': transcript,
       if (tags.isNotEmpty) 'tags': tags,
+      if (isReviewed) 'isReviewed': true,
     };
   }
 }

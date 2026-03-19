@@ -15,6 +15,9 @@ class AppColors {
   static const beauty = Color(0xFFEC4899);
   static const identity = Color(0xFF06B6D4);
 
+  // Semantic colors
+  static const callActiveRed = Color(0xFFEF4444);
+
   // Category surface tints (12% opacity fills for card backgrounds)
   static Color positiveSurface(Brightness b) =>
       b == Brightness.light ? const Color(0xFFFFF8E1) : const Color(0xFF2D2510);
