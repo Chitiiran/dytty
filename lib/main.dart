@@ -43,7 +43,10 @@ void main() async {
     FirebaseStorage.instance.useStorageEmulator(emulatorHost, 9199);
   }
 
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Portrait lock only on mobile — Platform check is unsafe on web
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  }
 
   notificationService = NotificationService();
   await notificationService.init();
