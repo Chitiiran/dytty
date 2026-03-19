@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,9 +27,6 @@ SpeechRecognitionResult _makeSpeechResult(String words, bool isFinal) {
 }
 
 void main() {
-  GoogleFonts.config.allowRuntimeFetching = false;
-  Animate.restartOnHotReload = false;
-
   late MockSpeechToText mockStt;
   late MockLlmService mockLlm;
   late MockCategoryCubit mockCategoryCubit; // from pump_app.dart
@@ -154,9 +150,11 @@ void main() {
         expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
         expect(find.text('Start speaking...'), findsOneWidget);
         expect(find.text('Done'), findsOneWidget);
+
+        // Flush any pending zero-duration animation timers from flutter_animate
+        // so the test framework's teardown doesn't assert on pending timers.
+        await tester.pump(const Duration(seconds: 1));
       },
-      // flutter_animate's repeating mic pulse creates pending timers
-      skip: true,
     );
 
     testWidgets('shows error state with error message', (tester) async {
