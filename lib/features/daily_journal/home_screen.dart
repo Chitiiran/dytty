@@ -561,48 +561,48 @@ class _ProgressCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: categories.map((cat) {
                   final isFilled = filledCategoryIds.contains(cat.id);
-                  return Semantics(
-                    label: '${cat.displayName} detail',
-                    button: true,
-                    child: GestureDetector(
-                    onTap: () => onCategoryTap?.call(cat.id),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: isFilled
-                                ? cat.color.withValues(alpha: 0.15)
-                                : theme.colorScheme.surfaceContainerHighest
-                                      .withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            cat.icon,
-                            size: 20,
-                            color: isFilled
-                                ? cat.color
-                                : theme.colorScheme.onSurfaceVariant.withValues(
-                                    alpha: 0.3,
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        if (isFilled)
+                  return Tooltip(
+                    message: '${cat.displayName} detail',
+                    child: InkWell(
+                      onTap: () => onCategoryTap?.call(cat.id),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Column(
+                        children: [
                           Container(
-                            width: 6,
-                            height: 6,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
-                              color: cat.color,
+                              color: isFilled
+                                  ? cat.color.withValues(alpha: 0.15)
+                                  : theme.colorScheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.5),
                               shape: BoxShape.circle,
                             ),
-                          )
-                        else
-                          const SizedBox(height: 6),
-                      ],
+                            child: Icon(
+                              cat.icon,
+                              size: 20,
+                              color: isFilled
+                                  ? cat.color
+                                  : theme.colorScheme.onSurfaceVariant.withValues(
+                                      alpha: 0.3,
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if (isFilled)
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: cat.color,
+                                shape: BoxShape.circle,
+                              ),
+                            )
+                          else
+                            const SizedBox(height: 6),
+                        ],
+                      ),
                     ),
-                  ),
                   );
                 }).toList(),
               ),

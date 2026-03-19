@@ -7,6 +7,19 @@ import {
   clearEmulatorFirestore,
 } from './helpers';
 
+/** Scrolls down and clicks a category icon by its tooltip text. */
+async function clickCategoryIcon(page: import('@playwright/test').Page, categoryName: string) {
+  // The category icons in the ProgressCard are below the fold.
+  // Scroll the page down to reveal them.
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(1000);
+
+  // Tooltip-based InkWell renders as a button with the tooltip as accessible name
+  const icon = page.getByRole('button', { name: `${categoryName} detail` });
+  await expect(icon).toBeVisible({ timeout: 10_000 });
+  await icon.click();
+}
+
 test.describe('Category Detail Screen', () => {
   test.beforeEach(async ({ page }) => {
     await clearEmulatorAuth();
@@ -17,25 +30,24 @@ test.describe('Category Detail Screen', () => {
   });
 
   test('navigates to category detail from progress card', async ({ page }) => {
-    // Tap the "Positive Things detail" button on the progress card
-    await clickByLabel(page, 'Positive Things detail');
+    await clickCategoryIcon(page, 'Positive Things');
 
     // Should show category title in app bar
     await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
   });
 
   test('shows empty state when no entries exist', async ({ page }) => {
-    await clickByLabel(page, 'Positive Things detail');
+    await clickCategoryIcon(page, 'Gratitude');
 
-    // Should show empty state messaging
-    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
-    // The empty state widget should be visible (no entries yet)
-    // Wait for loading to finish
+    // Category detail screen title — use exact match to avoid matching tooltip text
+    await expect(page.getByText('Gratitude', { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Wait for loading to finish — should show empty state
     await page.waitForTimeout(2000);
   });
 
   test('can navigate back from category detail', async ({ page }) => {
-    await clickByLabel(page, 'Positive Things detail');
+    await clickCategoryIcon(page, 'Positive Things');
     await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
 
     // Navigate back
@@ -62,7 +74,7 @@ test.describe('Category Detail Screen', () => {
     await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
 
     // Navigate to category detail via progress card
-    await clickByLabel(page, 'Positive Things detail');
+    await clickCategoryIcon(page, 'Positive Things');
     await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
 
     // Entry should be visible in category detail
@@ -79,7 +91,7 @@ test.describe('Category Detail Screen', () => {
     ];
 
     for (const name of categories) {
-      await clickByLabel(page, `${name} detail`);
+      await clickCategoryIcon(page, name);
       await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
       await page.goBack();
       await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
