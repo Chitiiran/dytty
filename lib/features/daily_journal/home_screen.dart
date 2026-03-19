@@ -561,7 +561,10 @@ class _ProgressCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: categories.map((cat) {
                   final isFilled = filledCategoryIds.contains(cat.id);
-                  return GestureDetector(
+                  return Semantics(
+                    label: '${cat.displayName} detail',
+                    button: true,
+                    child: GestureDetector(
                     onTap: () => onCategoryTap?.call(cat.id),
                     child: Column(
                       children: [
@@ -599,6 +602,7 @@ class _ProgressCard extends StatelessWidget {
                           const SizedBox(height: 6),
                       ],
                     ),
+                  ),
                   );
                 }).toList(),
               ),
