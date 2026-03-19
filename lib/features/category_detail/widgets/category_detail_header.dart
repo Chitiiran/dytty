@@ -20,9 +20,9 @@ class CategoryDetailHeader extends StatelessWidget
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   JournalCategory get _category => JournalCategory.values.firstWhere(
-        (c) => c.name == categoryId,
-        orElse: () => JournalCategory.positive,
-      );
+    (c) => c.name == categoryId,
+    orElse: () => JournalCategory.positive,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -78,11 +78,7 @@ class _CallBadgeIcon extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(
-              category.icon,
-              color: category.color,
-              size: 28,
-            ),
+            Icon(category.icon, color: category.color, size: 28),
             Positioned(
               right: 2,
               bottom: 4,

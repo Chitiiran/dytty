@@ -21,7 +21,15 @@ class TestLayerResults {
 }
 
 class CovFile {
-  CovFile(this.path, {this.lineHit = 0, this.lineTotal = 0, this.fnHit = 0, this.fnTotal = 0, this.brHit = 0, this.brTotal = 0});
+  CovFile(
+    this.path, {
+    this.lineHit = 0,
+    this.lineTotal = 0,
+    this.fnHit = 0,
+    this.fnTotal = 0,
+    this.brHit = 0,
+    this.brTotal = 0,
+  });
 
   final String path;
   final int lineHit;
@@ -70,12 +78,18 @@ class TestLayer {
 
   late final suiteKeys = suites.keys.toList()..sort();
   late final total = suites.values.fold<int>(0, (s, v) => s + v.length);
-  late final passed = suites.values
-      .fold<int>(0, (s, v) => s + v.where((t) => t.result == 'success').length);
-  late final failed = suites.values
-      .fold<int>(0, (s, v) => s + v.where((t) => t.result == 'failure').length);
-  late final skipped =
-      suites.values.fold<int>(0, (s, v) => s + v.where((t) => t.skipped).length);
+  late final passed = suites.values.fold<int>(
+    0,
+    (s, v) => s + v.where((t) => t.result == 'success').length,
+  );
+  late final failed = suites.values.fold<int>(
+    0,
+    (s, v) => s + v.where((t) => t.result == 'failure').length,
+  );
+  late final skipped = suites.values.fold<int>(
+    0,
+    (s, v) => s + v.where((t) => t.skipped).length,
+  );
 }
 
 class E2eItem {

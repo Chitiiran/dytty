@@ -78,10 +78,7 @@ class CallControlsOverlay extends StatelessWidget {
               onPressed: onEndCall,
               tooltip: 'End call',
               backgroundColor: AppColors.callActiveRed,
-              child: const Icon(
-                Icons.call_end_rounded,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.call_end_rounded, color: Colors.white),
             ),
           ),
         ],

@@ -6,15 +6,12 @@ import 'package:dytty/core/constants/categories.dart';
 class EmptyCategoryState extends StatelessWidget {
   final String categoryId;
 
-  const EmptyCategoryState({
-    super.key,
-    required this.categoryId,
-  });
+  const EmptyCategoryState({super.key, required this.categoryId});
 
   JournalCategory get _category => JournalCategory.values.firstWhere(
-        (c) => c.name == categoryId,
-        orElse: () => JournalCategory.positive,
-      );
+    (c) => c.name == categoryId,
+    orElse: () => JournalCategory.positive,
+  );
 
   @override
   Widget build(BuildContext context) {

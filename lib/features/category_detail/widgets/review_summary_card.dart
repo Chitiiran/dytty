@@ -16,9 +16,9 @@ class ReviewSummaryCard extends StatelessWidget {
   });
 
   JournalCategory get _category => JournalCategory.values.firstWhere(
-        (c) => c.name == categoryId,
-        orElse: () => JournalCategory.positive,
-      );
+    (c) => c.name == categoryId,
+    orElse: () => JournalCategory.positive,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -28,18 +28,11 @@ class ReviewSummaryCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
       child: Container(
         decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: category.color,
-              width: 4,
-            ),
-          ),
+          border: Border(left: BorderSide(color: category.color, width: 4)),
         ),
         padding: const EdgeInsets.all(16),
         child: Column(

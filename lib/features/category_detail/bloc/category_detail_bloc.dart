@@ -237,10 +237,12 @@ class CategoryDetailBloc
     LoadCategoryDetail event,
     Emitter<CategoryDetailState> emit,
   ) async {
-    emit(state.copyWith(
-      status: CategoryDetailStatus.loading,
-      categoryId: event.categoryId,
-    ));
+    emit(
+      state.copyWith(
+        status: CategoryDetailStatus.loading,
+        categoryId: event.categoryId,
+      ),
+    );
 
     try {
       final now = _clock();
@@ -252,14 +254,16 @@ class CategoryDetailBloc
 
       // Get days with entries for current and previous month
       final currentMonthDays = await _repository.getDaysWithEntries(
-        now.year, now.month,
+        now.year,
+        now.month,
       );
       Set<String> prevMonthDays = {};
       if (now.day <= 7) {
         final prevMonth = now.month == 1 ? 12 : now.month - 1;
         final prevYear = now.month == 1 ? now.year - 1 : now.year;
         prevMonthDays = await _repository.getDaysWithEntries(
-          prevYear, prevMonth,
+          prevYear,
+          prevMonth,
         );
       }
       final allDaysWithEntries = {...currentMonthDays, ...prevMonthDays};
@@ -280,12 +284,14 @@ class CategoryDetailBloc
         final entries = entriesByDate[date] ?? [];
         if (entries.isEmpty) continue;
 
-        recentGroups.add(DateGroup(
-          date: date,
-          displayDate: _relativeDate(date, now),
-          entries: entries,
-          isCollapsed: false,
-        ));
+        recentGroups.add(
+          DateGroup(
+            date: date,
+            displayDate: _relativeDate(date, now),
+            entries: entries,
+            isCollapsed: false,
+          ),
+        );
       }
 
       // Get review summary for this week
@@ -297,19 +303,20 @@ class CategoryDetailBloc
 
       final hasRecent = recentGroups.any((g) => g.entries.isNotEmpty);
 
-      emit(state.copyWith(
-        status: CategoryDetailStatus.loaded,
-        categoryId: event.categoryId,
-        recentEntries: recentGroups,
-        reviewSummary: summary,
-        hasRecentEntries: hasRecent,
-        clearReviewSummary: summary == null,
-      ));
+      emit(
+        state.copyWith(
+          status: CategoryDetailStatus.loaded,
+          categoryId: event.categoryId,
+          recentEntries: recentGroups,
+          reviewSummary: summary,
+          hasRecentEntries: hasRecent,
+          clearReviewSummary: summary == null,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: CategoryDetailStatus.error,
-        error: e.toString(),
-      ));
+      emit(
+        state.copyWith(status: CategoryDetailStatus.error, error: e.toString()),
+      );
     }
   }
 
@@ -354,10 +361,9 @@ class CategoryDetailBloc
       return group;
     }).toList();
 
-    emit(state.copyWith(
-      recentEntries: updatedGroups,
-      clearEditingEntryId: true,
-    ));
+    emit(
+      state.copyWith(recentEntries: updatedGroups, clearEditingEntryId: true),
+    );
 
     // Persist to Firestore
     try {
@@ -395,17 +401,17 @@ class CategoryDetailBloc
       );
     } else {
       // New date group
-      updatedGroups.insert(0, DateGroup(
-        date: event.date,
-        displayDate: _relativeDate(event.date, now),
-        entries: [event.entry],
-      ));
+      updatedGroups.insert(
+        0,
+        DateGroup(
+          date: event.date,
+          displayDate: _relativeDate(event.date, now),
+          entries: [event.entry],
+        ),
+      );
     }
 
-    emit(state.copyWith(
-      recentEntries: updatedGroups,
-      hasRecentEntries: true,
-    ));
+    emit(state.copyWith(recentEntries: updatedGroups, hasRecentEntries: true));
   }
 
   Future<void> _onEntryEditedFromCall(
@@ -481,5 +487,4 @@ class CategoryDetailBloc
 
     return DateFormat('MMM d').format(date);
   }
-
 }

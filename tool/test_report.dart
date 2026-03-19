@@ -42,8 +42,12 @@ void main(List<String> args) {
   final String maestroEnvPath;
 
   if (runDir != null) {
-    inputPath = filteredArgs.isNotEmpty ? filteredArgs[0] : '$runDir/flutter/results.json';
-    outputPath = filteredArgs.length > 1 ? filteredArgs[1] : '$runDir/report.html';
+    inputPath = filteredArgs.isNotEmpty
+        ? filteredArgs[0]
+        : '$runDir/flutter/results.json';
+    outputPath = filteredArgs.length > 1
+        ? filteredArgs[1]
+        : '$runDir/report.html';
     covPath = '$runDir/flutter/lcov.info';
     playwrightPath = '$runDir/playwright/results.json';
     maestroDir = '$runDir/device-e2e/maestro';
@@ -69,10 +73,12 @@ void main(List<String> args) {
   final covFiles = parseLcov(covPath);
   final playwrightResults = parsePlaywrightResults(playwrightPath);
   final maestroResults = parseMaestroResults(maestroDir);
-  final maestroScreenshots =
-      noScreenshots ? <Screenshot>[] : collectScreenshots(maestroDir);
-  final playwrightScreenshots =
-      noScreenshots ? <Screenshot>[] : collectScreenshots(playwrightScreenshotDir);
+  final maestroScreenshots = noScreenshots
+      ? <Screenshot>[]
+      : collectScreenshots(maestroDir);
+  final playwrightScreenshots = noScreenshots
+      ? <Screenshot>[]
+      : collectScreenshots(playwrightScreenshotDir);
   final e2eCoverage = parseScreenCoverage('tool/screen-coverage.yaml');
 
   // --- Categorize Flutter suites ---
@@ -84,7 +90,8 @@ void main(List<String> args) {
     final path = entry.key;
     if (path.contains('test/goldens/') || path.contains('test\\goldens\\')) {
       goldenSuites[path] = entry.value;
-    } else if (path.contains('test/widgets/') || path.contains('test\\widgets\\')) {
+    } else if (path.contains('test/widgets/') ||
+        path.contains('test\\widgets\\')) {
       widgetSuites[path] = entry.value;
     } else {
       unitSuites[path] = entry.value;
@@ -98,13 +105,32 @@ void main(List<String> args) {
 
   // --- Build test layers ---
   final layers = <TestLayer>[
-    buildFlutterLayer('Unit Tests', 'unit', unitSuites,
-        'flutter test --machine > test-results.json', flutterEnv),
-    buildFlutterLayer('Widget Tests', 'widget', widgetSuites,
-        'flutter test test/widgets/ --machine > test-results.json', flutterEnv),
-    buildFlutterLayer('Golden Tests', 'golden', goldenSuites,
-        'flutter test test/goldens/ --machine > test-results.json', flutterEnv),
-    buildPlaywrightLayer(playwrightResults, playwrightScreenshots, playwrightEnv),
+    buildFlutterLayer(
+      'Unit Tests',
+      'unit',
+      unitSuites,
+      'flutter test --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildFlutterLayer(
+      'Widget Tests',
+      'widget',
+      widgetSuites,
+      'flutter test test/widgets/ --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildFlutterLayer(
+      'Golden Tests',
+      'golden',
+      goldenSuites,
+      'flutter test test/goldens/ --machine > test-results.json',
+      flutterEnv,
+    ),
+    buildPlaywrightLayer(
+      playwrightResults,
+      playwrightScreenshots,
+      playwrightEnv,
+    ),
     buildMaestroLayer(maestroResults, maestroScreenshots, maestroEnv),
   ];
 
@@ -132,7 +158,9 @@ void main(List<String> args) {
     totalFailed += c.failed;
   }
 
-  final covMsg = covFiles.isNotEmpty ? ', coverage ${covPct.toStringAsFixed(1)}%' : '';
+  final covMsg = covFiles.isNotEmpty
+      ? ', coverage ${covPct.toStringAsFixed(1)}%'
+      : '';
   final srcCount = layers.where((c) => c.total > 0).length;
   print(
     'Test report: $outputPath '

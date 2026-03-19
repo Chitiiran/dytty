@@ -107,14 +107,17 @@ String renderReport({
   buf.writeln('</div>');
 
   // Layer summary cards (boxed with timing bars) — includes Coverage as 6th card
-  final maxDur = layers.fold<int>(0, (m, c) => c.durationMs > m ? c.durationMs : m);
+  final maxDur = layers.fold<int>(
+    0,
+    (m, c) => c.durationMs > m ? c.durationMs : m,
+  );
   buf.writeln('<div class="cat-grid">');
   for (final c in layers) {
     final cls = c.failed > 0
         ? 'fail'
         : c.total == 0
-            ? 'muted'
-            : 'pass';
+        ? 'muted'
+        : 'pass';
     final layerColor = _layerColor(c.id);
     final durStr = c.durationMs > 0 ? _formatDuration(c.durationMs) : '';
     final barPct = maxDur > 0 && c.durationMs > 0
@@ -145,7 +148,11 @@ String renderReport({
   // Coverage as 6th clickable card
   if (covLineTotal > 0) {
     final covColor = _pctColor(linePct);
-    final covCls = linePct >= 80 ? 'pass' : linePct >= 50 ? '' : 'fail';
+    final covCls = linePct >= 80
+        ? 'pass'
+        : linePct >= 50
+        ? ''
+        : 'fail';
     buf.writeln(
       '<a href="#coverage" class="cat-box $covCls" style="border-left:4px solid #7b1fa2;text-decoration:none;color:inherit">'
       '<div class="cat-box-top">'
@@ -165,7 +172,9 @@ String renderReport({
 
   // Layer sections (collapsible)
   for (final c in layers) {
-    final secDur = c.durationMs > 0 ? ' — ${_formatDuration(c.durationMs)}' : '';
+    final secDur = c.durationMs > 0
+        ? ' — ${_formatDuration(c.durationMs)}'
+        : '';
     final secEnv = c.environment.isNotEmpty
         ? ' <span class="env-badge">${_esc(c.environment)}</span>'
         : '';
@@ -207,7 +216,9 @@ String renderReport({
         '<span class="counts">$totalScreenshots screenshots</span></summary>',
       );
       for (final folder in folders) {
-        buf.writeln('<div class="screenshot-folder-label">${_esc(folder)}/</div>');
+        buf.writeln(
+          '<div class="screenshot-folder-label">${_esc(folder)}/</div>',
+        );
         buf.writeln('<div class="screenshot-grid">');
         for (final s in grouped[folder]!) {
           buf.writeln(
@@ -232,7 +243,9 @@ String renderReport({
   // Coverage by file (with function + branch breakdown)
   if (covFiles.isNotEmpty) {
     final covColor = _pctColor(linePct);
-    buf.writeln('<h2 id="coverage">Coverage: ${linePct.toStringAsFixed(1)}%</h2>');
+    buf.writeln(
+      '<h2 id="coverage">Coverage: ${linePct.toStringAsFixed(1)}%</h2>',
+    );
     buf.writeln('<div class="summary">');
     buf.writeln(
       '<div class="card" style="flex:1;max-width:300px">'
@@ -265,7 +278,9 @@ String renderReport({
       buf.writeln('<ul>');
       for (final f in zeroCov) {
         final name = f.path.split('/').last;
-        buf.writeln('<li><code>${_esc(name)}</code> — ${f.lineTotal} lines</li>');
+        buf.writeln(
+          '<li><code>${_esc(name)}</code> — ${f.lineTotal} lines</li>',
+        );
       }
       buf.writeln('</ul></div>');
     }
@@ -294,7 +309,9 @@ String renderReport({
       final fColor = _pctColor(fPct);
       final autoOpen = fPct < 50;
 
-      buf.writeln('<details class="suite folder-group"${autoOpen ? ' open' : ''}>');
+      buf.writeln(
+        '<details class="suite folder-group"${autoOpen ? ' open' : ''}>',
+      );
       buf.writeln(
         '<summary class="suite-header folder-header"><span>${_esc(folder)}/</span>'
         '<span class="counts" style="color:$fColor">${fPct.toStringAsFixed(0)}% — ${files.length} files</span></summary>',
@@ -303,12 +320,16 @@ String renderReport({
         final pctStr = f.linePct.toStringAsFixed(0);
         final barColor = _pctColor(f.linePct);
         buf.writeln('<div class="cov-row">');
-        buf.writeln('<span class="file">${_esc(f.path.split('/').last)}</span>');
+        buf.writeln(
+          '<span class="file">${_esc(f.path.split('/').last)}</span>',
+        );
         buf.writeln(
           '<div class="coverage-bar"><div class="fill" '
           'style="width:${f.linePct.clamp(0, 100)}%;background:$barColor"></div></div>',
         );
-        buf.writeln('<span class="pct" style="color:$barColor">$pctStr%</span>');
+        buf.writeln(
+          '<span class="pct" style="color:$barColor">$pctStr%</span>',
+        );
         buf.writeln('<span class="ratio">${f.lineHit}/${f.lineTotal}</span>');
         buf.writeln('</div>');
       }
@@ -382,8 +403,11 @@ TestLayer buildMaestroLayer(
 String _esc(String s) =>
     s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
-String _pctColor(double pct) =>
-    pct >= 80 ? '#2e7d32' : pct >= 50 ? '#f57f17' : '#c62828';
+String _pctColor(double pct) => pct >= 80
+    ? '#2e7d32'
+    : pct >= 50
+    ? '#f57f17'
+    : '#c62828';
 
 String _layerColor(String id) {
   switch (id) {
@@ -404,8 +428,9 @@ String _summaryCard(int value, String label, String cls) =>
     '<div class="card $cls"><div class="num">$value</div>'
     '<div class="label">$label</div></div>';
 
-String _shortenPath(String path) =>
-    path.replaceAll('\\', '/').replaceAll(RegExp(r'^.*[/\\]test[/\\]'), 'test/');
+String _shortenPath(String path) => path
+    .replaceAll('\\', '/')
+    .replaceAll(RegExp(r'^.*[/\\]test[/\\]'), 'test/');
 
 String _formatDuration(int ms) {
   final sec = ms ~/ 1000;
@@ -456,7 +481,9 @@ void _writeFolderGroupedSuites(StringBuffer buf, TestLayer c) {
     }
     final hasFails = folderFailed > 0;
 
-    buf.writeln('<details class="suite folder-group"${hasFails ? ' open' : ''}>');
+    buf.writeln(
+      '<details class="suite folder-group"${hasFails ? ' open' : ''}>',
+    );
     buf.writeln(
       '<summary class="suite-header folder-header"><span>${_esc(folder)}/</span>'
       '<span class="counts">$folderPassed/$folderTotal passed</span></summary>',
@@ -469,7 +496,9 @@ void _writeFolderGroupedSuites(StringBuffer buf, TestLayer c) {
       final shortPath = _shortenPath(suitePath).split('/').last;
       final suiteHasFails = sf > 0;
 
-      buf.writeln('<details class="suite nested-suite"${suiteHasFails ? ' open' : ''}>');
+      buf.writeln(
+        '<details class="suite nested-suite"${suiteHasFails ? ' open' : ''}>',
+      );
       buf.writeln(
         '<summary class="suite-header"><span>${_esc(shortPath)}</span>'
         '<span class="counts">$sp/${suiteTests.length} passed</span></summary>',

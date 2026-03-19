@@ -59,8 +59,9 @@ TestLayerResults parseFlutterResults(String path) {
     }
   }
 
-  final visible =
-      tests.values.where((t) => !t.hidden && t.result != null).toList();
+  final visible = tests.values
+      .where((t) => !t.hidden && t.result != null)
+      .toList();
 
   final grouped = <String, List<Test>>{};
   for (final t in visible) {
@@ -158,15 +159,17 @@ TestLayerResults parseMaestroResults(String dirPath) {
     final result = <String, List<Test>>{};
 
     var durationMs = 0;
-    final suiteTimeMatches =
-        RegExp(r'<testsuite\s+[^>]*time="([^"]*)"').allMatches(content);
+    final suiteTimeMatches = RegExp(
+      r'<testsuite\s+[^>]*time="([^"]*)"',
+    ).allMatches(content);
     for (final m in suiteTimeMatches) {
-      durationMs +=
-          ((double.tryParse(m.group(1)!) ?? 0) * 1000).round();
+      durationMs += ((double.tryParse(m.group(1)!) ?? 0) * 1000).round();
     }
 
-    final testCasePattern =
-        RegExp(r'<testcase\s+([^>]*)(?:/>|>(.*?)</testcase>)', dotAll: true);
+    final testCasePattern = RegExp(
+      r'<testcase\s+([^>]*)(?:/>|>(.*?)</testcase>)',
+      dotAll: true,
+    );
     final attrPattern = RegExp(r'(\w+)="([^"]*)"');
 
     for (final match in testCasePattern.allMatches(content)) {
@@ -259,15 +262,25 @@ List<CovFile> parseLcov(String path) {
       }
     } else if (line == 'end_of_record') {
       if (currentFile != null && (lineTotal > 0 || fnTotal > 0)) {
-        results.add(CovFile(currentFile,
-            lineHit: lineHit, lineTotal: lineTotal,
-            fnHit: fnHit, fnTotal: fnTotal,
-            brHit: brHit, brTotal: brTotal));
+        results.add(
+          CovFile(
+            currentFile,
+            lineHit: lineHit,
+            lineTotal: lineTotal,
+            fnHit: fnHit,
+            fnTotal: fnTotal,
+            brHit: brHit,
+            brTotal: brTotal,
+          ),
+        );
       }
       currentFile = null;
-      lineHit = 0; lineTotal = 0;
-      fnHit = 0; fnTotal = 0;
-      brHit = 0; brTotal = 0;
+      lineHit = 0;
+      lineTotal = 0;
+      fnHit = 0;
+      fnTotal = 0;
+      brHit = 0;
+      brTotal = 0;
     }
   }
   return results;
@@ -362,7 +375,9 @@ String readEnvLabel(String path) {
     if (json.containsKey('platform') && !json.containsKey('flutter')) {
       final p = json['platform'] as String;
       if (p != 'android') {
-        parts.add(p.startsWith('MINGW') || p.startsWith('MSYS') ? 'Windows' : p);
+        parts.add(
+          p.startsWith('MINGW') || p.startsWith('MSYS') ? 'Windows' : p,
+        );
       }
     }
     return parts.join(' · ');

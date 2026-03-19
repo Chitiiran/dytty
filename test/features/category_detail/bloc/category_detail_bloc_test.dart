@@ -20,10 +20,8 @@ void main() {
   group('CategoryDetailBloc', () {
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'initial state has status initial',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       verify: (bloc) {
         expect(bloc.state.status, CategoryDetailStatus.initial);
         expect(bloc.state.recentEntries, isEmpty);
@@ -36,17 +34,24 @@ void main() {
       setUp: () async {
         // Add entries on two different dates
         await repository.addCategoryEntry(
-          '2026-03-18', 'positive', 'Today entry');
+          '2026-03-18',
+          'positive',
+          'Today entry',
+        );
         await repository.addCategoryEntry(
-          '2026-03-17', 'positive', 'Yesterday entry');
+          '2026-03-17',
+          'positive',
+          'Yesterday entry',
+        );
         // Add a non-matching category entry (should not appear)
         await repository.addCategoryEntry(
-          '2026-03-18', 'negative', 'Negative entry');
+          '2026-03-18',
+          'negative',
+          'Negative entry',
+        );
       },
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       act: (bloc) => bloc.add(const LoadCategoryDetail('positive')),
       expect: () => [
         isA<CategoryDetailState>()
@@ -54,11 +59,7 @@ void main() {
             .having((s) => s.categoryId, 'categoryId', 'positive'),
         isA<CategoryDetailState>()
             .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
-            .having(
-              (s) => s.recentEntries.length,
-              'recentEntries.length',
-              2,
-            )
+            .having((s) => s.recentEntries.length, 'recentEntries.length', 2)
             .having(
               (s) => s.recentEntries[0].displayDate,
               'first group label',
@@ -80,14 +81,15 @@ void main() {
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'LoadCategoryDetail with no entries shows empty state',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       act: (bloc) => bloc.add(const LoadCategoryDetail('positive')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.status, 'status', CategoryDetailStatus.loading),
+        isA<CategoryDetailState>().having(
+          (s) => s.status,
+          'status',
+          CategoryDetailStatus.loading,
+        ),
         isA<CategoryDetailState>()
             .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having((s) => s.recentEntries, 'recentEntries', isEmpty)
@@ -98,26 +100,28 @@ void main() {
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'LoadCategoryDetail loads review summary',
       setUp: () async {
-        await repository.addCategoryEntry(
-          '2026-03-18', 'positive', 'Entry');
+        await repository.addCategoryEntry('2026-03-18', 'positive', 'Entry');
         final now = DateTime(2026, 3, 18);
-        await repository.saveReviewSummary(ReviewSummary(
-          id: '',
-          categoryId: 'positive',
-          weekStart: '2026-03-16', // Monday of that week
-          summary: 'Weekly review',
-          createdAt: now,
-          updatedAt: now,
-        ));
+        await repository.saveReviewSummary(
+          ReviewSummary(
+            id: '',
+            categoryId: 'positive',
+            weekStart: '2026-03-16', // Monday of that week
+            summary: 'Weekly review',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
       },
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       act: (bloc) => bloc.add(const LoadCategoryDetail('positive')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.status, 'status', CategoryDetailStatus.loading),
+        isA<CategoryDetailState>().having(
+          (s) => s.status,
+          'status',
+          CategoryDetailStatus.loading,
+        ),
         isA<CategoryDetailState>()
             .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having(
@@ -130,10 +134,8 @@ void main() {
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'ToggleDateGroup toggles collapsed state',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -156,38 +158,36 @@ void main() {
       ),
       act: (bloc) => bloc.add(const ToggleDateGroup('2026-03-18')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.first.isCollapsed,
-              'isCollapsed',
-              true,
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.isCollapsed,
+          'isCollapsed',
+          true,
+        ),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'StartInlineEdit sets editingEntryId',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => const CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
       ),
       act: (bloc) => bloc.add(const StartInlineEdit('entry-1')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.editingEntryId, 'editingEntryId', 'entry-1'),
+        isA<CategoryDetailState>().having(
+          (s) => s.editingEntryId,
+          'editingEntryId',
+          'entry-1',
+        ),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'CancelInlineEdit clears editingEntryId',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => const CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -195,8 +195,11 @@ void main() {
       ),
       act: (bloc) => bloc.add(const CancelInlineEdit()),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.editingEntryId, 'editingEntryId', isNull),
+        isA<CategoryDetailState>().having(
+          (s) => s.editingEntryId,
+          'editingEntryId',
+          isNull,
+        ),
       ],
     );
 
@@ -213,20 +216,15 @@ void main() {
           'createdAt': DateTime(2026, 3, 18),
           'updatedAt': DateTime(2026, 3, 18),
         });
-        await dayDoc
-            .collection('categoryEntries')
-            .doc('e1')
-            .set({
+        await dayDoc.collection('categoryEntries').doc('e1').set({
           'category': 'positive',
           'text': 'Original text',
           'source': 'manual',
           'createdAt': DateTime(2026, 3, 18),
         });
       },
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () {
         return CategoryDetailState(
           status: CategoryDetailStatus.loaded,
@@ -249,11 +247,13 @@ void main() {
           hasRecentEntries: true,
         );
       },
-      act: (bloc) => bloc.add(const SaveInlineEdit(
-        date: '2026-03-18',
-        entryId: 'e1',
-        newText: 'Updated text',
-      )),
+      act: (bloc) => bloc.add(
+        const SaveInlineEdit(
+          date: '2026-03-18',
+          entryId: 'e1',
+          newText: 'Updated text',
+        ),
+      ),
       expect: () => [
         isA<CategoryDetailState>()
             .having((s) => s.editingEntryId, 'editingEntryId', isNull)
@@ -267,10 +267,8 @@ void main() {
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'SaveInlineEdit reverts on Firestore failure',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () {
         // Entry not in Firestore — update will fail
         return CategoryDetailState(
@@ -294,35 +292,33 @@ void main() {
           hasRecentEntries: true,
         );
       },
-      act: (bloc) => bloc.add(const SaveInlineEdit(
-        date: '2026-03-18',
-        entryId: 'e-missing',
-        newText: 'Should revert',
-      )),
+      act: (bloc) => bloc.add(
+        const SaveInlineEdit(
+          date: '2026-03-18',
+          entryId: 'e-missing',
+          newText: 'Should revert',
+        ),
+      ),
       expect: () => [
         // 1. Optimistic update
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.first.entries.first.text,
-              'optimistic text',
-              'Should revert',
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.first.text,
+          'optimistic text',
+          'Should revert',
+        ),
         // 2. Revert after Firestore failure
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.first.entries.first.text,
-              'reverted text',
-              'Original',
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.first.text,
+          'reverted text',
+          'Original',
+        ),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'EntryAddedFromCall adds entry to existing date group',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -342,15 +338,17 @@ void main() {
         ],
         hasRecentEntries: true,
       ),
-      act: (bloc) => bloc.add(EntryAddedFromCall(
-        date: '2026-03-18',
-        entry: CategoryEntry(
-          id: 'e2',
-          categoryId: 'positive',
-          text: 'From AI call',
-          createdAt: DateTime(2026, 3, 18, 14, 0),
+      act: (bloc) => bloc.add(
+        EntryAddedFromCall(
+          date: '2026-03-18',
+          entry: CategoryEntry(
+            id: 'e2',
+            categoryId: 'positive',
+            text: 'From AI call',
+            createdAt: DateTime(2026, 3, 18, 14, 0),
+          ),
         ),
-      )),
+      ),
       expect: () => [
         isA<CategoryDetailState>()
             .having(
@@ -368,47 +366,37 @@ void main() {
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'EntryAddedFromCall creates new date group when date not found',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => const CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
         recentEntries: [],
         hasRecentEntries: false,
       ),
-      act: (bloc) => bloc.add(EntryAddedFromCall(
-        date: '2026-03-18',
-        entry: CategoryEntry(
-          id: 'e1',
-          categoryId: 'positive',
-          text: 'First entry from call',
-          createdAt: DateTime(2026, 3, 18),
+      act: (bloc) => bloc.add(
+        EntryAddedFromCall(
+          date: '2026-03-18',
+          entry: CategoryEntry(
+            id: 'e1',
+            categoryId: 'positive',
+            text: 'First entry from call',
+            createdAt: DateTime(2026, 3, 18),
+          ),
         ),
-      )),
+      ),
       expect: () => [
         isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.length,
-              'groups count',
-              1,
-            )
-            .having(
-              (s) => s.recentEntries.first.date,
-              'date',
-              '2026-03-18',
-            )
+            .having((s) => s.recentEntries.length, 'groups count', 1)
+            .having((s) => s.recentEntries.first.date, 'date', '2026-03-18')
             .having((s) => s.hasRecentEntries, 'hasRecentEntries', true),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'EntryEditedFromCall updates entry text across groups',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -428,26 +416,22 @@ void main() {
         ],
         hasRecentEntries: true,
       ),
-      act: (bloc) => bloc.add(const EntryEditedFromCall(
-        entryId: 'e1',
-        newText: 'Edited by AI',
-      )),
+      act: (bloc) => bloc.add(
+        const EntryEditedFromCall(entryId: 'e1', newText: 'Edited by AI'),
+      ),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.first.entries.first.text,
-              'entry text',
-              'Edited by AI',
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.first.text,
+          'entry text',
+          'Edited by AI',
+        ),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'MarkEntriesReviewed sets isReviewed on entries',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
@@ -475,48 +459,49 @@ void main() {
         ],
         hasRecentEntries: true,
       ),
-      act: (bloc) => bloc.add(const MarkEntriesReviewed(
-        entries: [
-          EntryReference(date: '2026-03-18', entryId: 'e1'),
-          EntryReference(date: '2026-03-18', entryId: 'e2'),
-        ],
-      )),
+      act: (bloc) => bloc.add(
+        const MarkEntriesReviewed(
+          entries: [
+            EntryReference(date: '2026-03-18', entryId: 'e1'),
+            EntryReference(date: '2026-03-18', entryId: 'e2'),
+          ],
+        ),
+      ),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.recentEntries.first.entries
-                  .every((e) => e.isReviewed),
-              'all reviewed',
-              true,
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.every((e) => e.isReviewed),
+          'all reviewed',
+          true,
+        ),
       ],
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'SaveReviewSummaryEvent updates state with summary',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       seed: () => const CategoryDetailState(
         status: CategoryDetailStatus.loaded,
         categoryId: 'positive',
       ),
-      act: (bloc) => bloc.add(SaveReviewSummaryEvent(ReviewSummary(
-        id: 'rs1',
-        categoryId: 'positive',
-        weekStart: '2026-03-16',
-        summary: 'Great week!',
-        createdAt: DateTime(2026, 3, 18),
-        updatedAt: DateTime(2026, 3, 18),
-      ))),
+      act: (bloc) => bloc.add(
+        SaveReviewSummaryEvent(
+          ReviewSummary(
+            id: 'rs1',
+            categoryId: 'positive',
+            weekStart: '2026-03-16',
+            summary: 'Great week!',
+            createdAt: DateTime(2026, 3, 18),
+            updatedAt: DateTime(2026, 3, 18),
+          ),
+        ),
+      ),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having(
-              (s) => s.reviewSummary?.summary,
-              'summary text',
-              'Great week!',
-            ),
+        isA<CategoryDetailState>().having(
+          (s) => s.reviewSummary?.summary,
+          'summary text',
+          'Great week!',
+        ),
       ],
     );
 
@@ -524,16 +509,20 @@ void main() {
       'relative date labels: 2 days ago',
       setUp: () async {
         await repository.addCategoryEntry(
-          '2026-03-16', 'positive', 'Two days ago entry');
+          '2026-03-16',
+          'positive',
+          'Two days ago entry',
+        );
       },
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       act: (bloc) => bloc.add(const LoadCategoryDetail('positive')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.status, 'status', CategoryDetailStatus.loading),
+        isA<CategoryDetailState>().having(
+          (s) => s.status,
+          'status',
+          CategoryDetailStatus.loading,
+        ),
         isA<CategoryDetailState>()
             .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having(
@@ -546,16 +535,20 @@ void main() {
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'hasRecentEntries is false when no entries in 7-day window',
-      build: () => CategoryDetailBloc(
-        repository: repository,
-        clock: fixedClock,
-      ),
+      build: () =>
+          CategoryDetailBloc(repository: repository, clock: fixedClock),
       act: (bloc) => bloc.add(const LoadCategoryDetail('positive')),
       expect: () => [
-        isA<CategoryDetailState>()
-            .having((s) => s.status, 'status', CategoryDetailStatus.loading),
-        isA<CategoryDetailState>()
-            .having((s) => s.hasRecentEntries, 'hasRecentEntries', false),
+        isA<CategoryDetailState>().having(
+          (s) => s.status,
+          'status',
+          CategoryDetailStatus.loading,
+        ),
+        isA<CategoryDetailState>().having(
+          (s) => s.hasRecentEntries,
+          'hasRecentEntries',
+          false,
+        ),
       ],
     );
   });

@@ -37,9 +37,9 @@ class CategoryDetailScreen extends StatelessWidget {
     final journalBloc = context.read<JournalBloc>();
 
     return BlocProvider(
-      create: (_) => CategoryDetailBloc(
-        repository: journalBloc.repository,
-      )..add(LoadCategoryDetail(categoryId)),
+      create: (_) =>
+          CategoryDetailBloc(repository: journalBloc.repository)
+            ..add(LoadCategoryDetail(categoryId)),
       child: _CategoryDetailView(categoryId: categoryId),
     );
   }
@@ -136,11 +136,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     );
     final questions = reviewQuestions[widget.categoryId] ?? [];
     final entries = _allRecentEntries();
-    final prompt = buildReviewPrompt(
-      category.displayName,
-      questions,
-      entries,
-    );
+    final prompt = buildReviewPrompt(category.displayName, questions, entries);
 
     // Start the call with review-specific prompt and tools
     bloc.add(const StartCall());
@@ -190,23 +186,27 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
 
     // Process only newly added entries (avoid re-dispatching on every state change)
     if (voiceState.savedEntries.length > _processedEntryCount) {
-      for (int i = _processedEntryCount;
-          i < voiceState.savedEntries.length;
-          i++) {
+      for (
+        int i = _processedEntryCount;
+        i < voiceState.savedEntries.length;
+        i++
+      ) {
         final entry = voiceState.savedEntries[i];
         if (entry.categoryId == widget.categoryId) {
           final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-          detailBloc.add(EntryAddedFromCall(
-            entry: CategoryEntry(
-              id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
-              categoryId: entry.categoryId,
-              text: entry.text,
-              source: 'voice',
-              transcript: entry.transcript,
-              createdAt: DateTime.now(),
+          detailBloc.add(
+            EntryAddedFromCall(
+              entry: CategoryEntry(
+                id: 'call-${DateTime.now().millisecondsSinceEpoch}-$i',
+                categoryId: entry.categoryId,
+                text: entry.text,
+                source: 'voice',
+                transcript: entry.transcript,
+                createdAt: DateTime.now(),
+              ),
+              date: today,
             ),
-            date: today,
-          ));
+          );
         }
       }
       _processedEntryCount = voiceState.savedEntries.length;
@@ -255,8 +255,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     // 2. Generate review summary via LlmService
     if (voiceState.transcripts.isNotEmpty) {
       final transcript = voiceState.transcripts
-          .map((t) =>
-              '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
+          .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
           .join('\n');
 
       final category = JournalCategory.values.firstWhere(
@@ -401,8 +400,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               if (_callActive && _voiceCallBloc != null)
                 CallControlsOverlay(
                   isMuted: _voiceCallBloc!.state.isMuted,
-                  onToggleMute: () =>
-                      _voiceCallBloc!.add(const ToggleMute()),
+                  onToggleMute: () => _voiceCallBloc!.add(const ToggleMute()),
                   onEndCall: _endReviewCall,
                   elapsed: _voiceCallBloc!.state.elapsed,
                 ),
@@ -423,43 +421,45 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
         final item = items[index];
         return switch (item) {
           _SummaryItem(:final summary) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: ReviewSummaryCard(
-                summary: summary,
-                categoryId: widget.categoryId,
-              ),
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ReviewSummaryCard(
+              summary: summary,
+              categoryId: widget.categoryId,
             ),
+          ),
           _HeaderItem(:final group) => DateGroupHeader(
-              displayDate: group.displayDate,
-              entryCount: group.entries.length,
-              isCollapsed: group.isCollapsed,
-              onTap: () {
-                context
-                    .read<CategoryDetailBloc>()
-                    .add(ToggleDateGroup(group.date));
-              },
-            ),
+            displayDate: group.displayDate,
+            entryCount: group.entries.length,
+            isCollapsed: group.isCollapsed,
+            onTap: () {
+              context.read<CategoryDetailBloc>().add(
+                ToggleDateGroup(group.date),
+              );
+            },
+          ),
           _EntryItem(:final entry, :final date, :final isOlder) =>
             InlineEntryTile(
               entry: entry,
               isEditing: state.editingEntryId == entry.id,
               isOlderEntry: isOlder,
               onTapEdit: () {
-                context
-                    .read<CategoryDetailBloc>()
-                    .add(StartInlineEdit(entry.id));
+                context.read<CategoryDetailBloc>().add(
+                  StartInlineEdit(entry.id),
+                );
               },
               onSaveEdit: (newText) {
-                context.read<CategoryDetailBloc>().add(SaveInlineEdit(
-                  date: date,
-                  entryId: entry.id,
-                  newText: newText,
-                ));
+                context.read<CategoryDetailBloc>().add(
+                  SaveInlineEdit(
+                    date: date,
+                    entryId: entry.id,
+                    newText: newText,
+                  ),
+                );
               },
               onCancelEdit: () {
-                context
-                    .read<CategoryDetailBloc>()
-                    .add(const CancelInlineEdit());
+                context.read<CategoryDetailBloc>().add(
+                  const CancelInlineEdit(),
+                );
               },
             ),
         };
@@ -558,11 +558,7 @@ class _CallBadge extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(
-                category.icon,
-                color: category.color,
-                size: 28,
-              ),
+              Icon(category.icon, color: category.color, size: 28),
               Positioned(
                 right: 2,
                 bottom: 4,
