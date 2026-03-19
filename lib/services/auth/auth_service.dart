@@ -14,26 +14,21 @@ class AuthService {
   // Lazy — avoids eager clientId assertion crash on web when no meta tag is set.
   // serverClientId is required for google_sign_in_android 6.2+ (Credential Manager)
   // to obtain an idToken. Value is the Web client OAuth ID from google-services.json.
-  GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn(
-    serverClientId:
-        '828440302945-uk9llfd9dh0blg876t76r6nse2o9e8g0.apps.googleusercontent.com',
-  );
+  GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn.instance;
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   User? get currentUser => _auth.currentUser;
 
   Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await _google.signIn();
-    if (googleUser == null) {
-      throw Exception('Google Sign-In was cancelled');
+    if (!_google.supportsAuthenticate()) {
+      throw Exception('Google Sign-In is not supported on this platform');
     }
 
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
+    final googleUser = await _google.authenticate();
+
+    final idToken = googleUser.authentication.idToken;
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
 
     return _auth.signInWithCredential(credential);
   }

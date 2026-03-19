@@ -121,7 +121,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
       providers: [
         RepositoryProvider<LlmService>(
           create: (_) => geminiApiKey.isNotEmpty
-              ? GeminiLlmService(apiKey: geminiApiKey) as LlmService
+              ? GeminiLlmService() as LlmService
               : NoOpLlmService(),
         ),
         RepositoryProvider<SpeechService>(create: (_) => SpeechService()),

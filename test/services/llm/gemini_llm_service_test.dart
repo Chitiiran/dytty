@@ -54,11 +54,9 @@ void main() {
   });
 
   group('GeminiLlmService', () {
-    test('dispose does not throw', () {
-      // GeminiLlmService constructor requires a valid API key format but
-      // dispose should always succeed since GenerativeModel needs no cleanup.
-      final service = GeminiLlmService(apiKey: 'test-api-key');
-      expect(() => service.dispose(), returnsNormally);
-    });
+    // Note: GeminiLlmService() now requires Firebase to be initialized
+    // (uses FirebaseAI.googleAI()). Constructor and API tests require
+    // a Firebase test environment. extractJson tests above cover the
+    // pure logic without Firebase dependency.
   });
 }
