@@ -2,12 +2,12 @@
 # Release branch creation for Dytty
 #
 # Usage:
-#   bash scripts/release.sh 0.2.0          # Create release/0.2.0 from develop
+#   bash scripts/release.sh 0.2.0          # Create release/0.2.0 from main
 #   bash scripts/release.sh 0.2.0 --dry-run  # Show what would happen
 #
 # What it does:
-# 1. Verify on develop branch and clean working tree
-# 2. Pull latest develop
+# 1. Verify on main branch and clean working tree
+# 2. Pull latest main
 # 3. Bump version in pubspec.yaml to the given version
 # 4. Create release/X.Y.Z branch
 # 5. Commit version bump
@@ -37,8 +37,8 @@ echo "=== Release: $VERSION ==="
 
 # 1. Verify branch and working tree
 CURRENT_BRANCH=$(git branch --show-current)
-if [[ "$CURRENT_BRANCH" != "develop" ]]; then
-  echo "ERROR: Must be on 'develop' branch (currently on '$CURRENT_BRANCH')"
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+  echo "ERROR: Must be on 'main' branch (currently on '$CURRENT_BRANCH')"
   exit 1
 fi
 
@@ -48,11 +48,11 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 # 2. Pull latest
-echo "Pulling latest develop..."
+echo "Pulling latest main..."
 if [[ "$DRY_RUN" == false ]]; then
-  git pull origin develop
+  git pull origin main
 else
-  echo "  [dry-run] Would pull origin develop"
+  echo "  [dry-run] Would pull origin main"
 fi
 
 # 3. Create release branch
@@ -97,5 +97,4 @@ echo "  3. Dogfooding: distribute APK to testers (2-3 days)"
 echo "  4. Fix P0/P1 bugs on this branch if any"
 echo "  5. When all gates pass:"
 echo "     a. Merge to main:   gh pr create --base main --title 'Release $VERSION'"
-echo "     b. Back-merge:      git checkout develop && git merge $BRANCH"
-echo "     c. Delete branch:   git branch -d $BRANCH && git push origin --delete $BRANCH"
+echo "     b. Delete branch:   git branch -d $BRANCH && git push origin --delete $BRANCH"

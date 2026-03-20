@@ -7,14 +7,14 @@
 ## Overview
 
 ```
-develop ---- feat -- feat -- feat --+
-                                    | cut release branch
-                                    v
-                              release/X.Y.Z -- fix -- fix
-                                    |
-                                    | all gates pass
-                                    v
-main ------------------------ merge -- tag vX.Y.Z -- deploy
+main ── feat ── feat ── feat ──+
+                               | cut release branch (when needed)
+                               v
+                         release/X.Y.Z -- fix -- fix
+                               |
+                               | all gates pass
+                               v
+main ───────────────── merge -- tag vX.Y.Z+N -- deploy
 ```
 
 ## Branch Model
@@ -22,9 +22,8 @@ main ------------------------ merge -- tag vX.Y.Z -- deploy
 | Branch | Purpose | Merges to |
 |--------|---------|-----------|
 | `main` | Production-ready. Every commit is a release. | -- |
-| `develop` | Integration branch. All feature PRs land here. | `main` (via release branch) |
-| `release/X.Y.Z` | Release candidate. Only bug fixes allowed. | `main` + back-merge to `develop` |
-| `feat/*`, `fix/*` | Feature work. Short-lived. | `develop` |
+| `release/X.Y.Z` | Release candidate. Only bug fixes allowed. | `main` |
+| `feat/*`, `fix/*` | Feature work. Short-lived. | `main` |
 
 ## Cutting a Release
 
@@ -34,8 +33,8 @@ bash scripts/release.sh 0.2.0
 ```
 
 This script:
-- Verifies you are on `develop` with a clean tree
-- Pulls latest `develop`
+- Verifies you are on `main` with a clean tree
+- Pulls latest `main`
 - Creates `release/0.2.0` branch
 - Bumps version in `pubspec.yaml`
 - Commits the version bump
@@ -55,7 +54,7 @@ The `release-candidate.yml` workflow automatically runs:
 ### 3. Dogfooding (2-3 days)
 - APK distributed to internal testers via Firebase App Distribution
 - Bugs filed as GitHub Issues with priority labels
-- **P0/P1**: fix on release branch, cherry-pick to develop
+- **P0/P1**: fix on release branch
 - **P2/P3**: backlog for next cycle
 
 ### 4. Merge to main
@@ -66,11 +65,6 @@ gh pr create --base main --title "Release 0.2.0" --body "..."
 
 After merge:
 ```bash
-# Back-merge fixes to develop
-git checkout develop
-git merge release/0.2.0
-git push origin develop
-
 # Clean up
 git branch -d release/0.2.0
 git push origin --delete release/0.2.0
@@ -89,7 +83,7 @@ The `deploy.yml` workflow on main push:
 - `flutter test` (unit + widget + golden)
 - ~10 seconds total
 
-### Gate 2: PR to `develop` (automated CI)
+### Gate 2: PR to `main` (automated CI)
 | Check | Blocks merge? |
 |-------|---------------|
 | `flutter analyze` | Yes |
@@ -127,3 +121,32 @@ Format: `X.Y.Z+build`
 - **build**: Auto-incremented integer for Firebase
 
 `scripts/release.sh` handles version bumping automatically.
+
+---
+
+## Rollback
+
+### Web (Firebase Hosting)
+Firebase Hosting keeps previous deploy history. To rollback:
+1. Go to Firebase Console > Hosting > Release history
+2. Click "Rollback" on the desired previous version
+
+### Android (Firebase App Distribution)
+App Distribution does not support rollback directly. Instead:
+1. Find the last-known-good tag: `git tag -l --sort=-creatordate | head -5`
+2. Check out that tag: `git checkout v0.1.7+9`
+3. Bump only the build number in pubspec.yaml (Android requires higher build number)
+4. Re-distribute: `bash scripts/distribute.sh "Rollback to v0.1.7+9"`
+
+---
+
+## Debug Keystore
+
+The project uses a shared debug keystore checked into `android/debug.keystore`.
+All builds (local and CI) use this keystore via `build.gradle.kts` signingConfig.
+This ensures APK signatures are consistent across machines — testers can update
+without reinstalling.
+
+Credentials (standard Android debug defaults):
+- Store/key password: `android`
+- Key alias: `androiddebugkey`

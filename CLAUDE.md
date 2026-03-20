@@ -87,9 +87,10 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 - `bash scripts/patrol-test.sh --flow auth` - Run specific Patrol flow
 
 ### Release & Distribution
-- `bash scripts/release.sh <version>` - Create release branch from develop with version bump
+- `bash scripts/release.sh <version>` - Create release branch from main with version bump
 - `bash scripts/release.sh <version> --dry-run` - Preview release steps without executing
-- `bash scripts/distribute.sh "Release notes"` - Build debug APK and upload to Firebase App Distribution
+- `bash scripts/distribute.sh "Release notes"` - Build, upload, tag, and create GitHub Release
+- `bash scripts/distribute.sh "Release notes" --patch` - Same but also bumps patch version
   - The release notes string should include: (1) a short summary of what changed, and (2) a test checklist of specific things to verify. This text is emailed to the tester, so make it human-friendly and complete.
 
 ## Firebase Setup (manual steps)

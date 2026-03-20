@@ -46,16 +46,25 @@ jobs:
     name: Tag Release
     needs: deploy
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Get version from pubspec
-        id: version
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-      - name: Create tag
-        run: |
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}" || true
-          git push origin "v${{ steps.version.outputs.version }}" || true
+          # Tag includes build number (e.g. v0.1.8+10) for unique per-deploy tags.
+          # The + is valid in git tags and GitHub Releases.
+          FULL_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//')
+          TAG="v${FULL_VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            gh release create "$TAG" --title "$TAG" --generate-notes
+            echo "Created tag and release: $TAG"
+          fi

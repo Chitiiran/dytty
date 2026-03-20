@@ -83,7 +83,7 @@ flutter build apk --debug --dart-define=FIREBASE_ANDROID_API_KEY=<key>
 
 # Release
 bash scripts/distribute.sh "Release notes"      # Build + upload to Firebase App Distribution
-bash scripts/release.sh 0.2.0                   # Cut a release branch from develop
+bash scripts/release.sh 0.2.0                   # Cut a release branch from main
 ```
 
 ## Environment Variables

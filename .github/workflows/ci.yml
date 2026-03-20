@@ -56,8 +56,7 @@ jobs:
       - name: Build web
         run: flutter build web --no-tree-shake-icons --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
 
-      - name: Restore shared debug keystore
-        run: mkdir -p ~/.android && echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
+      # Shared debug keystore is checked into android/debug.keystore and referenced by build.gradle.kts signingConfig.
 
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
@@ -79,55 +78,55 @@ jobs:
           name: debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
 
-  # distribute:
-  #   name: Distribute to Testers
-  #   runs-on: ubuntu-latest
-  #   needs: analyze-test
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: debug-apk
-  #         path: build/app/outputs/flutter-apk/
-  #
-  #     - name: Extract tester checklist from merged PR
-  #       id: notes
-  #       env:
-  #         GH_TOKEN: ${{ github.token }}
-  #       run: |
-  #         COMMIT_SHA=$(git rev-parse HEAD)
-  #         PR_NUMBER=$(gh pr list --state merged --search "$COMMIT_SHA" --json number --jq '.[0].number' 2>/dev/null)
-  #
-  #         if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
-  #           PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body')
-  #           CHECKLIST=$(echo "$PR_BODY" | sed -n '/^## Tester Checklist/,/^## /{ /^## Tester Checklist/d; /^## /d; p; }' | sed '/^<!--/,/-->/d' | sed -e 's/^[[:space:]]*//' -e '/^$/d')
-  #
-  #           if [ -n "$CHECKLIST" ]; then
-  #             NOTES="Please test:"$'\n'"${CHECKLIST}"
-  #           else
-  #             PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-  #             NOTES="New build from PR #${PR_NUMBER}: ${PR_TITLE}"$'\n\n'"(No tester checklist provided — check the PR for details.)"
-  #           fi
-  #         else
-  #           SUBJECT=$(git log -1 --pretty=%s)
-  #           NOTES="New build: ${SUBJECT}"$'\n\n'"(No linked PR found.)"
-  #         fi
-  #
-  #         EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-  #         echo "body<<$EOF" >> $GITHUB_OUTPUT
-  #         echo "$NOTES" >> $GITHUB_OUTPUT
-  #         echo "$EOF" >> $GITHUB_OUTPUT
-  #
-  #     - name: Upload to Firebase App Distribution
-  #       uses: wzieba/Firebase-Distribution-Github-Action@v1
-  #       with:
-  #         appId: 1:828440302945:android:8a03bc6c01380939392120
-  #         serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
-  #         testers: ${{ secrets.TESTER_EMAIL }}
-  #         releaseNotes: ${{ steps.notes.outputs.body }}
-  #         file: build/app/outputs/flutter-apk/app-debug.apk
+  distribute:
+    name: Distribute to Testers
+    runs-on: ubuntu-latest
+    needs: [analyze-test, maestro]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: debug-apk
+          path: build/app/outputs/flutter-apk/
+
+      - name: Extract tester checklist from merged PR
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          PR_NUMBER=$(gh pr list --state merged --search "$COMMIT_SHA" --json number --jq '.[0].number' 2>/dev/null)
+
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body')
+            CHECKLIST=$(echo "$PR_BODY" | sed -n '/^## Tester Checklist/,/^## /{ /^## Tester Checklist/d; /^## /d; p; }' | sed '/^<!--/,/-->/d' | sed -e 's/^[[:space:]]*//' -e '/^$/d')
+
+            if [ -n "$CHECKLIST" ]; then
+              NOTES="Please test:"$'\n'"${CHECKLIST}"
+            else
+              PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+              NOTES="New build from PR #${PR_NUMBER}: ${PR_TITLE}"$'\n\n'"(No tester checklist provided — check the PR for details.)"
+            fi
+          else
+            SUBJECT=$(git log -1 --pretty=%s)
+            NOTES="New build: ${SUBJECT}"$'\n\n'"(No linked PR found.)"
+          fi
+
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "body<<$EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: 1:828440302945:android:8a03bc6c01380939392120
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
+          testers: ${{ secrets.TESTER_EMAIL }}
+          releaseNotes: ${{ steps.notes.outputs.body }}
+          file: build/app/outputs/flutter-apk/app-debug.apk
 
   maestro:
     name: Maestro Android E2E
@@ -149,8 +148,7 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Restore shared debug keystore
-        run: mkdir -p ~/.android && echo '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 --decode > ~/.android/debug.keystore
+      # Shared debug keystore is checked into android/debug.keystore and referenced by build.gradle.kts signingConfig.
 
       - name: Restore google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
