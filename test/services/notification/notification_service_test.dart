@@ -9,6 +9,9 @@ import 'package:dytty/services/notification/notification_service.dart';
 class MockFlutterLocalNotificationsPlugin extends Mock
     implements FlutterLocalNotificationsPlugin {}
 
+class MockAndroidFlutterLocalNotificationsPlugin extends Mock
+    implements AndroidFlutterLocalNotificationsPlugin {}
+
 void main() {
   late MockFlutterLocalNotificationsPlugin mockPlugin;
   late NotificationService service;
@@ -24,7 +27,10 @@ void main() {
 
   setUp(() {
     mockPlugin = MockFlutterLocalNotificationsPlugin();
-    service = NotificationService(plugin: mockPlugin);
+    service = NotificationService(
+      plugin: mockPlugin,
+      timezoneResolver: () async => 'America/Toronto',
+    );
 
     // Default stubs for plugin methods
     when(
@@ -100,6 +106,14 @@ void main() {
           ),
         ),
       ).called(1);
+    });
+
+    test('sets local timezone from device timezone', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      await service.init();
+
+      expect(tz.local.name, 'America/Toronto');
     });
 
     test('re-schedules reminder if previously enabled', () async {
@@ -304,6 +318,35 @@ void main() {
       ).called(1);
     });
 
+    test('schedules in device local timezone, not UTC', () async {
+      SharedPreferences.setMockInitialValues({});
+      await service.init();
+
+      // Capture the scheduledDate passed to zonedSchedule
+      tz.TZDateTime? capturedDate;
+      when(
+        () => mockPlugin.zonedSchedule(
+          id: any(named: 'id'),
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          scheduledDate: any(named: 'scheduledDate'),
+          notificationDetails: any(named: 'notificationDetails'),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          matchDateTimeComponents: any(named: 'matchDateTimeComponents'),
+          payload: any(named: 'payload'),
+        ),
+      ).thenAnswer((invocation) async {
+        capturedDate =
+            invocation.namedArguments[#scheduledDate] as tz.TZDateTime;
+      });
+
+      await service.scheduleDailyReminder(hour: 20, minute: 0);
+
+      expect(capturedDate, isNotNull);
+      expect(capturedDate!.location.name, 'America/Toronto');
+      expect(capturedDate!.hour, 20);
+    });
+
     test('persists enabled state and time to SharedPreferences', () async {
       SharedPreferences.setMockInitialValues({});
       await service.init();
@@ -445,6 +488,55 @@ void main() {
 
       expect(result, isFalse);
     });
+
+    test(
+      'returns true when requestNotificationsPermission returns null but notifications enabled',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        await service.init();
+
+        final mockAndroid = MockAndroidFlutterLocalNotificationsPlugin();
+        when(
+          () => mockPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >(),
+        ).thenReturn(mockAndroid);
+        when(
+          () => mockAndroid.requestNotificationsPermission(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockAndroid.areNotificationsEnabled(),
+        ).thenAnswer((_) async => true);
+
+        final result = await service.requestPermission();
+
+        expect(result, isTrue);
+      },
+    );
+
+    test(
+      'returns true when requestNotificationsPermission returns true',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        await service.init();
+
+        final mockAndroid = MockAndroidFlutterLocalNotificationsPlugin();
+        when(
+          () => mockPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >(),
+        ).thenReturn(mockAndroid);
+        when(
+          () => mockAndroid.requestNotificationsPermission(),
+        ).thenAnswer((_) async => true);
+
+        final result = await service.requestPermission();
+
+        expect(result, isTrue);
+      },
+    );
   });
 
   group('pendingRoute (static)', () {

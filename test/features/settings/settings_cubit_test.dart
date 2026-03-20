@@ -74,6 +74,12 @@ class FakeNotificationService extends NotificationService {
   Future<bool> requestPermission() async => true;
 }
 
+/// Simulates a device where notification permission is actually denied.
+class PermissionDeniedNotificationService extends FakeNotificationService {
+  @override
+  Future<bool> requestPermission() async => false;
+}
+
 void main() {
   late FakeFirebaseFirestore firestore;
   late JournalRepository repository;
@@ -343,6 +349,49 @@ void main() {
           NotificationService.defaultMinute,
         );
       },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'toggle on then setReminderTime reschedules at new time',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) async {
+        await cubit.toggleReminder();
+        await cubit.setReminderTime(const TimeOfDay(hour: 9, minute: 27));
+      },
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.reminderEnabled,
+          'reminderEnabled',
+          true,
+        ),
+        isA<SettingsState>().having(
+          (s) => s.reminderTime,
+          'reminderTime',
+          const TimeOfDay(hour: 9, minute: 27),
+        ),
+      ],
+      verify: (_) {
+        expect(notificationService.reminderHour, 9);
+        expect(notificationService.reminderMinute, 27);
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'toggleReminder does not enable when permission denied',
+      build: () {
+        notificationService = PermissionDeniedNotificationService();
+        return SettingsCubit(
+          repository: repository,
+          notificationService: notificationService,
+        );
+      },
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) => cubit.toggleReminder(),
+      expect: () => [], // no state change — permission denied
     );
   });
 
