@@ -133,6 +133,8 @@ class ReviewCallController extends ChangeNotifier {
   /// Start the review call: request mic permission, set up audio plumbing,
   /// connect to Gemini, and begin streaming.
   Future<void> startCall() async {
+    if (_callActive || _disposed) return;
+
     final recorder = _recorderFactory();
     if (!await recorder.hasPermission()) {
       recorder.dispose();
@@ -157,7 +159,7 @@ class ReviewCallController extends ChangeNotifier {
     _callActive = true;
     _processedEntryCount = 0;
     _postCallHandled = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     // Listen to voice call state for tool calls and status changes
     _voiceStateSub = bloc.stream.listen(_handleVoiceCallState);
@@ -175,6 +177,10 @@ class ReviewCallController extends ChangeNotifier {
     bloc.add(const StartCall());
 
     await playback.init(sampleRate: 24000, channels: 1);
+    if (_disposed) {
+      cleanup();
+      return;
+    }
 
     _audioOutputSub = bloc.audioOutputStream.listen((audioData) {
       try {
@@ -198,6 +204,11 @@ class ReviewCallController extends ChangeNotifier {
         onError('Failed to start review call: $e');
       }
       await endCall();
+      return;
+    }
+
+    if (_disposed) {
+      cleanup();
       return;
     }
 
@@ -335,7 +346,7 @@ class ReviewCallController extends ChangeNotifier {
     _voiceCallBloc?.add(const EndCall());
 
     _callActive = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   List<CategoryEntry> _allRecentEntries() {

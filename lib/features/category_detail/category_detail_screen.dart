@@ -54,6 +54,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
   }
 
   void _startReviewCall() {
+    _callController?.dispose();
     final authState = context.read<AuthBloc>().state;
     final uid = authState is Authenticated ? authState.uid : null;
 
