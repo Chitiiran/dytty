@@ -825,7 +825,7 @@ class _CallControls extends StatelessWidget {
           child: IconButton.filled(
             onPressed: onToggleSpeaker,
             tooltip: isSpeakerOn ? 'Speaker' : 'Earpiece',
-            icon: Icon(isSpeakerOn ? Icons.volume_up : Icons.hearing),
+            icon: Icon(isSpeakerOn ? Icons.volume_up : Icons.phone_in_talk),
             style: IconButton.styleFrom(
               backgroundColor: isSpeakerOn
                   ? Theme.of(context).colorScheme.primaryContainer

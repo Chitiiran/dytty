@@ -527,7 +527,7 @@ void main() {
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
 
-      expect(find.byIcon(Icons.hearing), findsOneWidget);
+      expect(find.byIcon(Icons.phone_in_talk), findsOneWidget);
       expect(find.byIcon(Icons.volume_up), findsNothing);
     });
 

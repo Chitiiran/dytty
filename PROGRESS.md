@@ -1,15 +1,16 @@
 # Dytty Progress
 
 ## Current Status
-**Category Detail Page — All 7 phases complete on main. Ready for manual testing + distribution.**
+**Category Detail Page landed. UX tweaks (#91, #57, #39) in PR #104.**
 
 **Latest on main:**
-- Category Detail Page (#71): full feature — data layer, bloc, embedded review call, post-call summary + reviewed badges, 6 widgets, route + navigation
-- Version: 0.1.6+8 (distributed to testers via `scripts/distribute.sh`)
+- Deps upgrade: Flutter 3.41.5, google_sign_in 7.x, google_fonts 8.x, firebase_ai migration, all pins unlocked
+- Category Detail Page (#71): full feature
+- Version: 0.1.7+9
 
-**Open PRs:** None
+**Open PRs:** #104 — UX tweaks (#91 speaker icon, #57 portrait lock, #39 tappable empty prompt)
 
-**Test status:** 619 unit/widget tests (3 pre-existing golden failures), 9 Maestro flows. Coverage: ~82% (CI gate: 50%)
+**Test status:** 629 Flutter + 24 Playwright + 9 Maestro = 662 tests. Coverage: ~82% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -43,7 +44,6 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 - **#79**: Data export + account deletion for GDPR (P0)
 - **#78**: iOS build for close-circle distribution (P0)
 - **#90**: Error state flash on call start (race condition)
-- **#91**: Speaker toggle icon UX
 - **#95**: Enable CI auto-distribution (infra)
 - **#48**: Golden test CI failures (cross-platform fonts)
 - Coverage at 81.7% — ahead of ratchet schedule, bump CI gate
@@ -52,6 +52,38 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 
 ## Log
 
+<<<<<<< HEAD
+=======
+### 2026-03-19 (session 27)
+- **#92 Dependency upgrade — PR #103 merged**
+  - Flutter 3.41.1 → 3.41.5, google_sign_in 6.x → 7.x (new authenticate() API), google_fonts 6.x → 8.x
+  - Migrated GeminiLlmService from deprecated google_generative_ai to firebase_ai
+  - Updated Gemini Live model to gemini-2.5-flash-preview-native-audio
+  - Unpinned firebase_core, firebase_auth, firebase_ai, cloud_firestore, fake_cloud_firestore
+  - Fixed Color.value deprecation → Color.toARGB32()
+- **#91 Speaker toggle icon** — Icons.hearing → Icons.phone_in_talk (clearer earpiece icon)
+- **#57 Portrait lock** — SystemChrome.setPreferredOrientations in main.dart
+- **#39 Tappable empty prompt** — GestureDetector on empty category prompt text opens add entry sheet
+- **#55 Already implemented** — category icons in progress card were already tappable with navigation
+- 671 total tests (630 Flutter + 32 Playwright + 9 Maestro), 80.7% coverage
+
+### 2026-03-19 (session 26)
+- **#60 Test Report Upgrade — PR #100**
+  - Report UI: boxed category cards with color-coded left borders (blue=Flutter, green=Playwright, orange=Maestro), proportional timing bars, collapsible sections, folder-grouped test suites, coverage folder rollups with zero-coverage callout, E2E screen/flow coverage checklist table
+  - Per-category metrics: duration + throughput per layer, environment badges (Flutter version, browser, device/API level)
+  - Parallel E2E: Playwright + Maestro now run concurrently (pre-build web first to avoid Flutter lock conflict)
+  - Coverage: 77.5% → 80.7% (+3.2%) via 10 new CategoryDetailScreen widget tests (screen was at 0%)
+  - E2E: 24 → 32 Playwright tests (+8: settings, voice-note, category-detail), screen coverage 6/8 → 8/8
+  - Key decisions:
+    - **Port 4200 for Playwright web server** — port 5555 collided with Android emulator adb (root cause of all Playwright timeouts when emulator was running)
+    - **Per-flow Maestro XML merge** — each `maestro test` overwrites results.xml; now writes per-flow XMLs then merges, so all 9 flows appear in report (was showing 1/1)
+    - **E2E coverage as manual checklist** — Playwright/Maestro are black-box tests with no code coverage; created `tool/screen-coverage.yaml` mapping screens/flows to spec files, report shows coverage %
+    - **Collapsible category sections** — sections collapsed by default (auto-expand on failures) to reduce visual noise; screenshots also collapsed
+    - **Pre-build web before parallel fork** — `flutter build web` locks the project, preventing Maestro APK install; building first then forking both E2E layers avoids the race
+    - **`dart_test.yaml`** — registers `golden` tag to suppress unknown tag warning
+  - 669 total tests passing, 0 failures, 5 data sources
+
+>>>>>>> 50c9839 (fix(ux): speaker icon, portrait lock, tappable empty prompt (#91, #57, #39))
 ### 2026-03-18 (session 25)
 - **#71 Category Detail Page — Phases 5-7 complete (all done)**
   - Phase 5 (Embedded Review Call): `_CategoryDetailView` converted to `StatefulWidget` with full call lifecycle (VoiceCallBloc + GeminiLiveService + AudioRecorder + AudioPlaybackService), `CallControlsOverlay` widget (mute/end/elapsed), `_CallBadge` (red during call, green with entries, grey empty), category-tinted status banner, entry dedup via `_processedEntryCount`
