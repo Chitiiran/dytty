@@ -93,7 +93,7 @@ jobs:
               --format junit \
               --output maestro-output/results.xml \
               --include-tags=smoke,state,release \
-              .maestro/ || true
+              .maestro/
       - name: Upload Maestro screenshots
         if: always()
         uses: actions/upload-artifact@v4
