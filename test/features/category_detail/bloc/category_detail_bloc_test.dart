@@ -533,6 +533,10 @@ void main() {
       ],
     );
 
+    test('recentDaysCount constant is 7', () {
+      expect(CategoryDetailBloc.recentDaysCount, 7);
+    });
+
     blocTest<CategoryDetailBloc, CategoryDetailState>(
       'hasRecentEntries is false when no entries in 7-day window',
       build: () =>
