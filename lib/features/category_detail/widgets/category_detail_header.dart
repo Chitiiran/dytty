@@ -70,9 +70,10 @@ class _CallBadgeIcon extends StatelessWidget {
         ? Colors.green
         : theme.colorScheme.outline;
 
-    return GestureDetector(
-      onTap: hasRecentEntries ? onTap : null,
-      child: SizedBox(
+    return IconButton(
+      onPressed: hasRecentEntries ? onTap : null,
+      tooltip: hasRecentEntries ? 'Start review call' : 'No recent entries',
+      icon: SizedBox(
         width: 40,
         height: 40,
         child: Stack(
