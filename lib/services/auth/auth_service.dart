@@ -11,9 +11,8 @@ class AuthService {
     : _auth = auth ?? FirebaseAuth.instance,
       _googleSignIn = googleSignIn;
 
-  // Lazy — avoids eager clientId assertion crash on web when no meta tag is set.
-  // serverClientId is required for google_sign_in_android 6.2+ (Credential Manager)
-  // to obtain an idToken. Value is the Web client OAuth ID from google-services.json.
+  bool _initialized = false;
+
   GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn.instance;
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -25,6 +24,12 @@ class AuthService {
       throw Exception('Google Sign-In is not supported on this platform');
     }
 
+    // google_sign_in 7.x requires initialize() before authenticate().
+    // On Android, it auto-resolves serverClientId from google-services.json.
+    if (!_initialized) {
+      await _google.initialize();
+      _initialized = true;
+    }
     final googleUser = await _google.authenticate();
 
     final idToken = googleUser.authentication.idToken;

@@ -1,14 +1,16 @@
 # Dytty Progress
 
 ## Current Status
-**PR #104 code review refactors complete. All 7 issues (#105-#114) merged.**
+**Notifications fixed and tested. Code review refactors + release infra merged.**
 
 **Latest on main:**
-- All PR #104 code review refactors landed (7 PRs merged)
-- `formatRelativeTime` shared utility (#105), `recentDaysCount` constant (#106), enum keys for `reviewQuestions` (#107), CallBadgeIcon a11y fix (#112), silent catch → error states (#114), ReviewCallController extraction (#111), CallSession utility (#113)
-- Version: 0.1.7+9
+- All PR #104 code review refactors landed (#105-#114, PRs #124-#131, #133)
+- Release infra overhaul (#121): shared debug keystore, distribute.sh with tags + GitHub Releases
+- Dynamic version display (#27), Firestore index (#119), timestamp warnings (#108)
+- Version on main: 0.1.7+9
 
-**Open PRs:** None
+**Open PRs:**
+- #128 — Notification fixes (timezone, auth, permissions, channels, receivers) — tested working on device
 
 **Test status:** 671 Flutter + 32 Playwright + 9 Maestro = 712 tests. Coverage: 82.3% (CI gate: 50%)
 
@@ -29,13 +31,13 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 | Milestone | Status |
 |-----------|--------|
 | M0–M4 | Done |
-| M5: Weekly Review | In progress — #71 Category Detail Page (all 7 phases done, needs manual testing) |
+| M5: Weekly Review | In progress — #71 Category Detail Page landed, code review refactors merged |
 | M6: Categories + Polish | Data model done. UI settings page pending |
 | M7: Launch Prep | Not started |
 
 ## Blockers
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
-- #95: CI auto-distribution requires `FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D` secret
+- #130: google-services.json was committed to git history — assess key rotation before public release
 
 ## Up Next
 - **#86**: Journal entries lost on app restart (P0, offline persistence)
@@ -43,28 +45,35 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 - **#82**: Security audit — Firestore rules, API keys, audio encryption (P0)
 - **#79**: Data export + account deletion for GDPR (P0)
 - **#78**: iOS build for close-circle distribution (P0)
+- **#122**: Daily call AI conversation quality (P0 — repetition, no follow-ups, poor category handling)
+- **#123**: Transcript bubbles truncated (P1)
 - **#90**: Error state flash on call start (race condition)
-- **#95**: Enable CI auto-distribution (infra)
 - **#48**: Golden test CI failures (cross-platform fonts)
-- Coverage at 81.7% — ahead of ratchet schedule, bump CI gate
+- Coverage at ~82% — ahead of ratchet schedule, bump CI gate
 
 ---
 
 ## Log
 
 ### 2026-03-20 (session 28)
-- **PR #104 code review refactors — all 7 issues complete**
-  - PRs 1-4 implemented in parallel worktrees, PRs 5-7 sequential (overlapping files)
-  - Each PR: TDD (tests first), implement, analyze, test, push, code review, apply fixes, merge
-  - **#105** (PR #125): `formatRelativeTime` → shared utility with injectable `now` param for deterministic tests
-  - **#106** (PR #124): magic number 7 → `recentDaysCount` constant with clarifying comment
-  - **#107** (PR #127): `reviewQuestions` string keys → `JournalCategory` enum keys
-  - **#112** (PR #126): `_CallBadgeIcon` GestureDetector → IconButton (a11y + tooltip)
-  - **#114** (PR #129): silent catch blocks → emit error state + BlocListener SnackBars, optimistic revert on all 3 operations
-  - **#111** (PR #131): extracted `ReviewCallController` (ChangeNotifier) from `_CategoryDetailViewState` — screen 611→374 lines, factory injection for testability, `_disposed` guards on all async paths
-  - **#113** (PR #133): extracted `CallSession` utility — granular API (initPlayback, startRecording, stop, dispose), used by both ReviewCallController and VoiceCallScreen
-  - 703/703 tests passing (671 Flutter + 32 Playwright), 82.3% coverage
-  - Key decisions: injectable `now` for time utils, granular CallSession API (not monolithic `start()`) to accommodate Gemini connect interleaving, `onError` callback pattern for controller→screen error reporting
+- **Notification pipeline fixed end-to-end (#26, #132)** — 9 builds (0.1.8+11 through +19) to diagnose and fix the full 8-link Android notification chain:
+  - flutter_timezone 5.x returns `TimezoneInfo` not `String` (runtime crash)
+  - `requestPermission()` returns null when already granted — added `areNotificationsEnabled()` fallback
+  - `SCHEDULE_EXACT_ALARM` in manifest caused Android 14+ to reject alarms — removed
+  - `ScheduledNotificationReceiver` + `ScheduledNotificationBootReceiver` + `ActionBroadcastReceiver` missing from AndroidManifest
+  - Notification channels never created explicitly — Android 8+ silently drops without channels
+  - `multiDexEnabled` added for Android 14+ compatibility
+  - `google_sign_in` 7.x requires `initialize()` before `authenticate()` (auto-resolves serverClientId from google-services.json)
+- **Created `scripts/android-diag.sh`** — diagnostic script for the full notification pipeline
+- **PR #104 code review refactors — all 7 issues complete** (parallel agent)
+  - #105, #106, #107, #112, #114 (PRs #124-#129), #111 (PR #131), #113 (PR #133)
+  - Key decisions: injectable `now` for time utils, granular CallSession API, `onError` callback pattern
+  - 703 tests passing, 82.3% coverage
+- **PR #120 merged** — dynamic app version (#27), Firestore index (#119), timestamp warnings (#108)
+- **PR #121 merged** — release infra overhaul (shared debug keystore, distribute.sh with tags + GitHub Releases)
+- **Issues verified and closed**: #26, #29, #61, #115, #132
+- **Issues created**: #119, #122 (AI quality), #123 (transcript truncation), #130 (security), #132
+- **Lesson learned**: always diagnose the full chain before fixing symptoms — created `/debug-android` skill
 
 ### 2026-03-19 (session 27)
 - **#92 Dependency upgrade — PR #103 merged**

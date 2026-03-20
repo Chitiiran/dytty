@@ -34,6 +34,14 @@ void main() {
   setUp(() {
     mockAuth = MockFirebaseAuth();
     mockGoogleSignIn = MockGoogleSignIn();
+    when(
+      () => mockGoogleSignIn.initialize(
+        serverClientId: any(named: 'serverClientId'),
+        clientId: any(named: 'clientId'),
+        nonce: any(named: 'nonce'),
+        hostedDomain: any(named: 'hostedDomain'),
+      ),
+    ).thenAnswer((_) async {});
     service = AuthService(auth: mockAuth, googleSignIn: mockGoogleSignIn);
   });
 

@@ -1,8 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+
+/// Returns the device's IANA timezone name (e.g. "America/Toronto").
+typedef TimezoneResolver = Future<String> Function();
 
 class NotificationService {
   static const _channelId = 'dytty_daily_reminder';
@@ -31,10 +35,19 @@ class NotificationService {
   static String? pendingRoute;
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final TimezoneResolver _timezoneResolver;
   late final SharedPreferences _prefs;
 
-  NotificationService({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  NotificationService({
+    FlutterLocalNotificationsPlugin? plugin,
+    TimezoneResolver? timezoneResolver,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _timezoneResolver = timezoneResolver ?? _defaultTimezoneResolver;
+
+  static Future<String> _defaultTimezoneResolver() async {
+    final info = await FlutterTimezone.getLocalTimezone();
+    return info.identifier;
+  }
 
   /// Top-level callback for notification responses (required by flutter_local_notifications).
   @pragma('vm:entry-point')
@@ -54,6 +67,8 @@ class NotificationService {
 
   Future<void> init() async {
     tz.initializeTimeZones();
+    final timezoneName = await _timezoneResolver();
+    tz.setLocalLocation(tz.getLocation(timezoneName));
     _prefs = await SharedPreferences.getInstance();
 
     const androidSettings = AndroidInitializationSettings(
@@ -73,6 +88,33 @@ class NotificationService {
       settings: settings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
+
+    // Explicitly create notification channels on Android 8+.
+    // Channels must exist before scheduling or notifications are silently dropped.
+    if (!kIsWeb) {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android != null) {
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _channelId,
+            _channelName,
+            description: _channelDesc,
+            importance: Importance.high,
+          ),
+        );
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _callChannelId,
+            _callChannelName,
+            description: _callChannelDesc,
+            importance: Importance.high,
+          ),
+        );
+      }
+    }
 
     // Re-schedule if reminder was enabled from a previous session
     if (isReminderEnabled) {
@@ -230,6 +272,7 @@ class NotificationService {
   }
 
   /// Request notification permission (Android 13+, iOS).
+  /// Returns true if permission is granted (including already-granted).
   Future<bool> requestPermission() async {
     if (kIsWeb) return false;
 
@@ -238,7 +281,12 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (android != null) {
-      return await android.requestNotificationsPermission() ?? false;
+      // requestNotificationsPermission() can return null when permission
+      // is already granted on some devices. Check areNotificationsEnabled()
+      // as a fallback.
+      final result = await android.requestNotificationsPermission();
+      if (result == true) return true;
+      return await android.areNotificationsEnabled() ?? false;
     }
 
     final ios = _plugin
