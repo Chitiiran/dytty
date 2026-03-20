@@ -71,14 +71,15 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   Future<void> _startCall() async {
-    final playback = widget.playbackService ?? PcmSoundPlaybackService();
-    _session = CallSession(
-      recorder: AudioRecorder(),
-      playback: playback,
-      bloc: _bloc,
-    );
+    _session?.dispose();
+    final recorder = AudioRecorder();
+    if (!await recorder.hasPermission()) {
+      recorder.dispose();
+      return;
+    }
 
-    if (!await _session!.requestPermission()) return;
+    final playback = widget.playbackService ?? PcmSoundPlaybackService();
+    _session = CallSession(recorder: recorder, playback: playback, bloc: _bloc);
 
     _bloc.add(const StartCall());
     await _session!.initPlayback();

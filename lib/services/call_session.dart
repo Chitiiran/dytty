@@ -29,11 +29,6 @@ class CallSession {
     required this.bloc,
   });
 
-  /// Check mic permission. Returns false if denied.
-  Future<bool> requestPermission() async {
-    return recorder.hasPermission();
-  }
-
   /// Initialize playback and wire the audio output stream from the bloc.
   Future<void> initPlayback() async {
     await playback.init(sampleRate: 24000, channels: 1);

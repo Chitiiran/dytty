@@ -49,26 +49,6 @@ void main() {
   });
 
   group('CallSession', () {
-    group('requestPermission', () {
-      test('returns true when recorder grants permission', () async {
-        when(() => mockRecorder.hasPermission()).thenAnswer((_) async => true);
-
-        final result = await session.requestPermission();
-
-        expect(result, true);
-        verify(() => mockRecorder.hasPermission()).called(1);
-      });
-
-      test('returns false when recorder denies permission', () async {
-        when(() => mockRecorder.hasPermission()).thenAnswer((_) async => false);
-
-        final result = await session.requestPermission();
-
-        expect(result, false);
-        verify(() => mockRecorder.hasPermission()).called(1);
-      });
-    });
-
     group('initPlayback', () {
       test('initializes playback and subscribes to audio output', () async {
         when(
