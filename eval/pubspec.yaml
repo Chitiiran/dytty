@@ -1,0 +1,15 @@
+name: dytty_eval
+description: AI conversation quality eval harness for Dytty daily call
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  dytty:
+    path: ..
+  firebase_ai: ^3.9.0
+  firebase_core: ^4.5.0
+
+dev_dependencies:
+  lints: ^6.0.0

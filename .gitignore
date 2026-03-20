@@ -16,6 +16,9 @@ android/app/google-services.json
 # Node.js (Playwright E2E tests)
 node_modules/
 
+# Eval harness results (timestamped JSON)
+eval/results/
+
 # Unified test output (all layers, timestamped runs)
 test-output/
 
