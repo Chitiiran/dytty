@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:dytty/core/utils/time_format_utils.dart';
 import 'package:dytty/core/theme/app_colors.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/data/models/category_entry.dart';
@@ -12,17 +13,6 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
-
-String formatRelativeTime(DateTime dateTime) {
-  final now = DateTime.now();
-  final diff = now.difference(dateTime);
-
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  if (diff.inDays < 30) return '${diff.inDays}d ago';
-  return DateFormat('MMM d').format(dateTime);
-}
 
 class DailyJournalScreen extends StatefulWidget {
   const DailyJournalScreen({super.key});

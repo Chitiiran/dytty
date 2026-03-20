@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dytty/core/utils/time_format_utils.dart';
 import 'package:dytty/data/models/category_entry.dart';
 
 /// Tile for a single category entry, supporting inline editing
@@ -61,16 +62,6 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
       ? Icons.mic_rounded
       : Icons.edit_note_rounded;
 
-  String get _relativeTime {
-    final now = DateTime.now();
-    final diff = now.difference(widget.entry.createdAt);
-
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -124,7 +115,7 @@ class _InlineEntryTileState extends State<InlineEntryTile> {
                 Row(
                   children: [
                     Text(
-                      _relativeTime,
+                      formatRelativeTime(widget.entry.createdAt),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
