@@ -71,16 +71,14 @@ git pull origin main
 git checkout -b feat/14-voice-recording-sheet
 ```
 
-### Future: Release candidate flow (nice-to-have)
+### Release candidate flow (on-demand)
 
-When the team grows or a QA gate is needed, adopt `develop` + `release/*` branches:
-- `develop` as integration branch (all PRs land here)
-- `release/X.Y.Z` branches cut from `develop` for dogfooding (2-3 days)
-- Release branch merges to `main` after QA, back-merges to `develop`
+When a stabilization window is needed before distribution, cut a release branch from `main`:
+- `release/X.Y.Z` branches cut from `main` for dogfooding (2-3 days)
+- Only bug fixes cherry-picked onto the release branch
+- Release branch merges back to `main` after QA
 - Use `bash scripts/release.sh X.Y.Z` to automate
 - See `docs/planning/RELEASE.md` for the full release process
-
-This adds value when there are multiple contributors, external testers, or compliance requirements. For solo/small-team development, trunk-based with CI gates is sufficient.
 
 ---
 
@@ -250,7 +248,7 @@ When Claude is asked to implement a feature or fix a bug:
 
 1. **Check for existing issue** — search with `gh issue list` before creating a new one
 2. **Create issue if none exists** — with appropriate labels and milestone
-3. **Create branch** from `develop` using the naming convention
+3. **Create branch** from `main` using the naming convention
 4. **Commit with full context** — type, scope, what, why, key decisions, issue ref
 5. **Always ask before pushing** — never push to remote without user confirmation
 6. **Always ask before creating PRs** — present the PR title and summary first
