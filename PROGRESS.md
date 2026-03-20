@@ -1,16 +1,16 @@
 # Dytty Progress
 
 ## Current Status
-**Category Detail Page landed. UX tweaks (#91, #57, #39) in PR #104.**
+**PR #104 code review refactors complete. All 7 issues (#105-#114) merged.**
 
 **Latest on main:**
-- Deps upgrade: Flutter 3.41.5, google_sign_in 7.x, google_fonts 8.x, firebase_ai migration, all pins unlocked
-- Category Detail Page (#71): full feature
+- All PR #104 code review refactors landed (7 PRs merged)
+- `formatRelativeTime` shared utility (#105), `recentDaysCount` constant (#106), enum keys for `reviewQuestions` (#107), CallBadgeIcon a11y fix (#112), silent catch → error states (#114), ReviewCallController extraction (#111), CallSession utility (#113)
 - Version: 0.1.7+9
 
-**Open PRs:** #104 — UX tweaks (#91 speaker icon, #57 portrait lock, #39 tappable empty prompt)
+**Open PRs:** None
 
-**Test status:** 629 Flutter + 24 Playwright + 9 Maestro = 662 tests. Coverage: ~82% (CI gate: 50%)
+**Test status:** 671 Flutter + 32 Playwright + 9 Maestro = 712 tests. Coverage: 82.3% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -52,8 +52,20 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 
 ## Log
 
-<<<<<<< HEAD
-=======
+### 2026-03-20 (session 28)
+- **PR #104 code review refactors — all 7 issues complete**
+  - PRs 1-4 implemented in parallel worktrees, PRs 5-7 sequential (overlapping files)
+  - Each PR: TDD (tests first), implement, analyze, test, push, code review, apply fixes, merge
+  - **#105** (PR #125): `formatRelativeTime` → shared utility with injectable `now` param for deterministic tests
+  - **#106** (PR #124): magic number 7 → `recentDaysCount` constant with clarifying comment
+  - **#107** (PR #127): `reviewQuestions` string keys → `JournalCategory` enum keys
+  - **#112** (PR #126): `_CallBadgeIcon` GestureDetector → IconButton (a11y + tooltip)
+  - **#114** (PR #129): silent catch blocks → emit error state + BlocListener SnackBars, optimistic revert on all 3 operations
+  - **#111** (PR #131): extracted `ReviewCallController` (ChangeNotifier) from `_CategoryDetailViewState` — screen 611→374 lines, factory injection for testability, `_disposed` guards on all async paths
+  - **#113** (PR #133): extracted `CallSession` utility — granular API (initPlayback, startRecording, stop, dispose), used by both ReviewCallController and VoiceCallScreen
+  - 703/703 tests passing (671 Flutter + 32 Playwright), 82.3% coverage
+  - Key decisions: injectable `now` for time utils, granular CallSession API (not monolithic `start()`) to accommodate Gemini connect interleaving, `onError` callback pattern for controller→screen error reporting
+
 ### 2026-03-19 (session 27)
 - **#92 Dependency upgrade — PR #103 merged**
   - Flutter 3.41.1 → 3.41.5, google_sign_in 6.x → 7.x (new authenticate() API), google_fonts 6.x → 8.x
@@ -83,7 +95,6 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
     - **`dart_test.yaml`** — registers `golden` tag to suppress unknown tag warning
   - 669 total tests passing, 0 failures, 5 data sources
 
->>>>>>> 50c9839 (fix(ux): speaker icon, portrait lock, tappable empty prompt (#91, #57, #39))
 ### 2026-03-18 (session 25)
 - **#71 Category Detail Page — Phases 5-7 complete (all done)**
   - Phase 5 (Embedded Review Call): `_CategoryDetailView` converted to `StatefulWidget` with full call lifecycle (VoiceCallBloc + GeminiLiveService + AudioRecorder + AudioPlaybackService), `CallControlsOverlay` widget (mute/end/elapsed), `_CallBadge` (red during call, green with entries, grey empty), category-tinted status banner, entry dedup via `_processedEntryCount`
