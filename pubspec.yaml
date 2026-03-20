@@ -1,7 +1,7 @@
 name: dytty
 description: "Voice-first daily journaling app"
 publish_to: 'none'
-version: 0.1.7+9
+version: 0.1.8+10
 
 environment:
   sdk: ^3.11.0
