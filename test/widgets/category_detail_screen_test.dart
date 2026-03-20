@@ -716,7 +716,7 @@ void main() {
       await pumpScreen(tester);
       await tester.pumpAndSettle();
 
-      // The error text should be displayed
+      // The error text should be displayed in the body
       expect(find.textContaining('Simulated error'), findsOneWidget);
     });
   });

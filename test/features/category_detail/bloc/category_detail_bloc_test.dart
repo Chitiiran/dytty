@@ -1,10 +1,13 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/category_detail/bloc/category_detail_bloc.dart';
+
+class MockJournalRepository extends Mock implements JournalRepository {}
 
 void main() {
   late FakeFirebaseFirestore firestore;
@@ -468,10 +471,18 @@ void main() {
         ),
       ),
       expect: () => [
+        // Optimistic update marks entries reviewed
         isA<CategoryDetailState>().having(
           (s) => s.recentEntries.first.entries.every((e) => e.isReviewed),
           'all reviewed',
           true,
+        ),
+        // Firestore persist fails (no doc seeded), error emitted
+        // Note: second entry error is deduplicated by Equatable (same message)
+        isA<CategoryDetailState>().having(
+          (s) => s.error,
+          'error',
+          contains('Failed to mark entry as reviewed'),
         ),
       ],
     );
@@ -553,6 +564,179 @@ void main() {
           'hasRecentEntries',
           false,
         ),
+      ],
+    );
+  });
+
+  group('CategoryDetailBloc error handling', () {
+    late MockJournalRepository mockRepo;
+    DateTime fixedClock() => DateTime(2026, 3, 18);
+
+    setUp(() {
+      mockRepo = MockJournalRepository();
+    });
+
+    setUpAll(() {
+      registerFallbackValue(
+        ReviewSummary(
+          id: '',
+          categoryId: 'positive',
+          weekStart: '2026-03-16',
+          summary: '',
+          createdAt: DateTime(2026, 3, 18),
+          updatedAt: DateTime(2026, 3, 18),
+        ),
+      );
+    });
+
+    blocTest<CategoryDetailBloc, CategoryDetailState>(
+      'SaveInlineEdit emits error and reverts when repo throws',
+      build: () => CategoryDetailBloc(repository: mockRepo, clock: fixedClock),
+      setUp: () {
+        when(
+          () => mockRepo.updateCategoryEntry(any(), any(), any()),
+        ).thenThrow(Exception('network failure'));
+      },
+      seed: () => CategoryDetailState(
+        status: CategoryDetailStatus.loaded,
+        categoryId: 'positive',
+        editingEntryId: 'e1',
+        recentEntries: [
+          DateGroup(
+            date: '2026-03-18',
+            displayDate: 'Today',
+            entries: [
+              CategoryEntry(
+                id: 'e1',
+                categoryId: 'positive',
+                text: 'Original',
+                createdAt: DateTime(2026, 3, 18),
+              ),
+            ],
+          ),
+        ],
+        hasRecentEntries: true,
+      ),
+      act: (bloc) => bloc.add(
+        const SaveInlineEdit(
+          date: '2026-03-18',
+          entryId: 'e1',
+          newText: 'Updated',
+        ),
+      ),
+      expect: () => [
+        // 1. Optimistic update
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.first.text,
+          'optimistic text',
+          'Updated',
+        ),
+        // 2. Revert with error message
+        isA<CategoryDetailState>()
+            .having(
+              (s) => s.recentEntries.first.entries.first.text,
+              'reverted text',
+              'Original',
+            )
+            .having((s) => s.error, 'error', isNotNull)
+            .having(
+              (s) => s.error,
+              'error contains message',
+              contains('Failed to save edit'),
+            ),
+      ],
+    );
+
+    blocTest<CategoryDetailBloc, CategoryDetailState>(
+      'MarkEntriesReviewed emits error when repo throws',
+      build: () => CategoryDetailBloc(repository: mockRepo, clock: fixedClock),
+      setUp: () {
+        when(
+          () => mockRepo.markEntryReviewed(any(), any()),
+        ).thenThrow(Exception('network failure'));
+      },
+      seed: () => CategoryDetailState(
+        status: CategoryDetailStatus.loaded,
+        categoryId: 'positive',
+        recentEntries: [
+          DateGroup(
+            date: '2026-03-18',
+            displayDate: 'Today',
+            entries: [
+              CategoryEntry(
+                id: 'e1',
+                categoryId: 'positive',
+                text: 'Entry 1',
+                createdAt: DateTime(2026, 3, 18),
+                isReviewed: false,
+              ),
+            ],
+          ),
+        ],
+        hasRecentEntries: true,
+      ),
+      act: (bloc) => bloc.add(
+        const MarkEntriesReviewed(
+          entries: [EntryReference(date: '2026-03-18', entryId: 'e1')],
+        ),
+      ),
+      expect: () => [
+        // 1. Optimistic update
+        isA<CategoryDetailState>().having(
+          (s) => s.recentEntries.first.entries.first.isReviewed,
+          'isReviewed',
+          true,
+        ),
+        // 2. Error emitted
+        isA<CategoryDetailState>()
+            .having((s) => s.error, 'error', isNotNull)
+            .having(
+              (s) => s.error,
+              'error contains message',
+              contains('Failed to mark entry as reviewed'),
+            ),
+      ],
+    );
+
+    blocTest<CategoryDetailBloc, CategoryDetailState>(
+      'SaveReviewSummaryEvent emits error when repo throws',
+      build: () => CategoryDetailBloc(repository: mockRepo, clock: fixedClock),
+      setUp: () {
+        when(
+          () => mockRepo.saveReviewSummary(any()),
+        ).thenThrow(Exception('network failure'));
+      },
+      seed: () => const CategoryDetailState(
+        status: CategoryDetailStatus.loaded,
+        categoryId: 'positive',
+      ),
+      act: (bloc) => bloc.add(
+        SaveReviewSummaryEvent(
+          ReviewSummary(
+            id: 'rs1',
+            categoryId: 'positive',
+            weekStart: '2026-03-16',
+            summary: 'Great week!',
+            createdAt: DateTime(2026, 3, 18),
+            updatedAt: DateTime(2026, 3, 18),
+          ),
+        ),
+      ),
+      expect: () => [
+        // 1. Optimistic summary update
+        isA<CategoryDetailState>().having(
+          (s) => s.reviewSummary?.summary,
+          'summary text',
+          'Great week!',
+        ),
+        // 2. Error emitted
+        isA<CategoryDetailState>()
+            .having((s) => s.error, 'error', isNotNull)
+            .having(
+              (s) => s.error,
+              'error contains message',
+              contains('Failed to save review summary'),
+            ),
       ],
     );
   });

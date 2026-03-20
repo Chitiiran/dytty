@@ -1,5 +1,4 @@
 import 'package:equatable/equatable.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:dytty/core/utils/date_utils.dart' as app_date;
@@ -377,8 +376,12 @@ class CategoryDetailBloc
         event.newText,
       );
     } catch (e) {
-      debugPrint('Failed to persist inline edit: $e');
-      emit(state.copyWith(recentEntries: previousGroups));
+      emit(
+        state.copyWith(
+          recentEntries: previousGroups,
+          error: 'Failed to save edit: $e',
+        ),
+      );
     }
   }
 
@@ -458,7 +461,7 @@ class CategoryDetailBloc
       try {
         await _repository.markEntryReviewed(ref.date, ref.entryId);
       } catch (e) {
-        debugPrint('Failed to mark entry ${ref.entryId} as reviewed: $e');
+        emit(state.copyWith(error: 'Failed to mark entry as reviewed: $e'));
       }
     }
   }
@@ -472,7 +475,7 @@ class CategoryDetailBloc
     try {
       await _repository.saveReviewSummary(event.summary);
     } catch (e) {
-      debugPrint('Failed to save review summary: $e');
+      emit(state.copyWith(error: 'Failed to save review summary: $e'));
     }
   }
 

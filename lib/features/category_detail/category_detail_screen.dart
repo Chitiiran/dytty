@@ -161,7 +161,11 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
         ],
       );
     } catch (e) {
-      debugPrint('Review call connect failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start review call: $e')),
+        );
+      }
       _endReviewCall();
       return;
     }
@@ -290,7 +294,11 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
           detailBloc.add(SaveReviewSummaryEvent(summary));
         }
       } catch (e) {
-        debugPrint('Failed to generate review summary: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to generate summary: $e')),
+          );
+        }
       }
     }
   }
@@ -317,96 +325,110 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
       orElse: () => JournalCategory.positive,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(category.displayName),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          BlocBuilder<CategoryDetailBloc, CategoryDetailState>(
-            buildWhen: (prev, curr) =>
-                prev.hasRecentEntries != curr.hasRecentEntries,
-            builder: (context, state) {
-              return _CallBadge(
-                categoryId: widget.categoryId,
-                hasRecentEntries: state.hasRecentEntries,
-                isCallActive: _callActive,
-                onCallTap: state.hasRecentEntries && !_callActive
-                    ? _startReviewCall
-                    : null,
-              );
-            },
+    return BlocListener<CategoryDetailBloc, CategoryDetailState>(
+      listenWhen: (prev, curr) =>
+          curr.error != null &&
+          prev.error != curr.error &&
+          curr.status != CategoryDetailStatus.error,
+      listener: (context, state) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(state.error!)));
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(category.displayName),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
           ),
-        ],
-      ),
-      body: BlocBuilder<CategoryDetailBloc, CategoryDetailState>(
-        builder: (context, state) {
-          if (state.status == CategoryDetailStatus.loading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          actions: [
+            BlocBuilder<CategoryDetailBloc, CategoryDetailState>(
+              buildWhen: (prev, curr) =>
+                  prev.hasRecentEntries != curr.hasRecentEntries,
+              builder: (context, state) {
+                return _CallBadge(
+                  categoryId: widget.categoryId,
+                  hasRecentEntries: state.hasRecentEntries,
+                  isCallActive: _callActive,
+                  onCallTap: state.hasRecentEntries && !_callActive
+                      ? _startReviewCall
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+        body: BlocBuilder<CategoryDetailBloc, CategoryDetailState>(
+          builder: (context, state) {
+            if (state.status == CategoryDetailStatus.loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (state.status == CategoryDetailStatus.error) {
-            return Center(
-              child: Text(
-                state.error ?? 'Something went wrong',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+            if (state.status == CategoryDetailStatus.error) {
+              return Center(
+                child: Text(
+                  state.error ?? 'Something went wrong',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              );
+            }
+
+            if (state.recentEntries.isEmpty && state.reviewSummary == null) {
+              return EmptyCategoryState(categoryId: widget.categoryId);
+            }
+
+            return Column(
+              children: [
+                // Category-color tint during active call
+                if (_callActive)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    color: category.color.withValues(alpha: 0.08),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.callActiveRed,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Text(
+                          'Review call in progress',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                Expanded(child: _buildEntryList(context, state)),
+
+                // Call controls at bottom
+                if (_callActive && _voiceCallBloc != null)
+                  CallControlsOverlay(
+                    isMuted: _voiceCallBloc!.state.isMuted,
+                    onToggleMute: () => _voiceCallBloc!.add(const ToggleMute()),
+                    onEndCall: _endReviewCall,
+                    elapsed: _voiceCallBloc!.state.elapsed,
+                  ),
+              ],
             );
-          }
-
-          if (state.recentEntries.isEmpty && state.reviewSummary == null) {
-            return EmptyCategoryState(categoryId: widget.categoryId);
-          }
-
-          return Column(
-            children: [
-              // Category-color tint during active call
-              if (_callActive)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  color: category.color.withValues(alpha: 0.08),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.callActiveRed,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      Text(
-                        'Review call in progress',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              Expanded(child: _buildEntryList(context, state)),
-
-              // Call controls at bottom
-              if (_callActive && _voiceCallBloc != null)
-                CallControlsOverlay(
-                  isMuted: _voiceCallBloc!.state.isMuted,
-                  onToggleMute: () => _voiceCallBloc!.add(const ToggleMute()),
-                  onEndCall: _endReviewCall,
-                  elapsed: _voiceCallBloc!.state.elapsed,
-                ),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }
