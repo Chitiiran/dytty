@@ -443,6 +443,7 @@ class CategoryDetailBloc
     Emitter<CategoryDetailState> emit,
   ) async {
     // Optimistic update
+    final previousGroups = List<DateGroup>.from(state.recentEntries);
     final entryIdSet = event.entries.map((e) => e.entryId).toSet();
     final updatedGroups = state.recentEntries.map((group) {
       final updatedEntries = group.entries.map((entry) {
@@ -461,7 +462,13 @@ class CategoryDetailBloc
       try {
         await _repository.markEntryReviewed(ref.date, ref.entryId);
       } catch (e) {
-        emit(state.copyWith(error: 'Failed to mark entry as reviewed: $e'));
+        emit(
+          state.copyWith(
+            recentEntries: previousGroups,
+            error: 'Failed to mark entry as reviewed: $e',
+          ),
+        );
+        return;
       }
     }
   }
@@ -470,12 +477,19 @@ class CategoryDetailBloc
     SaveReviewSummaryEvent event,
     Emitter<CategoryDetailState> emit,
   ) async {
+    final previousSummary = state.reviewSummary;
     emit(state.copyWith(reviewSummary: event.summary));
 
     try {
       await _repository.saveReviewSummary(event.summary);
     } catch (e) {
-      emit(state.copyWith(error: 'Failed to save review summary: $e'));
+      emit(
+        state.copyWith(
+          reviewSummary: previousSummary,
+          clearReviewSummary: previousSummary == null,
+          error: 'Failed to save review summary: $e',
+        ),
+      );
     }
   }
 

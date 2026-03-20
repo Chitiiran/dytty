@@ -631,13 +631,14 @@ void main() {
           'optimistic text',
           'Updated',
         ),
-        // 2. Revert with error message
+        // 2. Revert with error message, status stays loaded
         isA<CategoryDetailState>()
             .having(
               (s) => s.recentEntries.first.entries.first.text,
               'reverted text',
               'Original',
             )
+            .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having((s) => s.error, 'error', isNotNull)
             .having(
               (s) => s.error,
@@ -687,8 +688,14 @@ void main() {
           'isReviewed',
           true,
         ),
-        // 2. Error emitted
+        // 2. Revert with error, status stays loaded
         isA<CategoryDetailState>()
+            .having(
+              (s) => s.recentEntries.first.entries.first.isReviewed,
+              'reverted isReviewed',
+              false,
+            )
+            .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having((s) => s.error, 'error', isNotNull)
             .having(
               (s) => s.error,
@@ -729,8 +736,10 @@ void main() {
           'summary text',
           'Great week!',
         ),
-        // 2. Error emitted
+        // 2. Revert summary with error, status stays loaded
         isA<CategoryDetailState>()
+            .having((s) => s.reviewSummary, 'reverted summary', isNull)
+            .having((s) => s.status, 'status', CategoryDetailStatus.loaded)
             .having((s) => s.error, 'error', isNotNull)
             .having(
               (s) => s.error,
