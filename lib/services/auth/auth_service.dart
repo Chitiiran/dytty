@@ -11,10 +11,7 @@ class AuthService {
     : _auth = auth ?? FirebaseAuth.instance,
       _googleSignIn = googleSignIn;
 
-  // Web client OAuth ID from google-services.json (client_type: 3).
-  // Required by google_sign_in 7.x Credential Manager to obtain an idToken.
-  static const _serverClientId =
-      '828440302945-uk9llfd9dh0blg876t76r6nse2o9e8g0.apps.googleusercontent.com';
+  bool _initialized = false;
 
   GoogleSignIn get _google => _googleSignIn ??= GoogleSignIn.instance;
 
@@ -27,7 +24,12 @@ class AuthService {
       throw Exception('Google Sign-In is not supported on this platform');
     }
 
-    await _google.initialize(serverClientId: _serverClientId);
+    // google_sign_in 7.x requires initialize() before authenticate().
+    // On Android, it auto-resolves serverClientId from google-services.json.
+    if (!_initialized) {
+      await _google.initialize();
+      _initialized = true;
+    }
     final googleUser = await _google.authenticate();
 
     final idToken = googleUser.authentication.idToken;
