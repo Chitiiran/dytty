@@ -27,7 +27,6 @@ jobs:
         run: flutter analyze --no-fatal-warnings --no-fatal-infos lib test
 
       - name: Create test output directory
-        if: always()
         run: mkdir -p test-output/latest/flutter
 
       - name: Test with coverage

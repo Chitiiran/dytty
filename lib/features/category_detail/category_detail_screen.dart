@@ -242,14 +242,14 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     final state = detailBloc.state;
 
     // 1. Mark all recent entries as reviewed
-    final refs = <EntryReference>[];
+    final entries = <EntryReference>[];
     for (final group in state.recentEntries) {
       for (final entry in group.entries) {
-        refs.add(EntryReference(date: group.date, entryId: entry.id));
+        entries.add(EntryReference(date: group.date, entryId: entry.id));
       }
     }
-    if (refs.isNotEmpty) {
-      detailBloc.add(MarkEntriesReviewed(entries: refs));
+    if (entries.isNotEmpty) {
+      detailBloc.add(MarkEntriesReviewed(entries: entries));
     }
 
     // 2. Generate review summary via LlmService
@@ -550,32 +550,36 @@ class _CallBadge extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onCallTap,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(category.icon, color: category.color, size: 28),
-              Positioned(
-                right: 2,
-                bottom: 4,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.surface,
-                      width: 1.5,
+      child: Tooltip(
+        message: isCallActive ? 'Call in progress' : 'Start review call',
+        child: InkWell(
+          onTap: onCallTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(category.icon, color: category.color, size: 28),
+                Positioned(
+                  right: 2,
+                  bottom: 4,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: theme.colorScheme.surface,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
