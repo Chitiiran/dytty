@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
@@ -13,6 +12,7 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/audio/audio_playback_service.dart';
 import 'package:dytty/services/audio/pcm_sound_playback_service.dart';
+import 'package:dytty/services/call_session.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
@@ -49,9 +49,7 @@ class ReviewCallController extends ChangeNotifier {
   // Internal call state
   VoiceCallBloc? _voiceCallBloc;
   GeminiLiveService? _geminiService;
-  AudioRecorder? _recorder;
-  AudioPlaybackService? _playback;
-  StreamSubscription<Uint8List>? _audioOutputSub;
+  CallSession? _session;
   StreamSubscription<VoiceCallState>? _voiceStateSub;
   bool _callActive = false;
   int _processedEntryCount = 0;
@@ -116,14 +114,10 @@ class ReviewCallController extends ChangeNotifier {
 
   /// Releases all call-related resources.
   void cleanup() {
-    _audioOutputSub?.cancel();
-    _audioOutputSub = null;
     _voiceStateSub?.cancel();
     _voiceStateSub = null;
-    _recorder?.dispose();
-    _recorder = null;
-    _playback?.dispose();
-    _playback = null;
+    _session?.dispose();
+    _session = null;
     _voiceCallBloc?.close();
     _voiceCallBloc = null;
     _geminiService?.dispose();
@@ -141,8 +135,8 @@ class ReviewCallController extends ChangeNotifier {
       return;
     }
 
-    final geminiService = _geminiServiceFactory();
     final playback = _playbackFactory();
+    final geminiService = _geminiServiceFactory();
 
     final bloc = _voiceCallBlocFactory(
       service: geminiService,
@@ -152,9 +146,14 @@ class ReviewCallController extends ChangeNotifier {
       uid: uid,
     );
 
+    final session = CallSession(
+      recorder: recorder,
+      playback: playback,
+      bloc: bloc,
+    );
+
     _geminiService = geminiService;
-    _recorder = recorder;
-    _playback = playback;
+    _session = session;
     _voiceCallBloc = bloc;
     _callActive = true;
     _processedEntryCount = 0;
@@ -176,19 +175,11 @@ class ReviewCallController extends ChangeNotifier {
     // Start the call with review-specific prompt and tools
     bloc.add(const StartCall());
 
-    await playback.init(sampleRate: 24000, channels: 1);
+    await session.initPlayback();
     if (_disposed) {
       cleanup();
       return;
     }
-
-    _audioOutputSub = bloc.audioOutputStream.listen((audioData) {
-      try {
-        playback.feed(audioData);
-      } catch (e) {
-        debugPrint('Audio playback feed error: $e');
-      }
-    });
 
     // Connect the service with custom prompt
     try {
@@ -212,17 +203,7 @@ class ReviewCallController extends ChangeNotifier {
       return;
     }
 
-    // Start recording and streaming audio
-    final stream = await recorder.startStream(
-      const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 16000,
-        numChannels: 1,
-      ),
-    );
-    stream.listen((data) {
-      bloc.sendAudio(Uint8List.fromList(data));
-    });
+    await session.startRecording();
   }
 
   void _handleVoiceCallState(VoiceCallState voiceState) {
@@ -339,10 +320,7 @@ class ReviewCallController extends ChangeNotifier {
 
   /// Stops recording, cancels audio subscription, and ends the voice call.
   Future<void> endCall() async {
-    await _recorder?.stop();
-    _audioOutputSub?.cancel();
-    _audioOutputSub = null;
-    await _playback?.stop();
+    await _session?.stop();
     _voiceCallBloc?.add(const EndCall());
 
     _callActive = false;
