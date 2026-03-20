@@ -97,4 +97,48 @@ test.describe('Category Detail Screen', () => {
       await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
     }
   });
+
+  test('shows empty state message text', async ({ page }) => {
+    await clickCategoryIcon(page, 'Gratitude');
+    await expect(page.getByText('Gratitude', { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Should show the empty state message
+    await expect(page.getByText('No entries yet for Gratitude')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Your reflections will appear here.')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('shows multiple entries with date group header', async ({ page }) => {
+    // Add two entries to the same category
+    await clickByLabel(page, 'Today button');
+    await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
+
+    // First entry
+    await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
+    const textField1 = page.getByRole('textbox');
+    await expect(textField1).toBeVisible({ timeout: 10_000 });
+    await textField1.fill('First positive thought');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Journal entry: First positive thought')).toBeVisible({ timeout: 10_000 });
+
+    // Second entry
+    await page.getByRole('button', { name: 'Add Positive Things entry' }).click();
+    const textField2 = page.getByRole('textbox');
+    await expect(textField2).toBeVisible({ timeout: 10_000 });
+    await textField2.fill('Second positive thought');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Journal entry: Second positive thought')).toBeVisible({ timeout: 10_000 });
+
+    // Navigate to category detail
+    await page.goBack();
+    await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
+    await clickCategoryIcon(page, 'Positive Things');
+    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
+
+    // Both entries should be visible
+    await expect(page.getByText('First positive thought')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Second positive thought')).toBeVisible({ timeout: 10_000 });
+
+    // Should show "Today" date group header
+    await expect(page.getByText('Today')).toBeVisible({ timeout: 10_000 });
+  });
 });
