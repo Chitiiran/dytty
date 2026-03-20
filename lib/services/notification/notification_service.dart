@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:flutter_timezone/timezone_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 /// Returns the device's IANA timezone name (e.g. "America/Toronto").
-typedef TimezoneResolver = Future<Object> Function();
+typedef TimezoneResolver = Future<String> Function();
 
 class NotificationService {
   static const _channelId = 'dytty_daily_reminder';
@@ -42,7 +43,12 @@ class NotificationService {
     FlutterLocalNotificationsPlugin? plugin,
     TimezoneResolver? timezoneResolver,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
-       _timezoneResolver = timezoneResolver ?? FlutterTimezone.getLocalTimezone;
+       _timezoneResolver = timezoneResolver ?? _defaultTimezoneResolver;
+
+  static Future<String> _defaultTimezoneResolver() async {
+    final info = await FlutterTimezone.getLocalTimezone();
+    return info.identifier;
+  }
 
   /// Top-level callback for notification responses (required by flutter_local_notifications).
   @pragma('vm:entry-point')
@@ -62,7 +68,7 @@ class NotificationService {
 
   Future<void> init() async {
     tz.initializeTimeZones();
-    final timezoneName = await _timezoneResolver() as String;
+    final timezoneName = await _timezoneResolver();
     tz.setLocalLocation(tz.getLocation(timezoneName));
     _prefs = await SharedPreferences.getInstance();
 
