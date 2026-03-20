@@ -214,6 +214,9 @@ class CategoryDetailBloc
   final JournalRepository _repository;
   final DateTime Function() _clock;
 
+  /// Number of days shown in the "recent entries" window.
+  static const recentDaysCount = 7;
+
   static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   CategoryDetailBloc({
@@ -247,7 +250,7 @@ class CategoryDetailBloc
     try {
       final now = _clock();
       final dates = <String>[];
-      for (int i = 0; i < 7; i++) {
+      for (int i = 0; i < recentDaysCount; i++) {
         final day = now.subtract(Duration(days: i));
         dates.add(_dateFormat.format(day));
       }
@@ -258,7 +261,8 @@ class CategoryDetailBloc
         now.month,
       );
       Set<String> prevMonthDays = {};
-      if (now.day <= 7) {
+      // If the recent-days window could span into the previous month
+      if (now.day <= recentDaysCount) {
         final prevMonth = now.month == 1 ? 12 : now.month - 1;
         final prevYear = now.month == 1 ? now.year - 1 : now.year;
         prevMonthDays = await _repository.getDaysWithEntries(
