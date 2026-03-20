@@ -8,9 +8,9 @@ import 'package:intl/intl.dart';
 /// - 'Xh ago' for < 24 hours ago
 /// - 'Xd ago' for < 30 days ago
 /// - 'MMM d' (e.g. 'Jan 15') for >= 30 days ago
-String formatRelativeTime(DateTime dateTime) {
-  final now = DateTime.now();
-  final diff = now.difference(dateTime);
+String formatRelativeTime(DateTime dateTime, {DateTime? now}) {
+  final currentTime = now ?? DateTime.now();
+  final diff = currentTime.difference(dateTime);
 
   if (diff.inMinutes < 1) return 'just now';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
