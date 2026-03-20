@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +7,7 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/audio/audio_playback_service.dart';
 import 'package:dytty/services/audio/pcm_sound_playback_service.dart';
+import 'package:dytty/services/call_session.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
@@ -29,20 +27,16 @@ class VoiceCallScreen extends StatefulWidget {
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
-  final AudioRecorder _recorder = AudioRecorder();
-  StreamSubscription<Uint8List>? _audioOutputSub;
-  late final AudioPlaybackService _playback;
-
   late final GeminiLiveService _service;
   late final VoiceCallBloc _bloc;
 
   bool _ownsBloc = false;
+  CallSession? _session;
 
   @override
   void initState() {
     super.initState();
     _service = GeminiLiveService();
-    _playback = widget.playbackService ?? PcmSoundPlaybackService();
   }
 
   @override
@@ -71,45 +65,28 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   @override
   void dispose() {
-    _audioOutputSub?.cancel();
-    _recorder.dispose();
-    _playback.dispose();
+    _session?.dispose();
     if (_ownsBloc) _bloc.close();
     super.dispose();
   }
 
   Future<void> _startCall() async {
-    if (!await _recorder.hasPermission()) return;
+    final playback = widget.playbackService ?? PcmSoundPlaybackService();
+    _session = CallSession(
+      recorder: AudioRecorder(),
+      playback: playback,
+      bloc: _bloc,
+    );
+
+    if (!await _session!.requestPermission()) return;
 
     _bloc.add(const StartCall());
-
-    await _playback.init(sampleRate: 24000, channels: 1);
-
-    _audioOutputSub = _bloc.audioOutputStream.listen((audioData) {
-      try {
-        _playback.feed(audioData);
-      } catch (e) {
-        debugPrint('Audio playback feed error: $e');
-      }
-    });
-
-    final stream = await _recorder.startStream(
-      const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 16000,
-        numChannels: 1,
-      ),
-    );
-    stream.listen((data) {
-      _bloc.sendAudio(Uint8List.fromList(data));
-    });
+    await _session!.initPlayback();
+    await _session!.startRecording();
   }
 
   Future<void> _endCall() async {
-    await _recorder.stop();
-    _audioOutputSub?.cancel();
-    _audioOutputSub = null;
-    await _playback.stop();
+    await _session?.stop();
     _bloc.add(const EndCall());
   }
 
