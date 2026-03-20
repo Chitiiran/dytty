@@ -32,8 +32,8 @@ test.describe('Category Detail Screen', () => {
   test('navigates to category detail from progress card', async ({ page }) => {
     await clickCategoryIcon(page, 'Positive Things');
 
-    // Should show category title in app bar
-    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
+    // Should show category title in app bar — exact match to avoid tooltip collision
+    await expect(page.getByText('Positive Things', { exact: true })).toBeVisible({ timeout: 10_000 });
   });
 
   test('shows empty state when no entries exist', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('Category Detail Screen', () => {
 
   test('can navigate back from category detail', async ({ page }) => {
     await clickCategoryIcon(page, 'Positive Things');
-    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Positive Things', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Navigate back
     await page.goBack();
@@ -75,7 +75,7 @@ test.describe('Category Detail Screen', () => {
 
     // Navigate to category detail via progress card
     await clickCategoryIcon(page, 'Positive Things');
-    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Positive Things', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Entry should be visible in category detail
     await expect(page.getByText('Test entry for category detail')).toBeVisible({ timeout: 15_000 });
@@ -92,7 +92,7 @@ test.describe('Category Detail Screen', () => {
 
     for (const name of categories) {
       await clickCategoryIcon(page, name);
-      await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 10_000 });
       await page.goBack();
       await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
     }
@@ -132,7 +132,7 @@ test.describe('Category Detail Screen', () => {
     await page.goBack();
     await expect(page.getByRole('button', { name: 'Today button' })).toBeVisible({ timeout: 10_000 });
     await clickCategoryIcon(page, 'Positive Things');
-    await expect(page.getByText('Positive Things')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Positive Things', { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Both entries should be visible
     await expect(page.getByText('First positive thought')).toBeVisible({ timeout: 15_000 });
