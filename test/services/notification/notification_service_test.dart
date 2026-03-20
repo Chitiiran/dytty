@@ -9,6 +9,9 @@ import 'package:dytty/services/notification/notification_service.dart';
 class MockFlutterLocalNotificationsPlugin extends Mock
     implements FlutterLocalNotificationsPlugin {}
 
+class MockAndroidFlutterLocalNotificationsPlugin extends Mock
+    implements AndroidFlutterLocalNotificationsPlugin {}
+
 void main() {
   late MockFlutterLocalNotificationsPlugin mockPlugin;
   late NotificationService service;
@@ -485,6 +488,55 @@ void main() {
 
       expect(result, isFalse);
     });
+
+    test(
+      'returns true when requestNotificationsPermission returns null but notifications enabled',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        await service.init();
+
+        final mockAndroid = MockAndroidFlutterLocalNotificationsPlugin();
+        when(
+          () => mockPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >(),
+        ).thenReturn(mockAndroid);
+        when(
+          () => mockAndroid.requestNotificationsPermission(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockAndroid.areNotificationsEnabled(),
+        ).thenAnswer((_) async => true);
+
+        final result = await service.requestPermission();
+
+        expect(result, isTrue);
+      },
+    );
+
+    test(
+      'returns true when requestNotificationsPermission returns true',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        await service.init();
+
+        final mockAndroid = MockAndroidFlutterLocalNotificationsPlugin();
+        when(
+          () => mockPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >(),
+        ).thenReturn(mockAndroid);
+        when(
+          () => mockAndroid.requestNotificationsPermission(),
+        ).thenAnswer((_) async => true);
+
+        final result = await service.requestPermission();
+
+        expect(result, isTrue);
+      },
+    );
   });
 
   group('pendingRoute (static)', () {
