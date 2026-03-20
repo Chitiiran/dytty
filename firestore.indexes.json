@@ -9,6 +9,13 @@
       ]
     },
     {
+      "collectionGroup": "dailyEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "reviewSummaries",
       "queryScope": "COLLECTION",
       "fields": [

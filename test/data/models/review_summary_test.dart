@@ -87,6 +87,46 @@ void main() {
       expect(summary.audioUrl, isNull);
     });
 
+    test('fromFirestore logs warning when timestamps are missing', () async {
+      final firestore = FakeFirebaseFirestore();
+      await firestore.collection('test').doc('no-ts').set({
+        'categoryId': 'positive',
+        'weekStart': '2026-03-16',
+        'summary': 'Missing timestamps',
+      });
+
+      final logs = <String>[];
+      final snapshot = await firestore.collection('test').doc('no-ts').get();
+      final summary = ReviewSummary.fromFirestore(
+        snapshot,
+        onWarning: logs.add,
+      );
+
+      expect(summary.categoryId, 'positive');
+      expect(summary.createdAt, isNotNull);
+      expect(summary.updatedAt, isNotNull);
+      expect(logs, contains(contains('createdAt')));
+      expect(logs, contains(contains('updatedAt')));
+    });
+
+    test('fromFirestore does not warn when timestamps are present', () async {
+      final firestore = FakeFirebaseFirestore();
+      final now = DateTime(2026, 3, 18);
+      await firestore.collection('test').doc('with-ts').set({
+        'categoryId': 'positive',
+        'weekStart': '2026-03-16',
+        'summary': 'Has timestamps',
+        'createdAt': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
+      });
+
+      final logs = <String>[];
+      final snapshot = await firestore.collection('test').doc('with-ts').get();
+      ReviewSummary.fromFirestore(snapshot, onWarning: logs.add);
+
+      expect(logs, isEmpty);
+    });
+
     test('equatable compares all fields', () {
       final now = DateTime(2026, 3, 18);
       final a = ReviewSummary(

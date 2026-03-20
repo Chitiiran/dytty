@@ -2,12 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _version = info.buildNumber.isNotEmpty
+            ? '${info.version}+${info.buildNumber}'
+            : info.version;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -286,7 +311,7 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.info_outline_rounded),
                     title: const Text('Version'),
                     trailing: Text(
-                      '0.1.0',
+                      _version.isEmpty ? '...' : _version,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -311,7 +336,7 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => showLicensePage(
                       context: context,
                       applicationName: 'Dytty',
-                      applicationVersion: '0.1.0',
+                      applicationVersion: _version.isEmpty ? null : _version,
                     ),
                   ),
                 ],

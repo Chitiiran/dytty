@@ -31,6 +31,7 @@ dependencies:
   record: ^6.2.0
   flutter_pcm_sound: ^3.3.3
   firebase_storage: ^13.1.0
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:
