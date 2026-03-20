@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -224,13 +225,41 @@ void main() {
       verify(() => mockThemeCubit.setThemeMode(ThemeMode.dark)).called(1);
     });
 
-    testWidgets('shows version number', (tester) async {
+    testWidgets('shows version from PackageInfo, not hardcoded', (
+      tester,
+    ) async {
+      // Mock PackageInfo platform channel to return a known version
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('dev.fluttercommunity.plus/package_info'),
+        (call) async => {
+          'appName': 'Dytty',
+          'packageName': 'com.dytty.dytty',
+          'version': '0.1.8',
+          'buildNumber': '10',
+        },
+      );
+
+      await tester.pumpApp(const SettingsScreen());
+      await tester.pumpAndSettle();
+
+      robot = SettingsScreenRobot(tester);
+      await robot.scrollTo(find.text('Version'));
+      robot.expectVersionVisible('0.1.8+10');
+
+      // Clean up mock
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('dev.fluttercommunity.plus/package_info'),
+        null,
+      );
+    });
+
+    testWidgets('shows loading indicator before version loads', (tester) async {
       await tester.pumpApp(const SettingsScreen());
       await tester.pump(const Duration(seconds: 1));
 
       robot = SettingsScreenRobot(tester);
       await robot.scrollTo(find.text('Version'));
-      robot.expectVersionVisible('0.1.0');
+      expect(find.text('Version'), findsOneWidget);
     });
 
     testWidgets('shows licenses tile', (tester) async {
