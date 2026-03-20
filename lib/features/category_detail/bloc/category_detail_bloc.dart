@@ -261,6 +261,7 @@ class CategoryDetailBloc
         now.month,
       );
       Set<String> prevMonthDays = {};
+      // If the recent-days window could span into the previous month
       if (now.day <= recentDaysCount) {
         final prevMonth = now.month == 1 ? 12 : now.month - 1;
         final prevYear = now.month == 1 ? now.year - 1 : now.year;
