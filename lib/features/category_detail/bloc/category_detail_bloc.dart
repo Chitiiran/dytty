@@ -1,5 +1,4 @@
 import 'package:equatable/equatable.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:dytty/core/utils/date_utils.dart' as app_date;
@@ -377,8 +376,12 @@ class CategoryDetailBloc
         event.newText,
       );
     } catch (e) {
-      debugPrint('Failed to persist inline edit: $e');
-      emit(state.copyWith(recentEntries: previousGroups));
+      emit(
+        state.copyWith(
+          recentEntries: previousGroups,
+          error: 'Failed to save edit: $e',
+        ),
+      );
     }
   }
 
@@ -440,6 +443,7 @@ class CategoryDetailBloc
     Emitter<CategoryDetailState> emit,
   ) async {
     // Optimistic update
+    final previousGroups = List<DateGroup>.from(state.recentEntries);
     final entryIdSet = event.entries.map((e) => e.entryId).toSet();
     final updatedGroups = state.recentEntries.map((group) {
       final updatedEntries = group.entries.map((entry) {
@@ -458,7 +462,13 @@ class CategoryDetailBloc
       try {
         await _repository.markEntryReviewed(ref.date, ref.entryId);
       } catch (e) {
-        debugPrint('Failed to mark entry ${ref.entryId} as reviewed: $e');
+        emit(
+          state.copyWith(
+            recentEntries: previousGroups,
+            error: 'Failed to mark entry as reviewed: $e',
+          ),
+        );
+        return;
       }
     }
   }
@@ -467,12 +477,19 @@ class CategoryDetailBloc
     SaveReviewSummaryEvent event,
     Emitter<CategoryDetailState> emit,
   ) async {
+    final previousSummary = state.reviewSummary;
     emit(state.copyWith(reviewSummary: event.summary));
 
     try {
       await _repository.saveReviewSummary(event.summary);
     } catch (e) {
-      debugPrint('Failed to save review summary: $e');
+      emit(
+        state.copyWith(
+          reviewSummary: previousSummary,
+          clearReviewSummary: previousSummary == null,
+          error: 'Failed to save review summary: $e',
+        ),
+      );
     }
   }
 
