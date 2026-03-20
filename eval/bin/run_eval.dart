@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:dytty_eval/orchestrator.dart';
 import 'package:dytty_eval/personas/persona.dart';
 import 'package:dytty_eval/personas/resistant_raj.dart';
@@ -16,9 +15,6 @@ final allPersonas = <String, Persona>{
 void main(List<String> args) async {
   final config = _parseArgs(args);
   if (config == null) return;
-
-  // Initialize Firebase (required for firebase_ai)
-  await Firebase.initializeApp();
 
   final orchestrator = Orchestrator(
     maxTurns: config.maxTurns,

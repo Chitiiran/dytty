@@ -93,20 +93,20 @@ class Orchestrator {
 
       // Get AI's opening message
       print('\n[AI greeting...]');
-      final greeting = await gemini.getGreeting();
+      var lastAiText = (await gemini.getGreeting()).text;
       turnNumber++;
       transcript.add(TranscriptTurn(
         turn: turnNumber,
         speaker: 'ai',
-        text: greeting.text,
+        text: lastAiText,
       ));
-      print('  AI: ${_truncate(greeting.text, 100)}');
+      print('  AI: ${_truncate(lastAiText, 100)}');
 
       // Turn loop
       while (turnNumber < maxTurns) {
         // Get user (Claude persona) response
         print('\n[User responding...]');
-        final userReply = await userSession.sendMessage(greeting.text);
+        final userReply = await userSession.sendMessage(lastAiText);
         turnNumber++;
         transcript.add(TranscriptTurn(
           turn: turnNumber,
@@ -124,13 +124,14 @@ class Orchestrator {
         // Get AI response
         print('\n[AI responding...]');
         final aiResponse = await gemini.sendMessage(userReply);
+        lastAiText = aiResponse.text;
         turnNumber++;
         transcript.add(TranscriptTurn(
           turn: turnNumber,
           speaker: 'ai',
-          text: aiResponse.text,
+          text: lastAiText,
         ));
-        print('  AI: ${_truncate(aiResponse.text, 100)}');
+        print('  AI: ${_truncate(lastAiText, 100)}');
 
         if (aiResponse.toolCalls.isNotEmpty) {
           for (final tc in aiResponse.toolCalls) {
@@ -139,7 +140,7 @@ class Orchestrator {
         }
 
         // Check if AI is wrapping up
-        if (_isGoodbye(aiResponse.text)) {
+        if (_isGoodbye(lastAiText)) {
           print('\n[AI said goodbye — ending conversation]');
           break;
         }
@@ -173,7 +174,7 @@ class Orchestrator {
       final result = EvalResult(
         persona: persona.id,
         promptVersion: promptVersion,
-        model: 'gemini-2.5-flash-preview-04-17',
+        model: 'gemini-2.5-flash',
         timestamp: timestamp,
         transcript: transcript,
         toolCalls: gemini.allToolCalls,
@@ -187,6 +188,7 @@ class Orchestrator {
 
       return result;
     } finally {
+      gemini.close();
       await userSession.stop();
     }
   }

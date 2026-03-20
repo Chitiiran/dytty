@@ -3,128 +3,57 @@ import 'dart:io';
 
 import 'rubric.dart';
 
-/// Wraps claude-session-driver to manage Claude tmux sessions via WSL.
+/// Wraps the Claude CLI (`claude -p`) for eval conversations.
 ///
-/// Uses `wsl tmux` + `claude` CLI to create sessions that play user personas
-/// and judge conversation quality.
+/// Uses `claude --print` with `--system-prompt` for stateless per-turn calls.
+/// For the user persona, each turn is an independent `claude -p` invocation
+/// with the conversation context embedded in the system prompt.
+/// For the judge, a single call with the full transcript.
 class ClaudeSession {
-  final String sessionName;
-  final String systemPrompt;
-  bool _started = false;
+  final String _systemPrompt;
+  final List<_Turn> _conversationHistory = [];
 
-  ClaudeSession._({required this.sessionName, required this.systemPrompt});
+  ClaudeSession._({required String systemPrompt})
+      : _systemPrompt = systemPrompt;
 
   /// Create a session for playing a user persona.
   factory ClaudeSession.user({
     required String personaId,
     required String systemPrompt,
   }) {
-    return ClaudeSession._(
-      sessionName: 'eval-user-$personaId',
-      systemPrompt: systemPrompt,
-    );
+    return ClaudeSession._(systemPrompt: systemPrompt);
   }
 
   /// Create a session for the judge.
   factory ClaudeSession.judge() {
     return ClaudeSession._(
-      sessionName: 'eval-judge',
       systemPrompt: 'You are a conversation quality evaluator. '
           'Follow instructions exactly and respond with valid JSON only.',
     );
   }
 
-  /// Start the Claude session in a tmux window.
-  Future<void> start() async {
-    // Kill any existing session with this name
-    await _runWsl(['tmux', 'kill-session', '-t', sessionName]);
+  /// No-op for the pipe-based approach.
+  Future<void> start() async {}
 
-    // Create new tmux session
-    final createResult = await _runWsl([
-      'tmux',
-      'new-session',
-      '-d',
-      '-s',
-      sessionName,
-      '-x',
-      '200',
-      '-y',
-      '50',
-    ]);
-    if (createResult.exitCode != 0) {
-      throw Exception(
-        'Failed to create tmux session: ${createResult.stderr}',
-      );
-    }
-
-    // Launch claude in the session with the system prompt
-    // Write system prompt to a temp file to avoid shell escaping issues
-    final promptFile = await _writeTempFile(
-      'eval-prompt-$sessionName',
-      systemPrompt,
-    );
-
-    await _sendKeys(
-      'claude --system-prompt "\$(cat $promptFile)" --no-input-confirmation',
-    );
-
-    // Wait for Claude to start
-    await Future<void>.delayed(const Duration(seconds: 5));
-    _started = true;
-  }
-
-  /// Send a message to the Claude session and get the response.
+  /// Send a message and get Claude's response.
   ///
-  /// Writes the message to the tmux session, waits for Claude to respond,
-  /// then reads the response from the tmux buffer.
+  /// Builds the full conversation context into the prompt so each
+  /// `claude -p` call has the history it needs.
   Future<String> sendMessage(String message) async {
-    if (!_started) throw StateError('Session not started');
+    _conversationHistory.add(_Turn(speaker: 'AI companion', text: message));
 
-    // Write message to a temp file to avoid escaping issues
-    final msgFile = await _writeTempFile(
-      'eval-msg-$sessionName',
-      message,
-    );
+    // Build a prompt that includes conversation history
+    final contextPrompt = _buildContextPrompt();
 
-    // Clear the current buffer to make response extraction easier
-    await _runWsl([
-      'tmux',
-      'send-keys',
-      '-t',
-      sessionName,
-      'clear',
-      'Enter',
-    ]);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final result = await _runClaude(contextPrompt);
 
-    // Send the message content via tmux
-    await _sendKeys('\$(cat $msgFile)');
-    await _sendKeys('', enter: true);
+    final response = result.stdout.toString().trim();
+    _conversationHistory.add(_Turn(speaker: 'You', text: response));
 
-    // Wait for Claude to process and respond
-    // Poll the buffer until we see the response stabilize
-    var lastContent = '';
-    var stableCount = 0;
-    const maxWait = Duration(minutes: 2);
-    final deadline = DateTime.now().add(maxWait);
-
-    while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(seconds: 3));
-      final content = await _captureBuffer();
-
-      if (content == lastContent && content.isNotEmpty) {
-        stableCount++;
-        if (stableCount >= 3) break; // Response has stabilized
-      } else {
-        stableCount = 0;
-        lastContent = content;
-      }
-    }
-
-    return _extractResponse(lastContent);
+    return response;
   }
 
-  /// Send a full transcript to the judge session and get structured scores.
+  /// Send a full transcript to the judge and get structured scores.
   Future<EvalScores> judge({
     required String transcript,
     required String toolCalls,
@@ -136,17 +65,13 @@ class ClaudeSession {
         .replaceAll('{tool_calls}', toolCalls)
         .replaceAll('{persona_description}', personaDescription);
 
-    final response = await sendMessage(filledPrompt);
+    final result = await _runClaude(filledPrompt);
+    final response = result.stdout.toString().trim();
 
-    // Extract JSON from response
-    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(response);
-    if (jsonMatch == null) {
-      throw FormatException(
-        'Judge did not return valid JSON. Response:\n$response',
-      );
-    }
+    // Extract JSON from response (Claude may wrap it in markdown code blocks)
+    final jsonStr = _extractJson(response);
 
-    final json = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+    final json = jsonDecode(jsonStr) as Map<String, dynamic>;
     final scoresMap = json['scores'] as Map<String, dynamic>;
 
     return EvalScores(
@@ -156,75 +81,103 @@ class ClaudeSession {
             dim: (scoresMap[dim.name] as num).toInt(),
       },
       judgeNotes: json['judge_notes'] as String? ?? '',
-      flaggedTurns: (json['flagged_turns'] as List<dynamic>?)
-              ?.cast<int>() ??
-          [],
+      flaggedTurns:
+          (json['flagged_turns'] as List<dynamic>?)?.cast<int>() ?? [],
     );
   }
 
-  /// Stop and clean up the session.
-  Future<void> stop() async {
-    await _runWsl(['tmux', 'kill-session', '-t', sessionName]);
-    _started = false;
-  }
+  /// No-op for the pipe-based approach.
+  Future<void> stop() async {}
 
   // --- Private helpers ---
 
-  Future<void> _sendKeys(String keys, {bool enter = false}) async {
-    final args = ['tmux', 'send-keys', '-t', sessionName, keys];
-    if (enter || keys.isNotEmpty) args.add('Enter');
-    await _runWsl(args);
-  }
+  /// Build a prompt that includes conversation history for multi-turn context.
+  String _buildContextPrompt() {
+    if (_conversationHistory.isEmpty) return 'Start the conversation.';
 
-  Future<String> _captureBuffer() async {
-    final result = await _runWsl([
-      'tmux',
-      'capture-pane',
-      '-t',
-      sessionName,
-      '-p',
-      '-S',
-      '-100',
-    ]);
-    return result.stdout.toString().trim();
-  }
-
-  String _extractResponse(String buffer) {
-    // The response is everything after the last user input marker
-    // Simple heuristic: take the last substantial block of text
-    final lines = buffer.split('\n');
-    final nonEmpty =
-        lines.where((l) => l.trim().isNotEmpty).toList();
-    if (nonEmpty.isEmpty) return buffer;
-
-    // Return the full buffer — the orchestrator can clean it up further
-    return buffer;
-  }
-
-  Future<String> _writeTempFile(String name, String content) async {
-    // Write to WSL /tmp via a Windows temp file
-    final winTmp = Directory.systemTemp;
-    final file = File('${winTmp.path}/$name.txt');
-    await file.writeAsString(content);
-
-    // Convert Windows path to WSL path
-    final wslPath = _windowsToWslPath(file.path);
-    return wslPath;
-  }
-
-  String _windowsToWslPath(String winPath) {
-    // C:\Users\foo\bar -> /mnt/c/Users/foo/bar
-    final normalized = winPath.replaceAll('\\', '/');
-    final match = RegExp(r'^([A-Za-z]):(.*)').firstMatch(normalized);
-    if (match != null) {
-      final drive = match.group(1)!.toLowerCase();
-      final rest = match.group(2)!;
-      return '/mnt/$drive$rest';
+    final buffer = StringBuffer();
+    buffer.writeln('Here is the conversation so far:');
+    buffer.writeln('---');
+    for (final turn in _conversationHistory) {
+      buffer.writeln('${turn.speaker}: ${turn.text}');
+      buffer.writeln();
     }
-    return normalized;
+    buffer.writeln('---');
+    buffer.writeln(
+      'Now respond as your character. Give ONLY your in-character reply, '
+      'nothing else.',
+    );
+
+    return buffer.toString();
   }
 
-  Future<ProcessResult> _runWsl(List<String> args) async {
-    return Process.run('wsl', args);
+  /// Run `claude -p` with the system prompt and user message.
+  Future<ProcessResult> _runClaude(String userMessage) async {
+    // Write system prompt and message to temp files to avoid shell escaping
+    final promptFile = await _writeTempFile('eval-sys', _systemPrompt);
+    final msgFile = await _writeTempFile('eval-msg', userMessage);
+
+    final result = await Process.run(
+      'claude',
+      [
+        '-p',
+        '--system-prompt',
+        await File(promptFile).readAsString(),
+        '--output-format',
+        'text',
+        '--no-session-persistence',
+        await File(msgFile).readAsString(),
+      ],
+      environment: Platform.environment,
+    );
+
+    if (result.exitCode != 0) {
+      final stderr = result.stderr.toString();
+      throw Exception('Claude CLI failed (exit ${result.exitCode}): $stderr');
+    }
+
+    // Clean up temp files
+    try {
+      await File(promptFile).delete();
+      await File(msgFile).delete();
+    } catch (_) {}
+
+    return result;
   }
+
+  /// Write content to a temp file, return the path.
+  Future<String> _writeTempFile(String prefix, String content) async {
+    final dir = Directory.systemTemp;
+    final file = File('${dir.path}/$prefix-${DateTime.now().millisecondsSinceEpoch}.txt');
+    await file.writeAsString(content);
+    return file.path;
+  }
+
+  /// Extract JSON object from a response that may include markdown fences.
+  String _extractJson(String response) {
+    // Try to find JSON in code blocks first
+    final codeBlockMatch =
+        RegExp(r'```(?:json)?\s*\n?([\s\S]*?)\n?```').firstMatch(response);
+    if (codeBlockMatch != null) {
+      return codeBlockMatch.group(1)!.trim();
+    }
+
+    // Fall back to finding the outermost { ... }
+    final start = response.indexOf('{');
+    final end = response.lastIndexOf('}');
+    if (start != -1 && end > start) {
+      return response.substring(start, end + 1);
+    }
+
+    throw FormatException(
+      'No JSON found in judge response:\n$response',
+    );
+  }
+}
+
+class _Turn {
+  final String speaker;
+  final String text;
+
+  const _Turn({required this.speaker, required this.text});
 }
