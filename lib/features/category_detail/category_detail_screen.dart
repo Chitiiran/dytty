@@ -134,7 +134,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
       (c) => c.name == widget.categoryId,
       orElse: () => JournalCategory.positive,
     );
-    final questions = reviewQuestions[widget.categoryId] ?? [];
+    final questions = reviewQuestions[category] ?? [];
     final entries = _allRecentEntries();
     final prompt = buildReviewPrompt(category.displayName, questions, entries);
 
@@ -262,7 +262,7 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
         (c) => c.name == widget.categoryId,
         orElse: () => JournalCategory.positive,
       );
-      final questions = reviewQuestions[widget.categoryId] ?? [];
+      final questions = reviewQuestions[category] ?? [];
 
       try {
         final response = await llmService.generateResponse(

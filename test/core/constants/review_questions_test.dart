@@ -1,19 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/constants/review_questions.dart';
 
 void main() {
   group('reviewQuestions', () {
     test('contains all 5 journal categories', () {
-      expect(
-        reviewQuestions.keys,
-        containsAll([
-          'positive',
-          'negative',
-          'gratitude',
-          'beauty',
-          'identity',
-        ]),
-      );
+      expect(reviewQuestions.keys, containsAll(JournalCategory.values));
       expect(reviewQuestions.length, 5);
     });
 
