@@ -1,0 +1,12 @@
+name: dytty_eval
+description: AI conversation quality eval harness for Dytty daily call
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  googleai_dart: ^3.6.0
+
+dev_dependencies:
+  lints: ^6.0.0

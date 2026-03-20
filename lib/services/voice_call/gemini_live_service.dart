@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:dytty/core/constants/daily_call_prompt.dart';
+import 'package:dytty/core/constants/tool_declarations.dart' as call_tools;
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
@@ -68,8 +70,8 @@ class GeminiLiveService {
   }) async {
     _stateController.add(GeminiLiveState.connecting);
 
-    final effectivePrompt = systemPrompt ?? _systemPrompt;
-    final effectiveTools = tools ?? [saveEntryDeclaration];
+    final effectivePrompt = systemPrompt ?? dailyCallSystemPrompt;
+    final effectiveTools = tools ?? [call_tools.saveEntryDeclaration];
 
     try {
       final liveModel = FirebaseAI.googleAI().liveGenerativeModel(
@@ -226,61 +228,6 @@ class GeminiLiveService {
       _toolCallController.add(call);
     }
   }
-
-  static final saveEntryDeclaration = FunctionDeclaration(
-    'save_entry',
-    'Save a journal entry for the user. Call this when the user shares '
-        'something they want to remember — a thought, feeling, experience, or '
-        'reflection. Categorize it into the most appropriate category.',
-    parameters: {
-      'category': Schema.enumString(
-        enumValues: ['positive', 'negative', 'gratitude', 'beauty', 'identity'],
-        description: 'The journal category that best fits this entry.',
-      ),
-      'text': Schema.string(
-        description:
-            'A concise summary of what the user shared, written in '
-            'first person as if the user wrote it.',
-      ),
-      'transcript': Schema.string(
-        description:
-            'The raw transcript of what the user said that led to this entry.',
-      ),
-    },
-  );
-
-  static final editEntryDeclaration = FunctionDeclaration(
-    'edit_entry',
-    'Edit an existing journal entry. Call this when the user wants to '
-        'modify, correct, or rephrase something they previously shared.',
-    parameters: {
-      'entry_id': Schema.string(description: 'The ID of the entry to edit.'),
-      'text': Schema.string(
-        description: 'The new text for the entry, written in first person.',
-      ),
-    },
-  );
-
-  static const _systemPrompt = '''
-You are a warm, encouraging best friend helping the user reflect on their day
-through a natural voice conversation. Your name is Dytty.
-
-Your role:
-- Ask open-ended questions about their day
-- Listen actively and respond with empathy
-- When they share something meaningful, use the save_entry tool to capture it
-- Guide them through 5 reflection categories: positive experiences, negative
-  experiences, gratitude, beauty they noticed, and identity/growth moments
-- Keep the conversation natural — don't interrogate or rush through categories
-- If they seem done with a topic, gently transition to the next
-- End the session warmly when they indicate they're finished
-
-Tone: warm, casual, genuinely interested. Like talking to a close friend who
-really listens. Use short sentences. Don't be overly enthusiastic or fake.
-
-Important: This is a VOICE conversation. Keep responses brief and natural.
-Avoid long monologues. Ask one question at a time.
-''';
 }
 
 /// Connection states for the Gemini Live session.

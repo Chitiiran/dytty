@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/constants/review_prompts.dart';
 import 'package:dytty/core/constants/review_questions.dart';
+import 'package:dytty/core/constants/tool_declarations.dart' as tools;
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/features/category_detail/bloc/category_detail_bloc.dart';
@@ -185,10 +186,7 @@ class ReviewCallController extends ChangeNotifier {
     try {
       await geminiService.connect(
         systemPrompt: prompt,
-        tools: [
-          GeminiLiveService.saveEntryDeclaration,
-          GeminiLiveService.editEntryDeclaration,
-        ],
+        tools: [tools.saveEntryDeclaration, tools.editEntryDeclaration],
       );
     } catch (e) {
       if (!_disposed) {
