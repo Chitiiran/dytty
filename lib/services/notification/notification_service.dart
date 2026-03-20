@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:flutter_timezone/timezone_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -89,6 +88,33 @@ class NotificationService {
       settings: settings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
+
+    // Explicitly create notification channels on Android 8+.
+    // Channels must exist before scheduling or notifications are silently dropped.
+    if (!kIsWeb) {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android != null) {
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _channelId,
+            _channelName,
+            description: _channelDesc,
+            importance: Importance.high,
+          ),
+        );
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _callChannelId,
+            _callChannelName,
+            description: _callChannelDesc,
+            importance: Importance.high,
+          ),
+        );
+      }
+    }
 
     // Re-schedule if reminder was enabled from a previous session
     if (isReminderEnabled) {
