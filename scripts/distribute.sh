@@ -33,6 +33,13 @@ for var in "${REQUIRED_VARS[@]}"; do
   fi
 done
 
+# Require clean working tree (staged or unstaged changes would leak into the version commit)
+cd "$PROJECT_ROOT"
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: Working tree is not clean. Commit or stash changes first."
+  exit 1
+fi
+
 # Parse flags
 BUMP_PATCH=false
 RELEASE_NOTES=""
@@ -67,8 +74,16 @@ echo "Bumped version: ${OLD_VERSION} -> ${NEW_VERSION}"
 APP_ID="1:828440302945:android:8a03bc6c01380939392120"
 APK_PATH="$PROJECT_ROOT/build/app/outputs/flutter-apk/app-debug.apk"
 
+# Tag the commit BEFORE building so the version-to-commit link exists
+# regardless of whether the upload succeeds or fails.
+TAG="v${NEW_VERSION}"
+git add "$PUBSPEC"
+git commit -m "chore: bump version to ${NEW_VERSION} for distribution"
+git tag -a "$TAG" -m "Distribution ${NEW_VERSION}: ${RELEASE_NOTES}"
+echo "Tagged: $TAG"
+
+echo ""
 echo "Building debug APK..."
-cd "$PROJECT_ROOT"
 flutter build apk --debug \
   --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
   ${GEMINI_API_KEY:+--dart-define=GEMINI_API_KEY="$GEMINI_API_KEY"}
@@ -83,15 +98,11 @@ firebase appdistribution:distribute "$APK_PATH" \
 echo ""
 echo "Done! Build ${NEW_VERSION} sent to ${TESTER_EMAIL}."
 
-# Tag the commit for traceability
-TAG="v${NEW_VERSION}"
-git add "$PUBSPEC"
-git commit -m "chore: bump version to ${NEW_VERSION} for distribution"
-git tag -a "$TAG" -m "Distribution ${NEW_VERSION}: ${RELEASE_NOTES}"
+# Push tag and create GitHub Release (tag must exist on remote first)
 echo ""
-echo "Tagged: $TAG"
+echo "Pushing tag to remote..."
+git push origin "$TAG"
 
-# Create GitHub Release with APK (if gh CLI available)
 if command -v gh &>/dev/null; then
   gh release create "$TAG" "$APK_PATH" \
     --title "$TAG" \
@@ -104,4 +115,4 @@ else
 fi
 
 echo ""
-echo "Next: push tag to remote with 'git push origin main --tags'"
+echo "Next: push the version commit with 'git push origin HEAD'"

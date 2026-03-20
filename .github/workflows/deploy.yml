@@ -56,7 +56,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          FULL_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
+          # Tag includes build number (e.g. v0.1.8+10) for unique per-deploy tags.
+          # The + is valid in git tags and GitHub Releases.
+          FULL_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//')
           TAG="v${FULL_VERSION}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
