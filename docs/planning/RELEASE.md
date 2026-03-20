@@ -121,3 +121,32 @@ Format: `X.Y.Z+build`
 - **build**: Auto-incremented integer for Firebase
 
 `scripts/release.sh` handles version bumping automatically.
+
+---
+
+## Rollback
+
+### Web (Firebase Hosting)
+Firebase Hosting keeps previous deploy history. To rollback:
+1. Go to Firebase Console > Hosting > Release history
+2. Click "Rollback" on the desired previous version
+
+### Android (Firebase App Distribution)
+App Distribution does not support rollback directly. Instead:
+1. Find the last-known-good tag: `git tag -l --sort=-creatordate | head -5`
+2. Check out that tag: `git checkout v0.1.7+9`
+3. Bump only the build number in pubspec.yaml (Android requires higher build number)
+4. Re-distribute: `bash scripts/distribute.sh "Rollback to v0.1.7+9"`
+
+---
+
+## Debug Keystore
+
+The project uses a shared debug keystore checked into `android/debug.keystore`.
+All builds (local and CI) use this keystore via `build.gradle.kts` signingConfig.
+This ensures APK signatures are consistent across machines — testers can update
+without reinstalling.
+
+Credentials (standard Android debug defaults):
+- Store/key password: `android`
+- Key alias: `androiddebugkey`
