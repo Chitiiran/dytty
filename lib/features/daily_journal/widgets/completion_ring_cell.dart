@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:dytty/data/models/category_config.dart';
 
 /// Describes one segment of the completion ring.
 class RingSegment extends Equatable {
@@ -88,5 +89,120 @@ class CompletionRingPainter extends CustomPainter {
         oldDelegate.segments != segments ||
         oldDelegate.dimColor != dimColor ||
         oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+/// A calendar date cell with a completion ring showing category fill state.
+class CompletionRingCell extends StatefulWidget {
+  final DateTime day;
+  final Map<String, int>? categoryMarkers;
+  final List<CategoryConfig> activeCategories;
+  final bool isSelected;
+  final bool isToday;
+
+  const CompletionRingCell({
+    super.key,
+    required this.day,
+    required this.categoryMarkers,
+    required this.activeCategories,
+    this.isSelected = false,
+    this.isToday = false,
+  });
+
+  @override
+  State<CompletionRingCell> createState() => _CompletionRingCellState();
+}
+
+class _CompletionRingCellState extends State<CompletionRingCell>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(CompletionRingCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.categoryMarkers != widget.categoryMarkers) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<RingSegment> _buildSegments() {
+    return widget.activeCategories.map((config) {
+      final count = widget.categoryMarkers?[config.id] ?? 0;
+      return RingSegment(color: config.color, isFilled: count > 0);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final segments = _buildSegments();
+    final dimColor = theme.colorScheme.outlineVariant.withValues(alpha: 0.3);
+
+    TextStyle textStyle = TextStyle(
+      fontSize: 14,
+      color: theme.colorScheme.onSurface,
+    );
+    if (widget.isSelected) {
+      textStyle = textStyle.copyWith(
+        color: theme.colorScheme.onPrimary,
+        fontWeight: FontWeight.w700,
+      );
+    } else if (widget.isToday) {
+      textStyle = textStyle.copyWith(
+        color: theme.colorScheme.primary,
+        fontWeight: FontWeight.w700,
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: segments.isNotEmpty
+              ? CompletionRingPainter(
+                  segments: segments,
+                  animationProgress: _animation.value,
+                  dimColor: dimColor,
+                  strokeWidth: 3.0,
+                )
+              : null,
+          child: child,
+        );
+      },
+      child: Container(
+        decoration: widget.isSelected
+            ? BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
+              )
+            : widget.isToday
+            ? BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              )
+            : null,
+        alignment: Alignment.center,
+        margin: const EdgeInsets.all(4),
+        child: Text('${widget.day.day}', style: textStyle),
+      ),
+    );
   }
 }
