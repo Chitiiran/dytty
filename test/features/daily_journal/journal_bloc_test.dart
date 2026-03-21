@@ -215,7 +215,7 @@ void main() {
     );
 
     blocTest<JournalBloc, JournalState>(
-      'LoadMonthMarkers updates daysWithEntries',
+      'LoadMonthMarkers updates monthCategoryMarkers',
       build: () => JournalBloc(repository: repository),
       setUp: () async {
         await repository.addCategoryEntry('2026-03-01', 'positive', 'entry');
@@ -223,11 +223,15 @@ void main() {
       },
       act: (bloc) => bloc.add(const LoadMonthMarkers(year: 2026, month: 3)),
       expect: () => [
-        isA<JournalState>().having(
-          (s) => s.daysWithEntries,
-          'daysWithEntries',
-          {'2026-03-01', '2026-03-15'},
-        ),
+        isA<JournalState>()
+            .having((s) => s.monthCategoryMarkers, 'monthCategoryMarkers', {
+              '2026-03-01': {'positive': 1},
+              '2026-03-15': {'positive': 1},
+            })
+            .having((s) => s.daysWithEntries, 'daysWithEntries', {
+              '2026-03-01',
+              '2026-03-15',
+            }),
       ],
     );
 
@@ -253,12 +257,20 @@ void main() {
       final today = DateTime.now();
       final todayStr =
           '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-      final state = JournalState(daysWithEntries: {todayStr});
+      final state = JournalState(
+        monthCategoryMarkers: {
+          todayStr: {'positive': 1},
+        },
+      );
       expect(state.journaledToday, true);
     });
 
     test('journaledToday returns false when today has no entries', () {
-      final state = JournalState(daysWithEntries: {'2025-01-01'});
+      final state = JournalState(
+        monthCategoryMarkers: {
+          '2025-01-01': {'positive': 1},
+        },
+      );
       expect(state.journaledToday, false);
     });
 

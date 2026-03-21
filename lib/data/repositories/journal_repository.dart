@@ -187,6 +187,33 @@ class JournalRepository {
     return snapshot.docs.map((doc) => doc.id).toSet();
   }
 
+  /// Gets per-category entry counts for each date in a month.
+  /// Returns e.g. {"2026-03-15": {"positive": 2, "gratitude": 1}}
+  Future<Map<String, Map<String, int>>> getMonthCategoryMarkers(
+    int year,
+    int month,
+  ) async {
+    final datesWithEntries = await getDaysWithEntries(year, month);
+    final result = <String, Map<String, int>>{};
+
+    for (final date in datesWithEntries) {
+      final snapshot = await _categoryEntries(date).get();
+      final counts = <String, int>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final categoryId = data?['category'] as String? ?? '';
+        if (categoryId.isNotEmpty) {
+          counts[categoryId] = (counts[categoryId] ?? 0) + 1;
+        }
+      }
+      if (counts.isNotEmpty) {
+        result[date] = counts;
+      }
+    }
+
+    return result;
+  }
+
   /// Computes streak data by walking dailyEntries backward from today.
   /// Returns {currentStreak, longestStreak, lastJournalDate}.
   Future<StreakData> getStreakData() async {

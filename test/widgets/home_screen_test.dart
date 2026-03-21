@@ -40,7 +40,7 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          daysWithEntries: const {},
+          monthCategoryMarkers: const {},
         ),
       );
       await tester.pump(const Duration(seconds: 1));
@@ -55,7 +55,9 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          daysWithEntries: {todayStr},
+          monthCategoryMarkers: {
+            todayStr: {'positive': 1},
+          },
           entries: [
             CategoryEntry(
               id: 'e1',
@@ -144,7 +146,9 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          daysWithEntries: {todayStr},
+          monthCategoryMarkers: {
+            todayStr: {'positive': 1},
+          },
           entries: [
             CategoryEntry(
               id: 'e1',
@@ -535,7 +539,7 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          daysWithEntries: const {},
+          monthCategoryMarkers: const {},
         ),
       );
       await tester.pump(const Duration(seconds: 1));

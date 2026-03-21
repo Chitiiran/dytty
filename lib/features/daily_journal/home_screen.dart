@@ -9,6 +9,7 @@ import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
 import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -183,12 +184,35 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                      eventLoader: (day) {
-                        final dateStr = _dateFormat.format(day);
-                        return journalState.daysWithEntries.contains(dateStr)
-                            ? ['entry']
-                            : [];
-                      },
+                      calendarBuilders: CalendarBuilders(
+                        defaultBuilder: (context, day, focusedDay) =>
+                            CompletionRingCell(
+                              day: day,
+                              categoryMarkers:
+                                  journalState.monthCategoryMarkers[_dateFormat
+                                      .format(day)],
+                              activeCategories: categoryState.activeCategories,
+                            ),
+                        todayBuilder: (context, day, focusedDay) =>
+                            CompletionRingCell(
+                              day: day,
+                              categoryMarkers:
+                                  journalState.monthCategoryMarkers[_dateFormat
+                                      .format(day)],
+                              activeCategories: categoryState.activeCategories,
+                              isToday: true,
+                            ),
+                        selectedBuilder: (context, day, focusedDay) =>
+                            CompletionRingCell(
+                              day: day,
+                              categoryMarkers:
+                                  journalState.monthCategoryMarkers[_dateFormat
+                                      .format(day)],
+                              activeCategories: categoryState.activeCategories,
+                              isSelected: true,
+                              isToday: isSameDay(day, DateTime.now()),
+                            ),
+                      ),
                       headerStyle: HeaderStyle(
                         formatButtonVisible: true,
                         titleCentered: true,
@@ -217,25 +241,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       calendarStyle: CalendarStyle(
-                        markerDecoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        markerSize: 6,
-                        todayDecoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.15,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        todayTextStyle: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        selectedDecoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
                         outsideDaysVisible: false,
                         weekendTextStyle: TextStyle(
                           color: theme.colorScheme.onSurface.withValues(
