@@ -1,0 +1,60 @@
+appId: com.dytty.dytty
+name: "State: completion ring updates after adding entries"
+tags:
+  - state
+  - ring
+---
+# Verify that calendar completion rings update when entries are added.
+# The ring is drawn via CustomPainter so we cannot assert on individual
+# segments directly — screenshots are the primary verification artifact.
+
+- runFlow: "../helpers/login.yaml"
+
+# Home screen should show calendar with empty rings (0 of 5)
+- assertVisible: "Progress 0 of 5"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-01-calendar-empty-rings"
+
+# Navigate to journal and add a Positive Things entry
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Ring test entry 1"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Ring test entry 1.*"
+
+# Go back to home — ring should now show one filled segment
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 1 of 5.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-02-calendar-one-segment"
+
+# Navigate back to journal and add a Gratitude entry
+- tapOn: "Today button"
+- waitForAnimationToEnd
+
+- tapOn: "Add Gratitude entry"
+- waitForAnimationToEnd
+- tapOn: "What are you grateful for today.*"
+- inputText: "Ring test entry 2"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Ring test entry 2.*"
+
+# Go back to home — ring should now show two filled segments
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 2 of 5.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-03-calendar-two-segments"
