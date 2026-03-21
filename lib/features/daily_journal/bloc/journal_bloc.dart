@@ -100,7 +100,7 @@ class JournalState extends Equatable {
   final JournalStatus status;
   final DateTime selectedDate;
   final List<CategoryEntry> entries;
-  final Set<String> daysWithEntries;
+  final Map<String, Map<String, int>> monthCategoryMarkers;
   final int currentStreak;
   final String? lastJournalDate;
   final String? error;
@@ -111,7 +111,7 @@ class JournalState extends Equatable {
     this.status = JournalStatus.initial,
     DateTime? selectedDate,
     this.entries = const [],
-    this.daysWithEntries = const {},
+    this.monthCategoryMarkers = const {},
     this.currentStreak = 0,
     this.lastJournalDate,
     this.error,
@@ -119,7 +119,10 @@ class JournalState extends Equatable {
 
   String get selectedDateString => _dateFormat.format(selectedDate);
 
-  /// Whether the user has journaled today (based on daysWithEntries).
+  /// Backward-compatible derived getter — dates that have any entries.
+  Set<String> get daysWithEntries => monthCategoryMarkers.keys.toSet();
+
+  /// Whether the user has journaled today (based on monthCategoryMarkers).
   bool get journaledToday {
     final now = DateTime.now();
     final todayStr = _dateFormat.format(now);
@@ -134,7 +137,7 @@ class JournalState extends Equatable {
     JournalStatus? status,
     DateTime? selectedDate,
     List<CategoryEntry>? entries,
-    Set<String>? daysWithEntries,
+    Map<String, Map<String, int>>? monthCategoryMarkers,
     int? currentStreak,
     String? lastJournalDate,
     String? error,
@@ -143,7 +146,7 @@ class JournalState extends Equatable {
       status: status ?? this.status,
       selectedDate: selectedDate ?? this.selectedDate,
       entries: entries ?? this.entries,
-      daysWithEntries: daysWithEntries ?? this.daysWithEntries,
+      monthCategoryMarkers: monthCategoryMarkers ?? this.monthCategoryMarkers,
       currentStreak: currentStreak ?? this.currentStreak,
       lastJournalDate: lastJournalDate ?? this.lastJournalDate,
       error: error,
@@ -155,7 +158,7 @@ class JournalState extends Equatable {
     status,
     selectedDate,
     entries,
-    daysWithEntries,
+    monthCategoryMarkers,
     currentStreak,
     lastJournalDate,
     error,
@@ -166,6 +169,9 @@ class JournalState extends Equatable {
 
 class JournalBloc extends Bloc<JournalEvent, JournalState> {
   final JournalRepository _repository;
+
+  /// Month-level cache: "yyyy-MM" → per-date per-category counts.
+  final Map<String, Map<String, Map<String, int>>> _markerCache = {};
 
   /// Exposes the repository for sibling blocs that share the same data source.
   JournalRepository get repository => _repository;
@@ -181,6 +187,16 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     on<DeleteEntry>(_onDeleteEntry);
     on<LoadMonthMarkers>(_onLoadMonthMarkers);
     on<LoadStreak>(_onLoadStreak);
+  }
+
+  String _cacheKey(int year, int month) =>
+      '$year-${month.toString().padLeft(2, '0')}';
+
+  /// Deep-copies monthCategoryMarkers to avoid mutating frozen state.
+  Map<String, Map<String, int>> _cloneMarkers(
+    Map<String, Map<String, int>> source,
+  ) {
+    return source.map((k, v) => MapEntry(k, Map<String, int>.from(v)));
   }
 
   Future<void> _onLoadEntries(
@@ -208,16 +224,18 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final dateString = JournalState._dateFormat.format(event.date);
       final entries = await _repository.getCategoryEntries(dateString);
-      final markers = await _repository.getDaysWithEntries(
+      final markers = await _repository.getMonthCategoryMarkers(
         event.date.year,
         event.date.month,
       );
+      final key = _cacheKey(event.date.year, event.date.month);
+      _markerCache[key] = markers;
       final streak = await _repository.getStreakData();
       emit(
         state.copyWith(
           status: JournalStatus.loaded,
           entries: entries,
-          daysWithEntries: markers,
+          monthCategoryMarkers: markers,
           currentStreak: streak.currentStreak,
           lastJournalDate: streak.lastJournalDate,
         ),
@@ -241,7 +259,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       );
       // Optimistic: update UI immediately with the new entry
       final updatedEntries = [...state.entries, created];
-      final updatedMarkers = {...state.daysWithEntries, dateString};
+
+      // Optimistic: update category markers
+      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+      final dateMarkers = currentMarkers[dateString] ?? {};
+      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
+      currentMarkers[dateString] = dateMarkers;
+
+      // Update cache
+      final focusKey = _cacheKey(targetDate.year, targetDate.month);
+      _markerCache[focusKey] = currentMarkers;
+
       // Optimistic streak: if this date wasn't in markers, it's a new day
       final isNewDay = !state.daysWithEntries.contains(dateString);
       final todayStr = JournalState._dateFormat.format(DateTime.now());
@@ -258,7 +286,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.copyWith(
           status: JournalStatus.loaded,
           entries: updatedEntries,
-          daysWithEntries: updatedMarkers,
+          monthCategoryMarkers: currentMarkers,
           currentStreak: optimisticStreak,
           lastJournalDate: dateString,
         ),
@@ -288,7 +316,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       );
       // Optimistic: update UI immediately with the new entry
       final updatedEntries = [...state.entries, created];
-      final updatedMarkers = {...state.daysWithEntries, dateString};
+
+      // Optimistic: update category markers
+      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+      final dateMarkers = currentMarkers[dateString] ?? {};
+      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
+      currentMarkers[dateString] = dateMarkers;
+
+      // Update cache
+      final focusKey = _cacheKey(targetDate.year, targetDate.month);
+      _markerCache[focusKey] = currentMarkers;
+
       final isNewDay = !state.daysWithEntries.contains(dateString);
       final todayStr = JournalState._dateFormat.format(DateTime.now());
       final yesterdayStr = JournalState._dateFormat.format(
@@ -304,7 +342,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.copyWith(
           status: JournalStatus.loaded,
           entries: updatedEntries,
-          daysWithEntries: updatedMarkers,
+          monthCategoryMarkers: currentMarkers,
           currentStreak: optimisticStreak,
           lastJournalDate: dateString,
         ),
@@ -355,6 +393,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   ) async {
     emit(state.copyWith(status: JournalStatus.saving));
     try {
+      // Look up the deleted entry's category before removing from list
+      final deletedEntry = state.entries.firstWhere(
+        (e) => e.id == event.entryId,
+      );
+
       await _repository.deleteCategoryEntry(
         state.selectedDateString,
         event.entryId,
@@ -363,15 +406,35 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       final updatedEntries = state.entries
           .where((e) => e.id != event.entryId)
           .toList();
-      final updatedMarkers = updatedEntries.isEmpty
-          ? (Set<String>.from(state.daysWithEntries)
-              ..remove(state.selectedDateString))
-          : state.daysWithEntries;
+
+      // Optimistic: update category markers
+      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+      final dateStr = state.selectedDateString;
+      final dateMarkers = currentMarkers[dateStr];
+      if (dateMarkers != null) {
+        final count = (dateMarkers[deletedEntry.categoryId] ?? 1) - 1;
+        if (count <= 0) {
+          dateMarkers.remove(deletedEntry.categoryId);
+        } else {
+          dateMarkers[deletedEntry.categoryId] = count;
+        }
+        if (dateMarkers.isEmpty) {
+          currentMarkers.remove(dateStr);
+        }
+      }
+
+      // Update cache
+      final focusKey = _cacheKey(
+        state.selectedDate.year,
+        state.selectedDate.month,
+      );
+      _markerCache[focusKey] = currentMarkers;
+
       emit(
         state.copyWith(
           status: JournalStatus.loaded,
           entries: updatedEntries,
-          daysWithEntries: updatedMarkers,
+          monthCategoryMarkers: currentMarkers,
         ),
       );
       // Refresh streak in background (non-blocking for UI)
@@ -396,11 +459,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     Emitter<JournalState> emit,
   ) async {
     try {
-      final markers = await _repository.getDaysWithEntries(
+      final key = _cacheKey(event.year, event.month);
+      if (_markerCache.containsKey(key)) {
+        emit(state.copyWith(monthCategoryMarkers: _markerCache[key]));
+        return;
+      }
+      final markers = await _repository.getMonthCategoryMarkers(
         event.year,
         event.month,
       );
-      emit(state.copyWith(daysWithEntries: markers));
+      _markerCache[key] = markers;
+      emit(state.copyWith(monthCategoryMarkers: markers));
     } catch (_) {
       // Non-critical — silently fail for markers
     }
