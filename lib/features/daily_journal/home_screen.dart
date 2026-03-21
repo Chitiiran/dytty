@@ -241,20 +241,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.15,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        todayTextStyle: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        selectedDecoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
                         outsideDaysVisible: false,
                         weekendTextStyle: TextStyle(
                           color: theme.colorScheme.onSurface.withValues(

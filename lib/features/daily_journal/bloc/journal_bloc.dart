@@ -393,10 +393,14 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   ) async {
     emit(state.copyWith(status: JournalStatus.saving));
     try {
-      // Look up the deleted entry's category before removing from list
-      final deletedEntry = state.entries.firstWhere(
+      // Look up the deleted entry's category before removing from list.
+      // Use indexed search with null fallback to avoid StateError on stale state.
+      final deletedEntryIndex = state.entries.indexWhere(
         (e) => e.id == event.entryId,
       );
+      final deletedEntry = deletedEntryIndex >= 0
+          ? state.entries[deletedEntryIndex]
+          : null;
 
       await _repository.deleteCategoryEntry(
         state.selectedDateString,
@@ -407,11 +411,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
           .where((e) => e.id != event.entryId)
           .toList();
 
-      // Optimistic: update category markers
+      // Optimistic: update category markers (skip if entry not found in state)
       final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
       final dateStr = state.selectedDateString;
       final dateMarkers = currentMarkers[dateStr];
-      if (dateMarkers != null) {
+      if (dateMarkers != null && deletedEntry != null) {
         final count = (dateMarkers[deletedEntry.categoryId] ?? 1) - 1;
         if (count <= 0) {
           dateMarkers.remove(deletedEntry.categoryId);
