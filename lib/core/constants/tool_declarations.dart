@@ -1,3 +1,4 @@
+import 'package:dytty/core/constants/categories.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 
 /// Tool declarations for the daily call AI conversation.
@@ -12,7 +13,7 @@ final saveEntryDeclaration = FunctionDeclaration(
       'reflection. Categorize it into the most appropriate category.',
   parameters: {
     'category': Schema.enumString(
-      enumValues: ['positive', 'negative', 'gratitude', 'beauty', 'identity'],
+      enumValues: JournalCategory.values.map((c) => c.name).toList(),
       description: 'The journal category that best fits this entry.',
     ),
     'text': Schema.string(
