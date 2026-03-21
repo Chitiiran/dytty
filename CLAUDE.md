@@ -99,6 +99,9 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 3. Enable Google Sign-In in Firebase Console > Authentication
 4. `firebase init` - for emulators/hosting
 
+## Worktrees
+- Worktree directory: `.worktrees/` (project-local, gitignored)
+
 ## Git Workflow
 Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
 - **Branch model**: Trunk-based — feature branches target `main` directly
@@ -120,6 +123,19 @@ TDD is mandatory. 5-layer test pyramid. Full details in `docs/planning/TESTING.m
 - **E2E web** (`npx playwright test`) — Playwright against web build + Firebase emulators.
 - **Coverage enforcement**: CI enforces minimum coverage (ratchets up 10% weekly toward 100%). Current gate: 40%.
 - **Test coverage rule**: Every bug fix must include a test that reproduces the bug before the fix. Every feature must include tests for its acceptance criteria. E2E required for cross-screen UI state changes.
+
+## Superpowers Plugin
+The superpowers plugin provides structured workflows. Always check for applicable skills before starting any task:
+- **Brainstorm** (`/brainstorm`) before any creative/design work or new features
+- **Write plans** before multi-step implementation work
+- **TDD** before implementing features or bugfixes
+- **Systematic debugging** before proposing fixes for bugs or test failures
+- **Verification** before claiming work is complete, committing, or creating PRs
+- **Code review** (requesting/receiving) after completing tasks or when processing feedback
+- **Finishing branch** when implementation is complete and ready to integrate
+- **Parallel agents** when facing 2+ independent tasks
+
+Process skills (brainstorming, debugging) come first, then implementation skills (TDD, plans). Follow rigid skills exactly.
 
 ## Conventions
 - Files: snake_case (daily_journal_screen.dart)
