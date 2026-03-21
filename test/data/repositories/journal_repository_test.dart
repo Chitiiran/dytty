@@ -207,6 +207,37 @@ void main() {
       });
     });
 
+    group('getMonthCategoryMarkers', () {
+      test('returns empty map for month with no entries', () async {
+        final result = await repository.getMonthCategoryMarkers(2026, 6);
+        expect(result, isEmpty);
+      });
+
+      test('returns correct category counts per date', () async {
+        await repository.addCategoryEntry('2026-03-01', 'positive', 'A');
+        await repository.addCategoryEntry('2026-03-01', 'positive', 'B');
+        await repository.addCategoryEntry('2026-03-01', 'gratitude', 'C');
+        await repository.addCategoryEntry('2026-03-15', 'negative', 'D');
+
+        final result = await repository.getMonthCategoryMarkers(2026, 3);
+
+        expect(result, {
+          '2026-03-01': {'positive': 2, 'gratitude': 1},
+          '2026-03-15': {'negative': 1},
+        });
+      });
+
+      test('does not include entries from other months', () async {
+        await repository.addCategoryEntry('2026-03-01', 'positive', 'March');
+        await repository.addCategoryEntry('2026-04-01', 'positive', 'April');
+
+        final result = await repository.getMonthCategoryMarkers(2026, 3);
+
+        expect(result.keys, contains('2026-03-01'));
+        expect(result.containsKey('2026-04-01'), isFalse);
+      });
+    });
+
     group('getStreakData', () {
       test('returns 0 streak when no entries exist', () async {
         final streak = await repository.getStreakData();
