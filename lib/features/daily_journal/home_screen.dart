@@ -9,7 +9,9 @@ import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
 import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
+import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
+  OverlayEntry? _radialMenuOverlay;
 
   @override
   void initState() {
@@ -35,6 +38,12 @@ class _HomeScreenState extends State<HomeScreen> {
       bloc.add(SelectDate(DateTime.now()));
       bloc.add(const LoadStreak());
     });
+  }
+
+  @override
+  void dispose() {
+    _dismissRadialMenu();
+    super.dispose();
   }
 
   String _greeting() {
@@ -168,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         context.read<JournalBloc>().add(
                           SelectDate(selectedDay),
                         );
-                        Navigator.pushNamed(context, '/daily-journal');
+                        _showRadialMenu(context, selectedDay);
                       },
                       onFormatChanged: (format) {
                         setState(() {
@@ -286,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: _ProgressCard(
                         entries: journalState.entries,
                         categories: categoryState.activeCategories,
+                        selectedDate: journalState.selectedDate,
                         currentStreak: journalState.currentStreak,
                         onCategoryTap: (categoryId) {
                           Navigator.pushNamed(
@@ -365,6 +375,100 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  void _dismissRadialMenu() {
+    _radialMenuOverlay?.remove();
+    _radialMenuOverlay = null;
+  }
+
+  void _showRadialMenu(BuildContext context, DateTime selectedDay) {
+    _dismissRadialMenu();
+
+    final categoryState = context.read<CategoryCubit>().state;
+    final journalBloc = context.read<JournalBloc>();
+
+    // Build entry count map from current entries
+    final filledCounts = <String, int>{};
+    for (final entry in journalBloc.state.entries) {
+      filledCounts[entry.categoryId] =
+          (filledCounts[entry.categoryId] ?? 0) + 1;
+    }
+
+    // Categories for this date: active + archived with entries
+    final categories = <CategoryConfig>[];
+    final entryIds = filledCounts.keys.toSet();
+    for (final cat in categoryState.categories) {
+      if (!cat.isArchived || entryIds.contains(cat.id)) {
+        categories.add(cat);
+      }
+    }
+    categories.sort((a, b) => a.order.compareTo(b.order));
+
+    // Need at least 2 for circular_menu
+    if (categories.length < 2) return;
+
+    _radialMenuOverlay = OverlayEntry(
+      builder: (overlayContext) => Material(
+        color: Colors.black54,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _dismissRadialMenu,
+          child: Center(
+            child: GestureDetector(
+              onTap: () {}, // Absorb taps on the menu itself
+              child: SizedBox(
+                width: 250,
+                height: 250,
+                child: CategoryRadialMenu(
+                  categories: categories,
+                  filledCounts: filledCounts,
+                  onCategoryTap: (category) async {
+                    _dismissRadialMenu();
+                    final selectedDate = journalBloc.state.selectedDate;
+
+                    if (category.isArchived) {
+                      if (context.mounted) {
+                        Navigator.pushNamed(
+                          context,
+                          '/category-detail',
+                          arguments: category.id,
+                        );
+                      }
+                      return;
+                    }
+
+                    if (!context.mounted) return;
+                    final text = await showEntryBottomSheet(
+                      context,
+                      category: category,
+                    );
+                    if (text != null && context.mounted) {
+                      journalBloc.add(
+                        AddEntry(
+                          categoryId: category.id,
+                          text: text,
+                          date: selectedDate,
+                        ),
+                      );
+                    }
+                  },
+                  onVoiceTap: () {
+                    _dismissRadialMenu();
+                    Navigator.pushNamed(context, '/voice-call');
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_radialMenuOverlay!);
+
+    // Semantics announcement is handled by the Semantics widget
+    // wrapping CategoryRadialMenu (label: 'Category menu').
   }
 
   Future<void> _openVoiceNote(BuildContext context) async {
@@ -469,11 +573,13 @@ class _ProgressCard extends StatelessWidget {
   final List<CategoryEntry> entries;
   final List<CategoryConfig> categories;
   final int currentStreak;
+  final DateTime selectedDate;
   final void Function(String categoryId)? onCategoryTap;
 
   const _ProgressCard({
     required this.entries,
     required this.categories,
+    required this.selectedDate,
     this.currentStreak = 0,
     this.onCategoryTap,
   });
@@ -513,7 +619,9 @@ class _ProgressCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    "Today's Progress",
+                    isSameDay(selectedDate, DateTime.now())
+                        ? "Today's Progress"
+                        : '${DateFormat('MMM d').format(selectedDate)} Progress',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
