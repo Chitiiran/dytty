@@ -11,7 +11,6 @@ void main() {
     Map<String, int> filledCounts = const {},
     void Function(CategoryConfig)? onCategoryTap,
     VoidCallback? onVoiceTap,
-    VoidCallback? onDismiss,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -24,7 +23,6 @@ void main() {
               filledCounts: filledCounts,
               onCategoryTap: onCategoryTap ?? (_) {},
               onVoiceTap: onVoiceTap ?? () {},
-              onDismiss: onDismiss ?? () {},
             ),
           ),
         ),

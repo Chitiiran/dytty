@@ -13,7 +13,6 @@ class CategoryRadialMenu extends StatefulWidget {
   final Map<String, int> filledCounts;
   final void Function(CategoryConfig category) onCategoryTap;
   final VoidCallback onVoiceTap;
-  final VoidCallback onDismiss;
 
   const CategoryRadialMenu({
     super.key,
@@ -21,7 +20,6 @@ class CategoryRadialMenu extends StatefulWidget {
     required this.filledCounts,
     required this.onCategoryTap,
     required this.onVoiceTap,
-    required this.onDismiss,
   });
 
   @override

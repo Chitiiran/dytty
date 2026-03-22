@@ -40,6 +40,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _dismissRadialMenu();
+    super.dispose();
+  }
+
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning';
@@ -451,7 +457,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     _dismissRadialMenu();
                     Navigator.pushNamed(context, '/voice-call');
                   },
-                  onDismiss: _dismissRadialMenu,
                 ),
               ),
             ),
