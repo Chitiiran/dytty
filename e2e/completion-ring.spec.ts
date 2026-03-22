@@ -59,6 +59,8 @@ test.describe('Completion ring on calendar', () => {
   });
 
   // --- TRUE NEGATIVE: Empty state is correctly empty ---
+  // Note: overlaps with home-state.spec.ts but serves as ring-specific regression
+  // anchor. If the ring feature regresses, this file fails independently.
 
   test('empty calendar shows 0 of 5 progress and nudge banner (true negative)', async ({ page }) => {
     // Calendar should be visible
@@ -176,8 +178,7 @@ test.describe('Completion ring on calendar', () => {
     await clickByLabel(page, 'Today button');
     await expect(page.getByLabel('Positive Things category')).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Delete entry' }).click();
-    await page.waitForTimeout(2000);
-    await expect(page.getByLabel('Journal entry: Ring FN delete')).not.toBeVisible();
+    await expect(page.getByLabel('Journal entry: Ring FN delete')).not.toBeVisible({ timeout: 10_000 });
 
     // Go back to home — should be fully empty again
     await goBackToHome(page);
@@ -202,9 +203,10 @@ test.describe('Completion ring on calendar', () => {
 
     // Navigate to next month — chevron buttons have no accessible name,
     // so we find them within the Calendar group by position.
-    // Layout: [left chevron] [title "March 2026"] [format button "Month"] [right chevron]
+    // TODO(#142): add semantic labels to chevron buttons, then use getByLabel
+    // Layout within Calendar group: [left chevron] [month title] [format toggle] [right chevron]
     const calendarGroup = page.getByLabel('Calendar');
-    const rightChevron = calendarGroup.getByRole('button').nth(3); // 4th button = right chevron
+    const rightChevron = calendarGroup.getByRole('button').nth(3);
     await rightChevron.click();
     await page.waitForTimeout(1000);
 

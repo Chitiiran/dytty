@@ -30,6 +30,7 @@ tags:
     text: "Add Positive Things entry"
     retryTapIfNoChange: true
 - waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
 - inputText: "Ring test entry 1"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -52,6 +53,7 @@ tags:
     text: "Add Gratitude entry"
     retryTapIfNoChange: true
 - waitForAnimationToEnd
+- tapOn: "What are you grateful for today.*"
 - inputText: "Ring test entry 2"
 - tapOn: "Save"
 - waitForAnimationToEnd:
