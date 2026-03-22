@@ -115,6 +115,8 @@ class VoiceCallState extends Equatable {
   final bool generatingSummary;
   final bool isMuted;
   final bool isSpeakerOn;
+  final int? latencyP50;
+  final int? latencyP95;
 
   const VoiceCallState({
     this.status = VoiceCallStatus.idle,
@@ -130,6 +132,8 @@ class VoiceCallState extends Equatable {
     this.generatingSummary = false,
     this.isMuted = false,
     this.isSpeakerOn = true,
+    this.latencyP50,
+    this.latencyP95,
   });
 
   Duration get timeRemaining {
@@ -153,6 +157,8 @@ class VoiceCallState extends Equatable {
     bool? generatingSummary,
     bool? isMuted,
     bool? isSpeakerOn,
+    int? latencyP50,
+    int? latencyP95,
   }) {
     return VoiceCallState(
       status: status ?? this.status,
@@ -168,6 +174,8 @@ class VoiceCallState extends Equatable {
       generatingSummary: generatingSummary ?? this.generatingSummary,
       isMuted: isMuted ?? this.isMuted,
       isSpeakerOn: isSpeakerOn ?? this.isSpeakerOn,
+      latencyP50: latencyP50 ?? this.latencyP50,
+      latencyP95: latencyP95 ?? this.latencyP95,
     );
   }
 
@@ -186,6 +194,8 @@ class VoiceCallState extends Equatable {
     generatingSummary,
     isMuted,
     isSpeakerOn,
+    latencyP50,
+    latencyP95,
   ];
 }
 
@@ -214,6 +224,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   StreamSubscription<Transcript>? _transcriptSub;
   StreamSubscription<FunctionCall>? _toolCallSub;
   StreamSubscription<GeminiLiveState>? _stateSub;
+  StreamSubscription<int>? _latencySub;
   Timer? _elapsedTimer;
   DateTime? _callStartTime;
   bool _warned5 = false;
@@ -280,9 +291,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     });
     _stateSub = _service.stateStream.listen((s) {
       add(ServiceStateChanged(s));
-      if (_service.lastLatencyMs != null) {
-        add(LatencyUpdated(_service.lastLatencyMs!));
-      }
+    });
+    _latencySub = _service.latencyStream.listen((ms) {
+      add(LatencyUpdated(ms));
     });
 
     try {
@@ -302,6 +313,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     emit(state.copyWith(status: VoiceCallStatus.ending));
     _elapsedTimer?.cancel();
     _callStartTime = null;
+
+    // Capture latency aggregates before disconnecting
+    final p50 = _service.latencyP50;
+    final p95 = _service.latencyP95;
+
     await _cancelSubscriptions();
     await _service.disconnect();
 
@@ -310,7 +326,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _audioStorage != null && _uid != null && _recordedAudio.isNotEmpty;
 
     if (hasAudio) {
-      emit(state.copyWith(status: VoiceCallStatus.ended, uploadingAudio: true));
+      emit(
+        state.copyWith(
+          status: VoiceCallStatus.ended,
+          uploadingAudio: true,
+          latencyP50: p50,
+          latencyP95: p95,
+        ),
+      );
 
       try {
         final now = DateTime.now();
@@ -327,7 +350,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         emit(state.copyWith(uploadingAudio: false));
       }
     } else {
-      emit(state.copyWith(status: VoiceCallStatus.ended));
+      emit(
+        state.copyWith(
+          status: VoiceCallStatus.ended,
+          latencyP50: p50,
+          latencyP95: p95,
+        ),
+      );
     }
   }
 
@@ -521,9 +550,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     await _transcriptSub?.cancel();
     await _toolCallSub?.cancel();
     await _stateSub?.cancel();
+    await _latencySub?.cancel();
     _transcriptSub = null;
     _toolCallSub = null;
     _stateSub = null;
+    _latencySub = null;
   }
 
   @override

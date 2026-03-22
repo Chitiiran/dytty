@@ -116,6 +116,24 @@ void main() {
     test('lastLatencyMs is null initially', () {
       expect(service.lastLatencyMs, isNull);
     });
+
+    test('latencyP50 and latencyP95 are null initially', () {
+      expect(service.latencyP50, isNull);
+      expect(service.latencyP95, isNull);
+    });
+
+    test('latencyStream is a broadcast stream', () {
+      service.latencyStream.listen((_) {});
+      service.latencyStream.listen((_) {});
+      // No error means it's broadcast
+    });
+
+    test('dispose closes latencyStream', () async {
+      final completer = Completer<void>();
+      service.latencyStream.listen(null, onDone: completer.complete);
+      service.dispose();
+      await expectLater(completer.future, completes);
+    });
   });
 
   group('Speaker', () {
