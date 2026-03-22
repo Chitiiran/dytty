@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:dytty/core/utils/ring_angle_utils.dart';
 import 'package:dytty/data/models/category_config.dart';
 
 /// Describes one segment of the completion ring.
@@ -25,9 +26,6 @@ class CompletionRingPainter extends CustomPainter {
   final Color dimColor;
   final double strokeWidth;
 
-  /// Gap between segments in radians. For N=1, no gap is applied.
-  static const double _gapRadians = 4 * pi / 180; // 4 degrees
-
   CompletionRingPainter({
     required this.segments,
     required this.animationProgress,
@@ -43,15 +41,14 @@ class CompletionRingPainter extends CustomPainter {
     final radius = (min(size.width, size.height) - strokeWidth) / 2;
     final n = segments.length;
     final segmentAngle = 2 * pi / n;
-    final gap = n == 1 ? 0.0 : _gapRadians;
+    final gap = RingAngleUtils.gapRadians(n);
     final sweepAngle = segmentAngle - gap;
 
     final rect = Rect.fromCircle(center: center, radius: radius);
 
     for (int i = 0; i < n; i++) {
       final segment = segments[i];
-      // Start at 12 o'clock (-pi/2), offset by half gap
-      final startAngle = -pi / 2 + i * segmentAngle + gap / 2;
+      final startAngle = RingAngleUtils.categoryAngle(index: i, total: n);
 
       if (segment.isFilled) {
         // Draw dim background for the full sweep first
