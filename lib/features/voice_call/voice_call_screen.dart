@@ -127,7 +127,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                 savedEntries: state.savedEntries,
                 transcripts: state.transcripts,
                 elapsed: state.elapsed,
-                latencyMs: state.latencyMs,
+                latencyP50: state.latencyP50,
+                latencyP95: state.latencyP95,
                 sessionSummary: state.sessionSummary,
                 generatingSummary: state.generatingSummary,
                 audioUrl: state.audioUrl,
@@ -298,7 +299,8 @@ class _PostCallSummary extends StatelessWidget {
   final List<SavedEntry> savedEntries;
   final List<Transcript> transcripts;
   final Duration elapsed;
-  final int? latencyMs;
+  final int? latencyP50;
+  final int? latencyP95;
   final String? sessionSummary;
   final bool generatingSummary;
   final String? audioUrl;
@@ -311,7 +313,8 @@ class _PostCallSummary extends StatelessWidget {
     required this.savedEntries,
     required this.transcripts,
     required this.elapsed,
-    required this.latencyMs,
+    this.latencyP50,
+    this.latencyP95,
     this.sessionSummary,
     this.generatingSummary = false,
     this.audioUrl,
@@ -355,11 +358,17 @@ class _PostCallSummary extends StatelessWidget {
                 label: '${savedEntries.length}',
                 caption: 'Entries',
               ),
-              if (latencyMs != null)
+              if (latencyP50 != null)
                 _StatChip(
                   icon: Icons.speed_rounded,
-                  label: '${latencyMs}ms',
-                  caption: 'Latency',
+                  label: '${latencyP50}ms',
+                  caption: 'P50',
+                ),
+              if (latencyP95 != null)
+                _StatChip(
+                  icon: Icons.speed_rounded,
+                  label: '${latencyP95}ms',
+                  caption: 'P95',
                 ),
             ],
           ),
