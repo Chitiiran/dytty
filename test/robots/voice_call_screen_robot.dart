@@ -63,13 +63,19 @@ class VoiceCallScreenRobot {
     expect(find.text('$count'), findsOneWidget);
   }
 
-  void expectLatencyStat(int ms) {
-    expect(find.text('Latency'), findsOneWidget);
+  void expectLatencyP50Stat(int ms) {
+    expect(find.text('P50'), findsOneWidget);
+    expect(find.text('${ms}ms'), findsOneWidget);
+  }
+
+  void expectLatencyP95Stat(int ms) {
+    expect(find.text('P95'), findsOneWidget);
     expect(find.text('${ms}ms'), findsOneWidget);
   }
 
   void expectNoLatencyStat() {
-    expect(find.text('Latency'), findsNothing);
+    expect(find.text('P50'), findsNothing);
+    expect(find.text('P95'), findsNothing);
   }
 
   void expectNoEntriesCapturedMessage() {
