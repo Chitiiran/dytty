@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:dytty/main.dart' show useEmulators;
 
 class AuthService {
@@ -20,6 +20,15 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<UserCredential> signInWithGoogle() async {
+    // On web, google_sign_in's authenticate() is not supported (Credential
+    // Manager is Android/iOS only). Use Firebase Auth's signInWithPopup which
+    // handles the full OAuth flow via browser popup.
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider();
+      return _auth.signInWithPopup(provider);
+    }
+
+    // On Android/iOS, use google_sign_in package with Credential Manager.
     if (!_google.supportsAuthenticate()) {
       throw Exception('Google Sign-In is not supported on this platform');
     }
