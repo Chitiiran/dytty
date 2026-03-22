@@ -1,0 +1,70 @@
+appId: com.dytty.dytty
+name: "State: completion ring updates after adding entries"
+tags:
+  - state
+  - ring
+---
+# Verify that calendar completion rings update when entries are added.
+# The ring is drawn via CustomPainter so we cannot assert on individual
+# segments directly — screenshots are the primary verification artifact.
+#
+# Test matrix:
+# - True positive:  progress updates from 0→1→2 as entries added
+# - False positive: screenshots capture ring state for visual regression
+# - True negative:  starts at 0 of 5 with empty rings
+# - False negative: covered by separate delete flow (progress-updates-after-entry)
+
+- runFlow: "../helpers/login.yaml"
+
+# TRUE NEGATIVE: Home screen should show 0 of 5 (all rings empty)
+- assertVisible: "Progress 0 of 5"
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-01-calendar-empty-rings"
+
+# TRUE POSITIVE: Add one entry, ring should show 1 segment
+- tapOn: "Today button"
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertVisible: "Positive Things"
+
+- tapOn:
+    text: "Add Positive Things entry"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Ring test entry 1"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Ring test entry 1.*"
+
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 1 of 5.*"
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-02-calendar-one-segment"
+
+# FALSE POSITIVE CHECK: Add to different category, should be exactly 2 not 3
+- tapOn: "Today button"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+- tapOn:
+    text: "Add Gratitude entry"
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
+- tapOn: "What are you grateful for today.*"
+- inputText: "Ring test entry 2"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Ring test entry 2.*"
+
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "Progress 2 of 5.*"
+# Verify it's not 3 of 5 (false positive)
+- assertNotVisible: "Progress 3 of 5.*"
+- takeScreenshot: ".maestro/screenshots/latest/state/ring-03-calendar-two-segments"
