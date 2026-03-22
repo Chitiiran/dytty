@@ -34,6 +34,7 @@ void main() {
   late StreamController<FunctionCall> toolCallController;
   late StreamController<GeminiLiveState> stateController;
   late StreamController<Uint8List> audioController;
+  late StreamController<int> latencyController;
 
   setUpAll(() {
     registerFallbackValue(
@@ -53,6 +54,7 @@ void main() {
     toolCallController = StreamController<FunctionCall>.broadcast();
     stateController = StreamController<GeminiLiveState>.broadcast();
     audioController = StreamController<Uint8List>.broadcast();
+    latencyController = StreamController<int>.broadcast();
 
     when(
       () => mockService.transcriptStream,
@@ -66,7 +68,11 @@ void main() {
     when(
       () => mockService.audioStream,
     ).thenAnswer((_) => audioController.stream);
-    when(() => mockService.lastLatencyMs).thenReturn(null);
+    when(
+      () => mockService.latencyStream,
+    ).thenAnswer((_) => latencyController.stream);
+    when(() => mockService.latencyP50).thenReturn(null);
+    when(() => mockService.latencyP95).thenReturn(null);
     when(() => mockService.connect()).thenAnswer((_) async {});
     when(() => mockService.disconnect()).thenAnswer((_) async {});
     when(() => mockService.dispose()).thenReturn(null);
@@ -81,6 +87,7 @@ void main() {
     toolCallController.close();
     stateController.close();
     audioController.close();
+    latencyController.close();
   });
 
   VoiceCallBloc buildBloc({
@@ -116,6 +123,62 @@ void main() {
       expect(bloc.state.isSpeakerOn, true);
       bloc.close();
     });
+
+    test('has null latencyP50 and latencyP95', () {
+      final bloc = buildBloc();
+      expect(bloc.state.latencyP50, isNull);
+      expect(bloc.state.latencyP95, isNull);
+      bloc.close();
+    });
+  });
+
+  group('Latency', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'latencyStream emission updates state.latencyMs',
+      build: () => buildBloc(),
+      act: (bloc) async {
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+        stateController.add(GeminiLiveState.active);
+        await Future<void>.delayed(Duration.zero);
+        latencyController.add(180);
+      },
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.status,
+          'status',
+          VoiceCallStatus.connecting,
+        ),
+        isA<VoiceCallState>().having(
+          (s) => s.status,
+          'status',
+          VoiceCallStatus.active,
+        ),
+        isA<VoiceCallState>().having((s) => s.latencyMs, 'latencyMs', 180),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'EndCall populates latencyP50 and latencyP95 from service',
+      build: () => buildBloc(),
+      seed: () => const VoiceCallState(status: VoiceCallStatus.active),
+      act: (bloc) {
+        when(() => mockService.latencyP50).thenReturn(150);
+        when(() => mockService.latencyP95).thenReturn(350);
+        bloc.add(const EndCall());
+      },
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.status,
+          'status',
+          VoiceCallStatus.ending,
+        ),
+        isA<VoiceCallState>()
+            .having((s) => s.status, 'status', VoiceCallStatus.ended)
+            .having((s) => s.latencyP50, 'latencyP50', 150)
+            .having((s) => s.latencyP95, 'latencyP95', 350),
+      ],
+    );
   });
 
   group('StartCall', () {
@@ -1090,16 +1153,14 @@ void main() {
 
   group('latency via StartCall stream subscription', () {
     blocTest<VoiceCallBloc, VoiceCallState>(
-      'emits latency when service reports lastLatencyMs on state change',
-      setUp: () {
-        when(() => mockService.lastLatencyMs).thenReturn(42);
-      },
+      'emits latency when latencyStream fires',
       build: () => buildBloc(),
       act: (bloc) async {
         bloc.add(const StartCall());
         await Future<void>.delayed(const Duration(milliseconds: 50));
-        // Simulate state change from service which checks lastLatencyMs
         stateController.add(GeminiLiveState.active);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        latencyController.add(42);
         await Future<void>.delayed(const Duration(milliseconds: 50));
       },
       expect: () => [
@@ -1115,7 +1176,7 @@ void main() {
           'status',
           VoiceCallStatus.active,
         ),
-        // latency update (from LatencyUpdated dispatched in _stateSub listener)
+        // latency update (from latencyStream subscription)
         isA<VoiceCallState>().having((s) => s.latencyMs, 'latencyMs', 42),
       ],
     );
