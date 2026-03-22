@@ -461,6 +461,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     Overlay.of(context).insert(_radialMenuOverlay!);
+
+    // Semantics announcement is handled by the Semantics widget
+    // wrapping CategoryRadialMenu (label: 'Category menu').
   }
 
   Future<void> _openVoiceNote(BuildContext context) async {
