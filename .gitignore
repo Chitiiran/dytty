@@ -9,6 +9,7 @@
 docs/planning/
 docs/superpowers/
 PROGRESS.md
+eval/
 
 # Environment secrets
 .env
