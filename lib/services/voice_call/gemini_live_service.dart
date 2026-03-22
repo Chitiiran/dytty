@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/core/constants/tool_declarations.dart' as call_tools;
+import 'package:dytty/services/voice_call/latency_tracker.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
@@ -51,14 +52,25 @@ class GeminiLiveService {
 
   bool get isConnected => _session != null;
 
-  /// Timestamp when the user's last audio chunk was sent (for latency measurement).
-  DateTime? _lastUserAudioSent;
+  /// High-resolution monotonic timer for latency measurement.
+  final Stopwatch _latencyStopwatch = Stopwatch();
+  final LatencyTracker _latencyTracker = LatencyTracker();
+  bool _modelTurnComplete = true;
+  bool _measuring = false;
 
-  /// Timestamp when first model audio was received after user turn.
-  DateTime? _firstModelAudioReceived;
+  final _latencyController = StreamController<int>.broadcast();
+
+  /// Per-turn latency measurements in milliseconds.
+  Stream<int> get latencyStream => _latencyController.stream;
 
   /// Last measured response latency in milliseconds.
   int? lastLatencyMs;
+
+  /// Median latency across all turns in the session.
+  int? get latencyP50 => _latencyTracker.p50;
+
+  /// 95th percentile latency across all turns in the session.
+  int? get latencyP95 => _latencyTracker.p95;
 
   /// Connect to the Gemini Live API and start a session.
   ///
@@ -69,6 +81,10 @@ class GeminiLiveService {
     List<FunctionDeclaration>? tools,
   }) async {
     _stateController.add(GeminiLiveState.connecting);
+    _latencyTracker.reset();
+    _modelTurnComplete = true;
+    _measuring = false;
+    lastLatencyMs = null;
 
     final effectivePrompt = systemPrompt ?? dailyCallSystemPrompt;
     final effectiveTools = tools ?? [call_tools.saveEntryDeclaration];
@@ -108,8 +124,12 @@ class GeminiLiveService {
   /// Audio format: 16-bit PCM, 16kHz, mono, little-endian.
   void sendAudio(Uint8List pcmData) {
     if (_session == null) return;
-    _lastUserAudioSent = DateTime.now();
-    _firstModelAudioReceived = null;
+    if (_modelTurnComplete && !_measuring) {
+      _latencyStopwatch.reset();
+      _latencyStopwatch.start();
+      _modelTurnComplete = false;
+      _measuring = true;
+    }
     _session!.sendAudioRealtime(InlineDataPart('audio/pcm', pcmData));
   }
 
@@ -145,6 +165,7 @@ class GeminiLiveService {
     _transcriptController.close();
     _toolCallController.close();
     _stateController.close();
+    _latencyController.close();
   }
 
   /// Start the receive loop for multi-turn conversations.
@@ -172,7 +193,8 @@ class GeminiLiveService {
             );
           }
         }
-        // receive() returned (turnComplete) — loop to listen for next turn
+        // receive() returned (turnComplete) — model's turn is done
+        _modelTurnComplete = true;
       }
     } catch (e) {
       debugPrint('Gemini Live stream error: $e');
@@ -188,12 +210,12 @@ class GeminiLiveService {
     if (content.modelTurn != null) {
       for (final part in content.modelTurn!.parts) {
         if (part is InlineDataPart && part.mimeType.startsWith('audio/')) {
-          // Measure latency: time from last user audio to first model audio
-          if (_firstModelAudioReceived == null && _lastUserAudioSent != null) {
-            _firstModelAudioReceived = DateTime.now();
-            lastLatencyMs = _firstModelAudioReceived!
-                .difference(_lastUserAudioSent!)
-                .inMilliseconds;
+          if (_measuring) {
+            _latencyStopwatch.stop();
+            lastLatencyMs = _latencyStopwatch.elapsedMilliseconds;
+            _latencyTracker.add(lastLatencyMs!);
+            _latencyController.add(lastLatencyMs!);
+            _measuring = false;
             debugPrint('Response latency: ${lastLatencyMs}ms');
           }
           _audioController.add(part.bytes);
