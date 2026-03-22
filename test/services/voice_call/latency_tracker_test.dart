@@ -28,22 +28,22 @@ void main() {
       expect(tracker.p50, 200);
     });
 
-    test('p50 is lower-middle of even count', () {
-      // Sorted: [100, 200, 300, 400] → index 1 (floor)
+    test('p50 is upper-middle of even count', () {
+      // Sorted: [100, 200, 300, 400] → ceil(3 * 0.5) = 2 → value 300
       tracker.add(300);
       tracker.add(100);
       tracker.add(400);
       tracker.add(200);
-      expect(tracker.p50, 200);
+      expect(tracker.p50, 300);
     });
 
-    test('p95 picks 95th percentile', () {
+    test('p95 picks 95th percentile (ceil for small N accuracy)', () {
       // 20 values: 10, 20, ..., 200
-      // 95th percentile index = floor(19 * 0.95) = 18 → value 190
+      // 95th percentile index = ceil(19 * 0.95) = 19 → value 200
       for (var i = 1; i <= 20; i++) {
         tracker.add(i * 10);
       }
-      expect(tracker.p95, 190);
+      expect(tracker.p95, 200);
     });
 
     test('measurements getter returns defensive copy', () {

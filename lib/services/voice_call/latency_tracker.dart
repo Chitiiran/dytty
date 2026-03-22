@@ -20,7 +20,7 @@ class LatencyTracker {
   int? _percentile(double p) {
     if (_data.isEmpty) return null;
     final sorted = List<int>.of(_data)..sort();
-    final index = ((sorted.length - 1) * p).floor();
+    final index = ((sorted.length - 1) * p).ceil();
     return sorted[index];
   }
 }
