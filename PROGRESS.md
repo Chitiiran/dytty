@@ -1,18 +1,20 @@
 # Dytty Progress
 
 ## Current Status
-**Notifications fixed and tested. Code review refactors + release infra merged.**
+**Calendar radial menu implemented. Issues #54 and #56 addressed in PR #150.**
 
 **Latest on main:**
+- PR #149 merged — latency fix (#148): replaced DateTime with Stopwatch, added LatencyTracker with P50/P95, dedicated latencyStream
+- PR #147 merged — deleted playground/ sub-project (#19): removed 11 files / 929 lines causing ~47 CI analysis errors
+- PR #138 merged — completion ring (#34): multi-color segmented ring per calendar date
 - All PR #104 code review refactors landed (#105-#114, PRs #124-#131, #133)
 - Release infra overhaul (#121): shared debug keystore, distribute.sh with tags + GitHub Releases
-- Dynamic version display (#27), Firestore index (#119), timestamp warnings (#108)
-- Version on main: 0.1.7+9
+- Version on main: 0.1.7+11
 
 **Open PRs:**
-- #128 — Notification fixes (timezone, auth, permissions, channels, receivers) — tested working on device
+- PR #150 — feat: calendar radial menu (#54, #56) — 6 commits, 725 tests pass, awaiting manual test + merge
 
-**Test status:** 671 Flutter + 32 Playwright + 9 Maestro = 712 tests. Coverage: 82.3% (CI gate: 50%)
+**Test status:** 725 Flutter + 32 Playwright + 9 Maestro = 766 tests. Coverage: ~82% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
@@ -37,15 +39,16 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 
 ## Blockers
 - Web build requires `--no-tree-shake-icons` due to dynamic IconData in CategoryConfig
-- #130: google-services.json was committed to git history — assess key rotation before public release
+- ~~#130: google-services.json was committed to git history~~ — CLOSED: removed from tracking, keys rotated
 
 ## Up Next
+- **Merge PR #150** — calendar radial menu, pending manual smoke test
 - **#86**: Journal entries lost on app restart (P0, offline persistence)
 - **#83**: First-time user onboarding (P0)
 - **#82**: Security audit — Firestore rules, API keys, audio encryption (P0)
 - **#79**: Data export + account deletion for GDPR (P0)
 - **#78**: iOS build for close-circle distribution (P0)
-- **#122**: Daily call AI conversation quality (P0 — repetition, no follow-ups, poor category handling)
+- **#137/#134**: AI eval harness — baseline metrics + LLM-as-judge
 - **#123**: Transcript bubbles truncated (P1)
 - **#90**: Error state flash on call start (race condition)
 - **#48**: Golden test CI failures (cross-platform fonts)
@@ -54,6 +57,51 @@ Update `min_coverage` in `.github/workflows/ci.yml` each week.
 ---
 
 ## Log
+
+### 2026-03-22 (session 31)
+- **Issue triage** — cross-referenced git merge history with open issues
+  - Closed: #57 (portrait lock), #7 (daily reminder), #63 (scheduled notifications), #33 (call UI), #24 (call stuck), #25 (end-call affordance), #72 (on-this-day memories), #130 (google-services.json security)
+  - Grouped all 48 open issues by category for prioritization
+- **#54 + #56 Calendar radial menu — PR #150 created**
+  - Brainstormed design with visual companion (circular_menu vs pie_menu vs star_menu)
+  - Key decisions: circular_menu 4.0.0, tap-to-open (not drag-release), 5 category bubbles + center mic, checkmark badges (✓/✓✓), mini bottom sheet for text entry
+  - Spec: `docs/planning/SPEC-54-56-calendar-radial-menu.md`
+  - Plan: `docs/planning/PLAN-54-56-calendar-radial-menu.md` (9 tasks)
+  - Implementation: 6 commits, 15 new tests (7 unit + 8 widget), 725 total pass
+  - New files: `RingAngleUtils`, `CategoryRadialMenu`
+  - Modified: `home_screen.dart` (overlay + progress card), `completion_ring_cell.dart` (shared angles)
+  - Code review: fixed dispose() crash risk, removed dead onDismiss param
+  - Deferred: cell-anchored positioning (V1 centers on screen), per-item semantics (package limitation)
+- **Workflow improvements**
+  - Updated CLAUDE.md, GIT_WORKFLOW.md, MEMORY.md: plans are local-only (gitignored), implementation always in worktrees
+  - Added `docs/superpowers/` to .gitignore
+
+### 2026-03-22 (session 30)
+- **#148 Latency fix — PR #149 merged** — daily call latency measurement was fundamentally broken
+  - `DateTime.now()` replaced with `Stopwatch` (monotonic, microsecond precision)
+  - Measurement was resetting on every PCM chunk → bogus 2ms readings; now measures from first user audio after model turn completes to first model audio received
+  - Added `LatencyTracker` utility with P50/P95 percentile aggregation
+  - Post-call summary shows P50 + P95 instead of single last-turn value
+  - Key decision: 200ms target from Reflection research may be unrealistic — need real-device measurements (#148 still needs on-device validation)
+  - 16 new tests (8 LatencyTracker, 3 GeminiLiveService, 3 VoiceCallBloc, 2 widget)
+- **#19 Playground deleted — PR #147 merged** — removed GenUI prototype (929 lines) that caused ~47 CI analysis errors
+- Added pre-merge PROGRESS.md update requirement to GIT_WORKFLOW.md and CLAUDE.md
+
+### 2026-03-21 (session 29)
+- **#34 Completion Ring — PR #138 merged** — replaced calendar minidots with multi-color completion rings
+  - `getMonthCategoryMarkers()` repository method: per-date, per-category entry counts
+  - `JournalState.monthCategoryMarkers` replaces `daysWithEntries` (derived getter for backward compat)
+  - Bloc-level `_markerCache` keyed by "yyyy-MM" prevents redundant Firestore reads
+  - `CompletionRingPainter`: CustomPainter with segmented arcs, 4° gap, animation support
+  - `CompletionRingCell`: StatefulWidget with 300ms easeOut animation, re-animates on marker changes
+  - HomeScreen: `calendarBuilders` replace `eventLoader` + marker styling
+  - Code review fix: safe `indexWhere` fallback in `_onDeleteEntry`, removed dead calendarStyle
+  - 29 new tests (3 repo + 11 painter + 9 widget + 6 golden), 710 total Flutter tests
+  - Spec: `docs/superpowers/specs/2026-03-21-completion-ring-design.md`
+  - Plan: `docs/planning/PLAN-34-completion-ring.md`
+- **Build v0.1.7+11 distributed** — tested on device, rings visible
+- **Bug found during distribute**: `android/debug.keystore` and `android/app/google-services.json` missing from disk (both gitignored/removed from tracking in earlier sessions). Restored from git history. First APK failed to install due to signature mismatch; rebuilt with correct keystore.
+- **Key lesson**: worktrees don't carry gitignored files — must copy `.env`, `google-services.json`, and verify `debug.keystore` presence before building
 
 ### 2026-03-20 (session 28)
 - **Notification pipeline fixed end-to-end (#26, #132)** — 9 builds (0.1.8+11 through +19) to diagnose and fix the full 8-link Android notification chain:

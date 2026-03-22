@@ -202,6 +202,12 @@ EOF
 )"
 ```
 
+### Pre-merge: update progress docs
+Before merging a PR, update `PROGRESS.md` to reflect what's landing:
+- **Top section**: update "Latest on main" with the PR, test counts, any new blockers
+- **Log section**: add a dated entry with key decisions, architectural choices, and non-obvious tradeoffs from the PR — these are lost if not captured before merge
+- This prevents decisions from being buried in PR bodies that no one re-reads
+
 ### Merge strategy
 - **Squash merge** for feature branches (clean history on main)
 - PR must pass CI before merge
@@ -248,12 +254,14 @@ When Claude is asked to implement a feature or fix a bug:
 
 1. **Check for existing issue** — search with `gh issue list` before creating a new one
 2. **Create issue if none exists** — with appropriate labels and milestone
-3. **Create branch** from `main` using the naming convention
-4. **Commit with full context** — type, scope, what, why, key decisions, issue ref
-5. **Always ask before pushing** — never push to remote without user confirmation
-6. **Always ask before creating PRs** — present the PR title and summary first
-7. **Update PROGRESS.md** at end of session as usual
-8. **Do not close issues manually** — let `Fixes #N` in the PR handle it
+3. **Brainstorm + plan on main** — save specs/plans to `docs/planning/` (gitignored, local-only, never committed)
+4. **Create worktree + branch** — `git worktree add .worktrees/<name> -b <type>/<issue#>-<short-name>`. All implementation happens in the worktree, never on main.
+5. **Commit with full context** — type, scope, what, why, key decisions, issue ref
+6. **Always ask before pushing** — never push to remote without user confirmation
+7. **Always ask before creating PRs** — present the PR title and summary first
+8. **Update PROGRESS.md before merge** — refresh top section (latest on main, test counts) and add log entry with key decisions from the PR. Do this before merging, not just at end of session — decisions get buried in PR bodies otherwise.
+9. **Update PROGRESS.md** at end of session as usual
+10. **Do not close issues manually** — let `Fixes #N` in the PR handle it
 
 ### Finding issues and milestones (CLI reference)
 ```bash

@@ -5,11 +5,13 @@
 > 2. Run `gh issue list --limit 50` — open bugs and feature requests (GitHub Issues is the single source of truth).
 > 3. Brief the user: where we are (current milestone status, any blockers), and where we can go next (top-priority backlog items, next milestone work). Keep it to a few sentences.
 >
+> **Before merging a PR:** Update `PROGRESS.md` — refresh "Latest on main" with the PR, update test counts, and log key decisions/tradeoffs from the PR. Decisions get buried in PR bodies; capture them before they're lost.
+>
 > **End of session:** Update `PROGRESS.md` — refresh the top section with current state, and append a dated entry to the `## Log` section.
 >
 > **Feedback process:** See `docs/planning/FEEDBACK_PROCESS.md` for converting user/tester feedback into GitHub Issues.
 >
-> **Plans:** When exiting plan mode, ALWAYS save the plan to `docs/planning/PLAN-{issue#}-{short-name}.md`. Plans must live with other planning docs, not in `.claude/plans/`. Do this immediately after finalizing the plan, before starting implementation.
+> **Plans:** When exiting plan mode, ALWAYS save the plan to `docs/planning/PLAN-{issue#}-{short-name}.md`. Plans must live with other planning docs, not in `.claude/plans/`. Do this immediately after finalizing the plan, before starting implementation. Note: `docs/planning/` is gitignored — plans and specs are local-only, never committed to git.
 
 ## Project Overview
 Daily journaling app with 5 structured categories. Cross-platform Flutter app backed by Firebase (Auth + Firestore). First target: web app with Playwright E2E tests.
@@ -101,12 +103,14 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define` at bui
 
 ## Worktrees
 - Worktree directory: `.worktrees/` (project-local, gitignored)
+- **Development workflow**: Plans/specs stay on main (local, gitignored in `docs/planning/`). Implementation happens in a worktree on a feature branch. Create the worktree + branch before writing any implementation code.
+- **Agent isolation**: When dispatching agents, always pass the worktree's absolute path as the working directory. Agents must write all files relative to their worktree path, never the project root. Verify changes landed on the worktree's branch before consolidating.
 
 ## Git Workflow
 Follow `docs/planning/GIT_WORKFLOW.md` strictly. Key points:
 - **Branch model**: Trunk-based — feature branches target `main` directly
 - Every change needs a GitHub Issue (check existing before creating)
-- Branch naming: `<type>/<issue#>-<short-name>` (e.g. `feat/14-voice-sheet`)
+- Branch naming: `<type>/<issue#>-<short-name>` (e.g. `feat/14-voice-sheet`, `test/34-ring-e2e`)
 - Conventional commits: `type(scope): what` + body with why + key decisions + `Refs #N`
 - PRs target `main`, use `.github/pull_request_template.md`, include `Fixes #N`
 - Always ask user before pushing or creating PRs
