@@ -511,11 +511,10 @@ void main() {
     late MockAudioStorageService mockAudioStorageService;
     late CategoryDetailScreenRobot robot;
 
+    final now = DateTime.now();
     final dateFormat = DateFormat('yyyy-MM-dd');
-    final today = dateFormat.format(DateTime.now());
-    final yesterday = dateFormat.format(
-      DateTime.now().subtract(const Duration(days: 1)),
-    );
+    final today = dateFormat.format(now);
+    final yesterday = dateFormat.format(now.subtract(const Duration(days: 1)));
 
     setUp(() {
       firestore = FakeFirebaseFirestore();
@@ -655,7 +654,6 @@ void main() {
       // Pre-populate an entry so the screen renders the list view
       await repository.addCategoryEntry(today, 'positive', 'An entry');
       // Save a review summary for the current week
-      final now = DateTime.now();
       final weekStart = dateFormat.format(app_date.mondayOfWeek(now));
       await repository.saveReviewSummary(
         ReviewSummary(
