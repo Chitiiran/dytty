@@ -314,12 +314,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   Future<void> _onAddEntry(AddEntry event, Emitter<JournalState> emit) async {
     final targetDate = event.date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
+    final previousDate = state.selectedDate;
     emit(
       state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
     );
 
     // Re-subscribe stream if date changed
-    if (targetDate != state.selectedDate) {
+    if (targetDate != previousDate) {
       await _entriesSubscription?.cancel();
       _entriesSubscription = _repository
           .watchCategoryEntries(dateString)
@@ -344,12 +345,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   ) async {
     final targetDate = event.date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
+    final previousDate = state.selectedDate;
     emit(
       state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
     );
 
     // Re-subscribe stream if date changed
-    if (targetDate != state.selectedDate) {
+    if (targetDate != previousDate) {
       await _entriesSubscription?.cancel();
       _entriesSubscription = _repository
           .watchCategoryEntries(dateString)
