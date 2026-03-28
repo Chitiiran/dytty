@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 20),
 
           // Developer section
-          _SectionLabel(label: 'Developer'),
+          _SectionLabel(label: 'Developer', color: theme.colorScheme.primary),
           const SizedBox(height: 8),
           Card(
             child: Column(
@@ -412,7 +412,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _SectionLabel extends StatelessWidget {
   final String label;
-  const _SectionLabel({required this.label});
+  final Color? color;
+  const _SectionLabel({required this.label, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -423,7 +424,7 @@ class _SectionLabel extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
           letterSpacing: 0.5,
         ),
       ),
