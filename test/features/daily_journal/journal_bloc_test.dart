@@ -369,75 +369,142 @@ void main() {
     );
   });
 
-  group('JournalEvent props equality', () {
-    test('AddEntry with same fields are equal', () {
-      final date = DateTime(2026, 3, 1);
-      expect(
-        AddEntry(categoryId: 'positive', text: 'hello', date: date),
-        AddEntry(categoryId: 'positive', text: 'hello', date: date),
-      );
-    });
+  group('JournalBloc state-chain: markers, streak, cross-date', () {
+    blocTest<JournalBloc, JournalState>(
+      'AddEntry updates monthCategoryMarkers with correct categoryId',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'positive', text: 'test')),
+      verify: (bloc) {
+        final markers = bloc.state.monthCategoryMarkers;
+        expect(markers['2026-03-10'], isNotNull);
+        expect(markers['2026-03-10']!['positive'], 1);
+      },
+    );
 
-    test('AddEntry with different fields are not equal', () {
-      expect(
-        const AddEntry(categoryId: 'positive', text: 'hello'),
-        isNot(const AddEntry(categoryId: 'negative', text: 'hello')),
-      );
-    });
-
-    test('UpdateEntry with same fields are equal', () {
-      expect(
-        const UpdateEntry(entryId: 'e1', text: 'updated'),
-        const UpdateEntry(entryId: 'e1', text: 'updated'),
-      );
-    });
-
-    test('DeleteEntry with same id are equal', () {
-      expect(const DeleteEntry('e1'), const DeleteEntry('e1'));
-    });
-
-    test('DeleteEntry with different ids are not equal', () {
-      expect(const DeleteEntry('e1'), isNot(const DeleteEntry('e2')));
-    });
-
-    test('SelectDate with same date are equal', () {
-      expect(
-        SelectDate(DateTime(2026, 3, 1)),
-        SelectDate(DateTime(2026, 3, 1)),
-      );
-    });
-
-    test('LoadEntries are equal', () {
-      expect(const LoadEntries(), const LoadEntries());
-    });
-
-    test('LoadMonthMarkers with same fields are equal', () {
-      expect(
-        const LoadMonthMarkers(year: 2026, month: 3),
-        const LoadMonthMarkers(year: 2026, month: 3),
-      );
-    });
-
-    test('LoadStreak are equal', () {
-      expect(const LoadStreak(), const LoadStreak());
-    });
-
-    test('AddVoiceEntry with same fields are equal', () {
-      expect(
+    blocTest<JournalBloc, JournalState>(
+      'AddVoiceEntry updates monthCategoryMarkers with correct categoryId',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) => bloc.add(
         const AddVoiceEntry(
           categoryId: 'gratitude',
-          text: 'thanks',
-          transcript: 'raw',
-          tags: ['a'],
+          text: 'voice test',
+          transcript: 'raw transcript',
         ),
-        const AddVoiceEntry(
-          categoryId: 'gratitude',
-          text: 'thanks',
-          transcript: 'raw',
-          tags: ['a'],
+      ),
+      verify: (bloc) {
+        final markers = bloc.state.monthCategoryMarkers;
+        expect(markers['2026-03-10'], isNotNull);
+        expect(markers['2026-03-10']!['gratitude'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'multiple entries same category increments marker count',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'first'));
+        await Future.delayed(const Duration(milliseconds: 100));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'second'));
+      },
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers['2026-03-10']!['positive'], 2);
+        expect(bloc.state.entries.length, 2);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'AddEntry with explicit date updates markers for target date',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) => bloc.add(
+        AddEntry(
+          categoryId: 'beauty',
+          text: 'explicit date',
+          date: DateTime(2026, 3, 20),
         ),
-      );
-    });
+      ),
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers['2026-03-20'], isNotNull);
+        expect(bloc.state.monthCategoryMarkers['2026-03-20']!['beauty'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'DeleteEntry decrements marker count',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'first'));
+        await Future.delayed(const Duration(milliseconds: 100));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'second'));
+        await Future.delayed(const Duration(milliseconds: 100));
+        final entryId = bloc.state.entries.first.id;
+        bloc.add(DeleteEntry(entryId));
+      },
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers['2026-03-10']!['positive'], 1);
+        expect(bloc.state.entries.length, 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'delete last entry removes date key from markers',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'only'));
+        await Future.delayed(const Duration(milliseconds: 100));
+        final entryId = bloc.state.entries.first.id;
+        bloc.add(DeleteEntry(entryId));
+      },
+      verify: (bloc) {
+        expect(bloc.state.daysWithEntries, isNot(contains('2026-03-10')));
+        expect(bloc.state.entries, isEmpty);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'cross-date add in same month — both date keys present',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 5)),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'day 5'));
+        await Future.delayed(const Duration(milliseconds: 100));
+        bloc.add(
+          AddEntry(
+            categoryId: 'negative',
+            text: 'day 15',
+            date: DateTime(2026, 3, 15),
+          ),
+        );
+      },
+      verify: (bloc) {
+        final markers = bloc.state.monthCategoryMarkers;
+        expect(markers['2026-03-05']?['positive'], 1);
+        expect(markers['2026-03-15']?['negative'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'streak not bumped for past dates beyond yesterday',
+      build: () => JournalBloc(repository: repository),
+      seed: () =>
+          JournalState(selectedDate: DateTime(2026, 1, 1), currentStreak: 3),
+      act: (bloc) => bloc.add(
+        AddEntry(
+          categoryId: 'positive',
+          text: 'old entry',
+          date: DateTime(2026, 1, 1),
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.currentStreak, 3);
+      },
+    );
   });
 
   group('JournalBloc error paths', () {
