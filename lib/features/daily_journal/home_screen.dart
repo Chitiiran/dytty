@@ -31,12 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final bloc = context.read<JournalBloc>();
-      bloc.add(
-        LoadMonthMarkers(year: _focusedDay.year, month: _focusedDay.month),
-      );
-      bloc.add(SelectDate(DateTime.now()));
-      bloc.add(const LoadStreak());
+      context.read<JournalBloc>().add(SelectDate(DateTime.now()));
     });
   }
 
@@ -388,12 +383,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final categoryState = context.read<CategoryCubit>().state;
     final journalBloc = context.read<JournalBloc>();
 
-    // Build entry count map from current entries
-    final filledCounts = <String, int>{};
-    for (final entry in journalBloc.state.entries) {
-      filledCounts[entry.categoryId] =
-          (filledCounts[entry.categoryId] ?? 0) + 1;
-    }
+    // Read from monthCategoryMarkers — always populated by calendar
+    final dateStr = _dateFormat.format(selectedDay);
+    final filledCounts = Map<String, int>.from(
+      journalBloc.state.monthCategoryMarkers[dateStr] ?? {},
+    );
 
     // Categories for this date: active + archived with entries
     final categories = <CategoryConfig>[];

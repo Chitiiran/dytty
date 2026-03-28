@@ -20,7 +20,11 @@ sealed class VoiceCallEvent extends Equatable {
 }
 
 class StartCall extends VoiceCallEvent {
-  const StartCall();
+  final String? systemPrompt;
+  const StartCall({this.systemPrompt});
+
+  @override
+  List<Object?> get props => [systemPrompt];
 }
 
 class EndCall extends VoiceCallEvent {
@@ -297,7 +301,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     });
 
     try {
-      await _service.connect();
+      await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
@@ -470,6 +474,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           text: text,
           transcript: transcript,
           tags: const ['voice-call'],
+          date: DateTime.now(),
         ),
       );
 

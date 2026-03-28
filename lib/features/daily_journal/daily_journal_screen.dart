@@ -22,17 +22,17 @@ class DailyJournalScreen extends StatefulWidget {
 }
 
 class _DailyJournalScreenState extends State<DailyJournalScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<JournalBloc>().add(const LoadEntries());
-    });
-  }
+  // No initState load needed — entries come from the stream
+  // subscription set up by SelectDate in HomeScreen.
 
   void _addEntry(String categoryId, String text) {
-    context.read<JournalBloc>().add(
-      AddEntry(categoryId: categoryId, text: text),
+    final bloc = context.read<JournalBloc>();
+    bloc.add(
+      AddEntry(
+        categoryId: categoryId,
+        text: text,
+        date: bloc.state.selectedDate,
+      ),
     );
     ScaffoldMessenger.of(
       context,
@@ -47,7 +47,9 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
   }
 
   void _deleteEntryOptimistic(CategoryEntry entry) {
-    context.read<JournalBloc>().add(DeleteEntry(entry.id));
+    final bloc = context.read<JournalBloc>();
+    final entryDate = bloc.state.selectedDate;
+    bloc.add(DeleteEntry(entry.id));
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -56,8 +58,12 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
-            context.read<JournalBloc>().add(
-              AddEntry(categoryId: entry.categoryId, text: entry.text),
+            bloc.add(
+              AddEntry(
+                categoryId: entry.categoryId,
+                text: entry.text,
+                date: entryDate,
+              ),
             );
           },
         ),

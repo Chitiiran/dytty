@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
+import 'package:dytty/features/settings/cubit/dev_settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 
@@ -39,6 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final authState = context.watch<AuthBloc>().state;
     final themeMode = context.watch<ThemeCubit>().state;
     final settingsState = context.watch<SettingsCubit>().state;
+    final devState = context.watch<DevSettingsCubit>().state;
     final theme = Theme.of(context);
 
     final displayName = authState is Authenticated
@@ -299,6 +301,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 20),
 
+          // Developer section
+          _SectionLabel(label: 'Developer', color: theme.colorScheme.primary),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.science_rounded),
+                  title: const Text('Minimal system prompt'),
+                  subtitle: const Text('Use short prompt for call testing'),
+                  value: devState.useMinimalPrompt,
+                  onChanged: (_) =>
+                      context.read<DevSettingsCubit>().togglePromptVariant(),
+                ),
+                if (devState.useMinimalPrompt)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
+                    ),
+                    child: Text(
+                      'Active: 24-line minimal prompt (pre-#122)',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
           // About section
           _SectionLabel(label: 'About'),
           const SizedBox(height: 8),
@@ -371,7 +412,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _SectionLabel extends StatelessWidget {
   final String label;
-  const _SectionLabel({required this.label});
+  final Color? color;
+  const _SectionLabel({required this.label, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +424,7 @@ class _SectionLabel extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
           letterSpacing: 0.5,
         ),
       ),

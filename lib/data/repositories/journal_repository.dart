@@ -46,6 +46,19 @@ class JournalRepository {
         .toList();
   }
 
+  /// Streams category entries for a given date.
+  /// Emits immediately from cache, then again when network data arrives.
+  Stream<List<CategoryEntry>> watchCategoryEntries(String date) {
+    return _categoryEntries(date)
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => CategoryEntry.fromFirestore(doc))
+              .toList(),
+        );
+  }
+
   /// Adds a new category entry.
   Future<CategoryEntry> addCategoryEntry(
     String date,
@@ -118,15 +131,20 @@ class JournalRepository {
     String categoryId,
     List<String> dates,
   ) async {
+    if (dates.isEmpty) return {};
+
+    final snapshots = await Future.wait(
+      dates.map(
+        (date) => _categoryEntries(date)
+            .where('category', isEqualTo: categoryId)
+            .orderBy('createdAt', descending: false)
+            .get(),
+      ),
+    );
+
     final result = <String, List<CategoryEntry>>{};
-
-    for (final date in dates) {
-      final snapshot = await _categoryEntries(date)
-          .where('category', isEqualTo: categoryId)
-          .orderBy('createdAt', descending: false)
-          .get();
-
-      result[date] = snapshot.docs
+    for (var i = 0; i < dates.length; i++) {
+      result[dates[i]] = snapshots[i].docs
           .map((doc) => CategoryEntry.fromFirestore(doc))
           .toList();
     }
@@ -194,12 +212,18 @@ class JournalRepository {
     int month,
   ) async {
     final datesWithEntries = await getDaysWithEntries(year, month);
-    final result = <String, Map<String, int>>{};
+    if (datesWithEntries.isEmpty) return {};
 
-    for (final date in datesWithEntries) {
-      final snapshot = await _categoryEntries(date).get();
+    final dateList = datesWithEntries.toList();
+    final snapshots = await Future.wait(
+      dateList.map((date) => _categoryEntries(date).get()),
+    );
+
+    final result = <String, Map<String, int>>{};
+    for (var i = 0; i < dateList.length; i++) {
+      final date = dateList[i];
       final counts = <String, int>{};
-      for (final doc in snapshot.docs) {
+      for (final doc in snapshots[i].docs) {
         final data = doc.data() as Map<String, dynamic>?;
         final categoryId = data?['category'] as String? ?? '';
         if (categoryId.isNotEmpty) {
