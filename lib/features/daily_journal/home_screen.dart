@@ -31,12 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final bloc = context.read<JournalBloc>();
-      bloc.add(
-        LoadMonthMarkers(year: _focusedDay.year, month: _focusedDay.month),
-      );
-      bloc.add(SelectDate(DateTime.now()));
-      bloc.add(const LoadStreak());
+      context.read<JournalBloc>().add(SelectDate(DateTime.now()));
     });
   }
 
