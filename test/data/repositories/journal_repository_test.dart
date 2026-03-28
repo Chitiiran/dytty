@@ -12,6 +12,22 @@ void main() {
     repository = JournalRepository(uid: 'test-user', firestore: firestore);
   });
 
+  group('Firestore persistence', () {
+    test(
+      'repository works with FakeFirebaseFirestore (simulates cached reads)',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repo = JournalRepository(uid: 'test-user', firestore: firestore);
+
+        await repo.addCategoryEntry('2026-03-28', 'positive', 'Cached entry');
+
+        final entries = await repo.getCategoryEntries('2026-03-28');
+        expect(entries.length, 1);
+        expect(entries.first.text, 'Cached entry');
+      },
+    );
+  });
+
   group('JournalRepository', () {
     group('addCategoryEntry', () {
       test('creates daily entry and category entry', () async {

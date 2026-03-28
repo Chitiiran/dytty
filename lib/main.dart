@@ -43,6 +43,15 @@ void main() async {
     FirebaseStorage.instance.useStorageEmulator(emulatorHost, 9199);
   }
 
+  // Enable Firestore offline persistence for cache-first reads.
+  // Skip when using emulators (emulators don't support persistence).
+  if (!useEmulators) {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: 104857600, // 100 MB
+    );
+  }
+
   // Portrait lock only on mobile — Platform check is unsafe on web
   if (!kIsWeb) {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
