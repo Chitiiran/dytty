@@ -118,15 +118,20 @@ class JournalRepository {
     String categoryId,
     List<String> dates,
   ) async {
+    if (dates.isEmpty) return {};
+
+    final snapshots = await Future.wait(
+      dates.map(
+        (date) => _categoryEntries(date)
+            .where('category', isEqualTo: categoryId)
+            .orderBy('createdAt', descending: false)
+            .get(),
+      ),
+    );
+
     final result = <String, List<CategoryEntry>>{};
-
-    for (final date in dates) {
-      final snapshot = await _categoryEntries(date)
-          .where('category', isEqualTo: categoryId)
-          .orderBy('createdAt', descending: false)
-          .get();
-
-      result[date] = snapshot.docs
+    for (var i = 0; i < dates.length; i++) {
+      result[dates[i]] = snapshots[i].docs
           .map((doc) => CategoryEntry.fromFirestore(doc))
           .toList();
     }
