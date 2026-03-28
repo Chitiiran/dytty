@@ -5,7 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:dytty/core/utils/date_utils.dart' as app_date;
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
@@ -509,6 +511,12 @@ void main() {
     late MockAudioStorageService mockAudioStorageService;
     late CategoryDetailScreenRobot robot;
 
+    final dateFormat = DateFormat('yyyy-MM-dd');
+    final today = dateFormat.format(DateTime.now());
+    final yesterday = dateFormat.format(
+      DateTime.now().subtract(const Duration(days: 1)),
+    );
+
     setUp(() {
       firestore = FakeFirebaseFirestore();
       repository = JournalRepository(uid: 'test-user', firestore: firestore);
@@ -607,16 +615,8 @@ void main() {
       tester,
     ) async {
       // Pre-populate Firestore with entries for today
-      await repository.addCategoryEntry(
-        '2026-03-19',
-        'positive',
-        'Morning sunshine',
-      );
-      await repository.addCategoryEntry(
-        '2026-03-19',
-        'positive',
-        'Good coffee',
-      );
+      await repository.addCategoryEntry(today, 'positive', 'Morning sunshine');
+      await repository.addCategoryEntry(today, 'positive', 'Good coffee');
 
       await pumpScreen(tester);
       await tester.pumpAndSettle();
@@ -630,13 +630,9 @@ void main() {
 
     testWidgets('shows entries across multiple date groups', (tester) async {
       // Pre-populate entries across two dates
+      await repository.addCategoryEntry(today, 'positive', 'Today entry');
       await repository.addCategoryEntry(
-        '2026-03-19',
-        'positive',
-        'Today entry',
-      );
-      await repository.addCategoryEntry(
-        '2026-03-18',
+        yesterday,
         'positive',
         'Yesterday entry',
       );
@@ -657,17 +653,18 @@ void main() {
       tester,
     ) async {
       // Pre-populate an entry so the screen renders the list view
-      await repository.addCategoryEntry('2026-03-19', 'positive', 'An entry');
+      await repository.addCategoryEntry(today, 'positive', 'An entry');
       // Save a review summary for the current week
-      // 2026-03-19 is Thursday, Monday of that week is 2026-03-16
+      final now = DateTime.now();
+      final weekStart = dateFormat.format(app_date.mondayOfWeek(now));
       await repository.saveReviewSummary(
         ReviewSummary(
           id: '',
           categoryId: 'positive',
-          weekStart: '2026-03-16',
+          weekStart: weekStart,
           summary: 'A thoughtful week of reflection.',
-          createdAt: DateTime(2026, 3, 19),
-          updatedAt: DateTime(2026, 3, 19),
+          createdAt: now,
+          updatedAt: now,
         ),
       );
 
@@ -682,11 +679,7 @@ void main() {
     testWidgets('tapping a date group header dispatches ToggleDateGroup', (
       tester,
     ) async {
-      await repository.addCategoryEntry(
-        '2026-03-19',
-        'positive',
-        'Visible entry',
-      );
+      await repository.addCategoryEntry(today, 'positive', 'Visible entry');
 
       await pumpScreen(tester);
       await tester.pumpAndSettle();
