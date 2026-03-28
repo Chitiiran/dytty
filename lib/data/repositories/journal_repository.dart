@@ -46,6 +46,19 @@ class JournalRepository {
         .toList();
   }
 
+  /// Streams category entries for a given date.
+  /// Emits immediately from cache, then again when network data arrives.
+  Stream<List<CategoryEntry>> watchCategoryEntries(String date) {
+    return _categoryEntries(date)
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => CategoryEntry.fromFirestore(doc))
+              .toList(),
+        );
+  }
+
   /// Adds a new category entry.
   Future<CategoryEntry> addCategoryEntry(
     String date,

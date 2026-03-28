@@ -1,5 +1,6 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/models/review_summary.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 
@@ -537,6 +538,49 @@ void main() {
             .doc('test-user')
             .get();
         expect(profileDoc.data()?['displayName'], 'Original');
+      });
+    });
+
+    group('watchCategoryEntries', () {
+      test('emits entries when data exists', () async {
+        await repository.addCategoryEntry(
+          '2026-03-28',
+          'positive',
+          'Existing entry',
+        );
+
+        final stream = repository.watchCategoryEntries('2026-03-28');
+        final first = await stream.first;
+
+        expect(first.length, 1);
+        expect(first.first.text, 'Existing entry');
+      });
+
+      test('emits empty list for date with no entries', () async {
+        final stream = repository.watchCategoryEntries('2026-03-28');
+        final first = await stream.first;
+
+        expect(first, isEmpty);
+      });
+
+      test('emits updated entries after add', () async {
+        final stream = repository.watchCategoryEntries('2026-03-28');
+
+        final emissions = <List<CategoryEntry>>[];
+        final sub = stream.listen(emissions.add);
+
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        await repository.addCategoryEntry('2026-03-28', 'positive', 'Streamed');
+
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        await sub.cancel();
+
+        expect(emissions.length, greaterThanOrEqualTo(2));
+        expect(emissions.first, isEmpty);
+        expect(emissions.last.length, 1);
+        expect(emissions.last.first.text, 'Streamed');
       });
     });
   });
