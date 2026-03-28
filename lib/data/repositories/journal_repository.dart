@@ -194,12 +194,18 @@ class JournalRepository {
     int month,
   ) async {
     final datesWithEntries = await getDaysWithEntries(year, month);
-    final result = <String, Map<String, int>>{};
+    if (datesWithEntries.isEmpty) return {};
 
-    for (final date in datesWithEntries) {
-      final snapshot = await _categoryEntries(date).get();
+    final dateList = datesWithEntries.toList();
+    final snapshots = await Future.wait(
+      dateList.map((date) => _categoryEntries(date).get()),
+    );
+
+    final result = <String, Map<String, int>>{};
+    for (var i = 0; i < dateList.length; i++) {
+      final date = dateList[i];
       final counts = <String, int>{};
-      for (final doc in snapshot.docs) {
+      for (final doc in snapshots[i].docs) {
         final data = doc.data() as Map<String, dynamic>?;
         final categoryId = data?['category'] as String? ?? '';
         if (categoryId.isNotEmpty) {
