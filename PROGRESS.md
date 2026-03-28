@@ -4,17 +4,18 @@
 **Calendar radial menu implemented. Issues #54 and #56 addressed in PR #150.**
 
 **Latest on main:**
+- PR #165 merged — fix #163: dynamic dates in CategoryDetailScreen tests (4 failing tests fixed) + added missing @Tags(['golden']) to completion_ring_golden_test (CI green for first time since March 21)
 - PR #149 merged — latency fix (#148): replaced DateTime with Stopwatch, added LatencyTracker with P50/P95, dedicated latencyStream
 - PR #147 merged — deleted playground/ sub-project (#19): removed 11 files / 929 lines causing ~47 CI analysis errors
 - PR #138 merged — completion ring (#34): multi-color segmented ring per calendar date
 - All PR #104 code review refactors landed (#105-#114, PRs #124-#131, #133)
 - Release infra overhaul (#121): shared debug keystore, distribute.sh with tags + GitHub Releases
-- Version on main: 0.1.7+11
+- Version on main: 0.1.8+14
 
 **Open PRs:**
-- PR #150 — feat: calendar radial menu (#54, #56) — 6 commits, 725 tests pass, awaiting manual test + merge
+- PR #150 — feat: calendar radial menu (#54, #56) — 6 commits, awaiting manual test + merge
 
-**Test status:** 725 Flutter + 32 Playwright + 9 Maestro = 766 tests. Coverage: ~82% (CI gate: 50%)
+**Test status:** 741 Flutter (728 non-golden in CI) + 32 Playwright + 9 Maestro = 782 tests. Coverage: ~82% (CI gate: 50%)
 
 **Coverage ratchet plan:**
 | Week | Date | Target | CI `min_coverage` |
