@@ -22,13 +22,8 @@ class DailyJournalScreen extends StatefulWidget {
 }
 
 class _DailyJournalScreenState extends State<DailyJournalScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<JournalBloc>().add(const LoadEntries());
-    });
-  }
+  // No initState load needed — entries come from the stream
+  // subscription set up by SelectDate in HomeScreen.
 
   void _addEntry(String categoryId, String text) {
     context.read<JournalBloc>().add(
