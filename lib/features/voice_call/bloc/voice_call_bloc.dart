@@ -470,6 +470,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           text: text,
           transcript: transcript,
           tags: const ['voice-call'],
+          date: DateTime.now(),
         ),
       );
 
