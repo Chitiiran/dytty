@@ -280,6 +280,15 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     emit(
       state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
     );
+
+    // Re-subscribe stream if date changed
+    if (targetDate != state.selectedDate) {
+      await _entriesSubscription?.cancel();
+      _entriesSubscription = _repository
+          .watchCategoryEntries(dateString)
+          .listen((entries) => add(_EntriesUpdated(entries)));
+    }
+
     try {
       await _repository.addCategoryEntry(
         dateString,
@@ -329,6 +338,15 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     emit(
       state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
     );
+
+    // Re-subscribe stream if date changed
+    if (targetDate != state.selectedDate) {
+      await _entriesSubscription?.cancel();
+      _entriesSubscription = _repository
+          .watchCategoryEntries(dateString)
+          .listen((entries) => add(_EntriesUpdated(entries)));
+    }
+
     try {
       await _repository.addCategoryEntry(
         dateString,
@@ -494,7 +512,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   }
 
   void _onEntriesUpdated(_EntriesUpdated event, Emitter<JournalState> emit) {
-    emit(state.copyWith(status: JournalStatus.loaded, entries: event.entries));
+    // Don't override saving status — let mutation handlers control transitions.
+    final status = state.status == JournalStatus.saving
+        ? JournalStatus.saving
+        : JournalStatus.loaded;
+    emit(state.copyWith(status: status, entries: event.entries));
   }
 
   @override
