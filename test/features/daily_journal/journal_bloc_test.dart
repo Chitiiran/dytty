@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,19 +32,16 @@ void main() {
     blocTest<JournalBloc, JournalState>(
       'SelectDate updates selectedDate and loads entries, markers, and streak',
       build: () => JournalBloc(repository: repository),
-      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
-      expect: () => [
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loading)
-            .having(
-              (s) => s.selectedDate,
-              'selectedDate',
-              DateTime(2026, 3, 1),
-            ),
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loaded)
-            .having((s) => s.entries, 'entries', isEmpty),
-      ],
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        // Wait for stream + parallel fetches to complete
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.selectedDate, DateTime(2026, 3, 1));
+        expect(bloc.state.entries, isEmpty);
+      },
     );
 
     blocTest<JournalBloc, JournalState>(
@@ -75,108 +74,75 @@ void main() {
     );
 
     blocTest<JournalBloc, JournalState>(
-      'AddEntry adds entry and reloads',
+      'AddEntry adds entry and stream updates entries',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
-      act: (bloc) =>
-          bloc.add(const AddEntry(categoryId: 'beauty', text: 'A sunset')),
-      expect: () => [
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.saving,
-        ),
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loaded)
-            .having((s) => s.entries.length, 'entries.length', 1)
-            .having(
-              (s) => s.entries.first.text,
-              'entries.first.text',
-              'A sunset',
-            ),
-      ],
+      act: (bloc) async {
+        // First subscribe to entries via SelectDate
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'beauty', text: 'A sunset'));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'A sunset');
+      },
     );
 
     blocTest<JournalBloc, JournalState>(
       'AddVoiceEntry saves entry with voice source and transcript',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
-      act: (bloc) => bloc.add(
-        const AddVoiceEntry(
-          categoryId: 'gratitude',
-          text: 'Grateful for sunshine',
-          transcript: 'I am really grateful for the sunshine today',
-          tags: ['sunshine', 'gratitude'],
-        ),
-      ),
-      expect: () => [
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.saving,
-        ),
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loaded)
-            .having((s) => s.entries.length, 'entries.length', 1)
-            .having(
-              (s) => s.entries.first.source,
-              'entries.first.source',
-              'voice',
-            )
-            .having(
-              (s) => s.entries.first.transcript,
-              'entries.first.transcript',
-              'I am really grateful for the sunshine today',
-            )
-            .having((s) => s.entries.first.tags, 'entries.first.tags', [
-              'sunshine',
-              'gratitude',
-            ]),
-      ],
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(
+          const AddVoiceEntry(
+            categoryId: 'gratitude',
+            text: 'Grateful for sunshine',
+            transcript: 'I am really grateful for the sunshine today',
+            tags: ['sunshine', 'gratitude'],
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.source, 'voice');
+        expect(
+          bloc.state.entries.first.transcript,
+          'I am really grateful for the sunshine today',
+        );
+        expect(bloc.state.entries.first.tags, ['sunshine', 'gratitude']);
+      },
     );
 
     blocTest<JournalBloc, JournalState>(
       'UpdateEntry updates entry text',
       build: () => JournalBloc(repository: repository),
-      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
       setUp: () async {
         await repository.addCategoryEntry('2026-03-01', 'identity', 'Original');
       },
       act: (bloc) async {
-        // Load first to get the entry ID
-        bloc.add(const LoadEntries());
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Subscribe to stream first
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
         final entryId = bloc.state.entries.first.id;
         bloc.add(UpdateEntry(entryId: entryId, text: 'Updated'));
+        await Future.delayed(const Duration(milliseconds: 200));
       },
-      expect: () => [
-        // LoadEntries: loading
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.loading,
-        ),
-        // LoadEntries: loaded with Original
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loaded)
-            .having((s) => s.entries.first.text, 'text', 'Original'),
-        // UpdateEntry: saving
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.saving,
-        ),
-        // UpdateEntry: loaded with Updated
-        isA<JournalState>()
-            .having((s) => s.status, 'status', JournalStatus.loaded)
-            .having((s) => s.entries.first.text, 'text', 'Updated'),
-      ],
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.entries.first.text, 'Updated');
+      },
     );
 
     blocTest<JournalBloc, JournalState>(
       'DeleteEntry removes entry',
       build: () => JournalBloc(repository: repository),
-      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
       setUp: () async {
         await repository.addCategoryEntry(
           '2026-03-01',
@@ -185,33 +151,16 @@ void main() {
         );
       },
       act: (bloc) async {
-        bloc.add(const LoadEntries());
-        await Future.delayed(const Duration(milliseconds: 100));
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
         final entryId = bloc.state.entries.first.id;
         bloc.add(DeleteEntry(entryId));
+        await Future.delayed(const Duration(milliseconds: 200));
       },
-      expect: () => [
-        // LoadEntries: loading
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.loading,
-        ),
-        // LoadEntries: loaded with 1 entry
-        isA<JournalState>().having(
-          (s) => s.entries.length,
-          'entries.length',
-          1,
-        ),
-        // DeleteEntry: saving
-        isA<JournalState>().having(
-          (s) => s.status,
-          'status',
-          JournalStatus.saving,
-        ),
-        // DeleteEntry: loaded with 0 entries
-        isA<JournalState>().having((s) => s.entries, 'entries', isEmpty),
-      ],
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.entries, isEmpty);
+      },
     );
 
     blocTest<JournalBloc, JournalState>(
@@ -324,14 +273,20 @@ void main() {
       'AddVoiceEntry with explicit date saves to correct date',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 1, 1)),
-      act: (bloc) => bloc.add(
-        AddVoiceEntry(
-          categoryId: 'beauty',
-          text: 'Voice on specific date',
-          transcript: 'voice transcript',
-          date: DateTime(2026, 3, 20),
-        ),
-      ),
+      act: (bloc) async {
+        // Subscribe to the target date first
+        bloc.add(SelectDate(DateTime(2026, 3, 20)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(
+          AddVoiceEntry(
+            categoryId: 'beauty',
+            text: 'Voice on specific date',
+            transcript: 'voice transcript',
+            date: DateTime(2026, 3, 20),
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
       verify: (bloc) {
         expect(bloc.state.selectedDate, DateTime(2026, 3, 20));
         expect(bloc.state.entries.length, 1);
@@ -345,10 +300,11 @@ void main() {
       build: () => JournalBloc(repository: repository),
       act: (bloc) async {
         bloc.add(SelectDate(DateTime(2026, 3, 5)));
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 200));
         bloc.add(
           const AddEntry(categoryId: 'negative', text: 'Sequential test'),
         );
+        await Future.delayed(const Duration(milliseconds: 200));
       },
       verify: (bloc) {
         expect(bloc.state.selectedDate, DateTime(2026, 3, 5));
@@ -365,6 +321,57 @@ void main() {
           bloc.add(const AddEntry(categoryId: 'identity', text: 'Today entry')),
       verify: (bloc) {
         expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'SelectDate subscribes to entry stream and emits on updates',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        await repository.addCategoryEntry(
+          '2026-03-01',
+          'positive',
+          'Initial entry',
+        );
+      },
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        // Add another entry — stream should auto-update
+        await repository.addCategoryEntry(
+          '2026-03-01',
+          'gratitude',
+          'Stream update',
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.entries.length, 2);
+        expect(
+          bloc.state.entries.map((e) => e.text).toList(),
+          containsAll(['Initial entry', 'Stream update']),
+        );
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'switching dates cancels previous stream subscription',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        await repository.addCategoryEntry('2026-03-01', 'positive', 'March 1');
+        await repository.addCategoryEntry('2026-03-02', 'positive', 'March 2');
+      },
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(SelectDate(DateTime(2026, 3, 2)));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.selectedDate, DateTime(2026, 3, 2));
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'March 2');
       },
     );
   });
@@ -446,6 +453,33 @@ void main() {
     setUp(() {
       mockRepository = MockJournalRepository();
     });
+
+    blocTest<JournalBloc, JournalState>(
+      'SelectDate emits error when repository throws',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenThrow(Exception('markers failed'));
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenThrow(Exception('streak failed'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
+      expect: () => [
+        isA<JournalState>().having(
+          (s) => s.status,
+          'status',
+          JournalStatus.loading,
+        ),
+        isA<JournalState>()
+            .having((s) => s.status, 'status', JournalStatus.error)
+            .having((s) => s.error, 'error', contains('markers failed')),
+      ],
+    );
 
     blocTest<JournalBloc, JournalState>(
       'LoadEntries emits error when repository throws',
