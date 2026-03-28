@@ -274,6 +274,43 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     }
   }
 
+  /// Shared optimistic marker/streak update for both AddEntry and AddVoiceEntry.
+  /// Entries come from the snapshot stream — this only updates markers and streak.
+  void _emitOptimisticMarkerUpdate(
+    Emitter<JournalState> emit,
+    String categoryId,
+    DateTime targetDate,
+  ) {
+    final dateString = JournalState._dateFormat.format(targetDate);
+
+    final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+    final dateMarkers = currentMarkers[dateString] ?? {};
+    dateMarkers[categoryId] = (dateMarkers[categoryId] ?? 0) + 1;
+    currentMarkers[dateString] = dateMarkers;
+
+    final focusKey = _cacheKey(targetDate.year, targetDate.month);
+    _markerCache[focusKey] = currentMarkers;
+
+    final isNewDay = !state.daysWithEntries.contains(dateString);
+    final todayStr = JournalState._dateFormat.format(DateTime.now());
+    final yesterdayStr = JournalState._dateFormat.format(
+      DateTime.now().subtract(const Duration(days: 1)),
+    );
+    int optimisticStreak = state.currentStreak;
+    if (isNewDay && (dateString == todayStr || dateString == yesterdayStr)) {
+      optimisticStreak = state.currentStreak + 1;
+    }
+
+    emit(
+      state.copyWith(
+        status: JournalStatus.loaded,
+        monthCategoryMarkers: currentMarkers,
+        currentStreak: optimisticStreak,
+        lastJournalDate: dateString,
+      ),
+    );
+  }
+
   Future<void> _onAddEntry(AddEntry event, Emitter<JournalState> emit) async {
     final targetDate = event.date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
@@ -295,35 +332,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.categoryId,
         event.text,
       );
-      // Entries are updated via the stream subscription (_EntriesUpdated).
-      // Optimistically update markers and streak only.
-      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
-      final dateMarkers = currentMarkers[dateString] ?? {};
-      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
-      currentMarkers[dateString] = dateMarkers;
-
-      final focusKey = _cacheKey(targetDate.year, targetDate.month);
-      _markerCache[focusKey] = currentMarkers;
-
-      final isNewDay = !state.daysWithEntries.contains(dateString);
-      final todayStr = JournalState._dateFormat.format(DateTime.now());
-      final yesterdayStr = JournalState._dateFormat.format(
-        DateTime.now().subtract(const Duration(days: 1)),
-      );
-      int optimisticStreak = state.currentStreak;
-      if (isNewDay) {
-        if (dateString == todayStr || dateString == yesterdayStr) {
-          optimisticStreak = state.currentStreak + 1;
-        }
-      }
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          monthCategoryMarkers: currentMarkers,
-          currentStreak: optimisticStreak,
-          lastJournalDate: dateString,
-        ),
-      );
+      _emitOptimisticMarkerUpdate(emit, event.categoryId, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
@@ -356,35 +365,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         transcript: event.transcript,
         tags: event.tags,
       );
-      // Entries are updated via the stream subscription (_EntriesUpdated).
-      // Optimistically update markers and streak only.
-      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
-      final dateMarkers = currentMarkers[dateString] ?? {};
-      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
-      currentMarkers[dateString] = dateMarkers;
-
-      final focusKey = _cacheKey(targetDate.year, targetDate.month);
-      _markerCache[focusKey] = currentMarkers;
-
-      final isNewDay = !state.daysWithEntries.contains(dateString);
-      final todayStr = JournalState._dateFormat.format(DateTime.now());
-      final yesterdayStr = JournalState._dateFormat.format(
-        DateTime.now().subtract(const Duration(days: 1)),
-      );
-      int optimisticStreak = state.currentStreak;
-      if (isNewDay) {
-        if (dateString == todayStr || dateString == yesterdayStr) {
-          optimisticStreak = state.currentStreak + 1;
-        }
-      }
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          monthCategoryMarkers: currentMarkers,
-          currentStreak: optimisticStreak,
-          lastJournalDate: dateString,
-        ),
-      );
+      _emitOptimisticMarkerUpdate(emit, event.categoryId, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
