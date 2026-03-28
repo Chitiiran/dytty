@@ -24,4 +24,21 @@ void main() {
       expect(dailyCallSystemPrompt, contains('identity'));
     });
   });
+
+  group('dailyCallMinimalPrompt', () {
+    test('is non-empty', () {
+      expect(dailyCallMinimalPrompt.trim(), isNotEmpty);
+    });
+
+    test('is shorter than detailed prompt', () {
+      expect(
+        dailyCallMinimalPrompt.length,
+        lessThan(dailyCallSystemPrompt.length),
+      );
+    });
+
+    test('is different from detailed prompt', () {
+      expect(dailyCallMinimalPrompt, isNot(equals(dailyCallSystemPrompt)));
+    });
+  });
 }
