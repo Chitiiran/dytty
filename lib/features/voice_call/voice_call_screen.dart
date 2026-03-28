@@ -11,7 +11,9 @@ import 'package:dytty/services/call_session.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
+import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/data/models/category_config.dart';
+import 'package:dytty/features/settings/cubit/dev_settings_cubit.dart';
 
 class VoiceCallScreen extends StatefulWidget {
   final AudioPlaybackService? playbackService;
@@ -71,6 +73,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   Future<void> _startCall() async {
+    final useMinimal = context.read<DevSettingsCubit>().state.useMinimalPrompt;
+
     _session?.dispose();
     final recorder = AudioRecorder();
     if (!await recorder.hasPermission()) {
@@ -81,7 +85,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     final playback = widget.playbackService ?? PcmSoundPlaybackService();
     _session = CallSession(recorder: recorder, playback: playback, bloc: _bloc);
 
-    _bloc.add(const StartCall());
+    _bloc.add(
+      StartCall(systemPrompt: useMinimal ? dailyCallMinimalPrompt : null),
+    );
     await _session!.initPlayback();
     await _session!.startRecording();
   }
