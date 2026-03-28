@@ -547,6 +547,284 @@ void main() {
     );
   });
 
+  group('JournalBloc integration: multi-action user sessions', () {
+    blocTest<JournalBloc, JournalState>(
+      'text + voice + delete on same date — entries and markers stay consistent',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 10)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Add text entry
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'text entry'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Add voice entry to different category
+        bloc.add(
+          const AddVoiceEntry(
+            categoryId: 'gratitude',
+            text: 'voice summary',
+            transcript: 'full voice transcript',
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Delete the text entry
+        final textEntry = bloc.state.entries.firstWhere(
+          (e) => e.categoryId == 'positive',
+        );
+        bloc.add(DeleteEntry(textEntry.id));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        // Only voice entry remains
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.categoryId, 'gratitude');
+        expect(bloc.state.entries.first.source, 'voice');
+
+        // Markers: positive removed (was 1, decremented to 0), gratitude stays
+        final markers = bloc.state.monthCategoryMarkers['2026-03-10']!;
+        expect(markers.containsKey('positive'), false);
+        expect(markers['gratitude'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'navigate dates back and forth — entries and markers stay correct',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        await repository.addCategoryEntry('2026-03-05', 'positive', 'day5');
+        await repository.addCategoryEntry('2026-03-05', 'negative', 'day5neg');
+        await repository.addCategoryEntry('2026-03-12', 'beauty', 'day12');
+      },
+      act: (bloc) async {
+        // Go to March 5
+        bloc.add(SelectDate(DateTime(2026, 3, 5)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Verify March 5 entries loaded
+        expect(bloc.state.entries.length, 2);
+
+        // Navigate to March 12
+        bloc.add(SelectDate(DateTime(2026, 3, 12)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Verify March 12 entries loaded, March 5 gone from entries
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'day12');
+
+        // Navigate back to March 5
+        bloc.add(SelectDate(DateTime(2026, 3, 5)));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        // March 5 entries should be back
+        expect(bloc.state.entries.length, 2);
+        expect(bloc.state.entries.map((e) => e.categoryId).toSet(), {
+          'positive',
+          'negative',
+        });
+
+        // Both dates should have markers
+        expect(bloc.state.monthCategoryMarkers['2026-03-05'], isNotNull);
+        expect(bloc.state.monthCategoryMarkers['2026-03-12'], isNotNull);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'add entries across multiple categories — per-category counts correct',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 10)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Fill all 5 categories
+        for (final cat in [
+          'positive',
+          'negative',
+          'gratitude',
+          'beauty',
+          'identity',
+        ]) {
+          bloc.add(AddEntry(categoryId: cat, text: '$cat entry'));
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+
+        // Add a second entry to positive
+        bloc.add(
+          const AddEntry(categoryId: 'positive', text: 'another positive'),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.entries.length, 6);
+
+        final markers = bloc.state.monthCategoryMarkers['2026-03-10']!;
+        expect(markers['positive'], 2);
+        expect(markers['negative'], 1);
+        expect(markers['gratitude'], 1);
+        expect(markers['beauty'], 1);
+        expect(markers['identity'], 1);
+
+        // entriesForCategory should filter correctly
+        expect(bloc.state.entriesForCategory('positive').length, 2);
+        expect(bloc.state.entriesForCategory('beauty').length, 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'add entry on date A, navigate to B, add entry, navigate back — both dates intact',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        // Date A: March 5
+        bloc.add(SelectDate(DateTime(2026, 3, 5)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'on day 5'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Date B: March 20
+        bloc.add(SelectDate(DateTime(2026, 3, 20)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'negative', text: 'on day 20'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Navigate back to A
+        bloc.add(SelectDate(DateTime(2026, 3, 5)));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        // Should see date A's entries
+        expect(bloc.state.entries.length, 1);
+        expect(bloc.state.entries.first.text, 'on day 5');
+
+        // Both dates should have markers
+        final markers = bloc.state.monthCategoryMarkers;
+        expect(markers['2026-03-05']?['positive'], 1);
+        expect(markers['2026-03-20']?['negative'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'delete then undo (re-add) — entry and markers restored on correct date',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 10)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Add two entries
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'keep'));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'gratitude', text: 'will delete'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Delete the gratitude entry
+        final gratitudeEntry = bloc.state.entries.firstWhere(
+          (e) => e.categoryId == 'gratitude',
+        );
+        bloc.add(DeleteEntry(gratitudeEntry.id));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Verify delete happened
+        expect(bloc.state.entries.length, 1);
+        expect(
+          bloc.state.monthCategoryMarkers['2026-03-10']!.containsKey(
+            'gratitude',
+          ),
+          false,
+        );
+
+        // Undo: re-add with explicit date (simulates undo snackbar)
+        bloc.add(
+          AddEntry(
+            categoryId: 'gratitude',
+            text: 'will delete',
+            date: DateTime(2026, 3, 10),
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        // Both entries restored
+        expect(bloc.state.entries.length, 2);
+        expect(bloc.state.entries.map((e) => e.categoryId).toSet(), {
+          'positive',
+          'gratitude',
+        });
+
+        // Markers restored
+        final markers = bloc.state.monthCategoryMarkers['2026-03-10']!;
+        expect(markers['positive'], 1);
+        expect(markers['gratitude'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'markers survive SelectDate round-trip via cache',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        // Add entries on March 10
+        bloc.add(SelectDate(DateTime(2026, 3, 10)));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'cached'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Navigate to different month (April)
+        bloc.add(SelectDate(DateTime(2026, 4, 1)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Navigate back to March — should hit marker cache
+        bloc.add(const LoadMonthMarkers(year: 2026, month: 3));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        // March markers should be intact from cache
+        expect(bloc.state.monthCategoryMarkers['2026-03-10']?['positive'], 1);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'mixed voice and text entries — voice metadata preserved alongside text',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 10)));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Text entry
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'typed'));
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // Voice entry to same category
+        bloc.add(
+          const AddVoiceEntry(
+            categoryId: 'positive',
+            text: 'spoken summary',
+            transcript: 'full spoken words',
+            tags: ['voice-call'],
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.entries.length, 2);
+        expect(bloc.state.monthCategoryMarkers['2026-03-10']!['positive'], 2);
+
+        final textEntry = bloc.state.entries.firstWhere(
+          (e) => e.source == 'manual',
+        );
+        final voiceEntry = bloc.state.entries.firstWhere(
+          (e) => e.source == 'voice',
+        );
+
+        expect(textEntry.text, 'typed');
+        expect(textEntry.transcript, isNull);
+
+        expect(voiceEntry.text, 'spoken summary');
+        expect(voiceEntry.transcript, 'full spoken words');
+        expect(voiceEntry.tags, ['voice-call']);
+      },
+    );
+  });
+
   group('JournalBloc error paths', () {
     late MockJournalRepository mockRepository;
 
