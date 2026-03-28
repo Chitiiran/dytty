@@ -199,6 +199,46 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     return source.map((k, v) => MapEntry(k, Map<String, int>.from(v)));
   }
 
+  /// Shared optimistic update for both AddEntry and AddVoiceEntry.
+  /// Called after the repository call succeeds.
+  void _emitOptimisticUpdate(
+    Emitter<JournalState> emit,
+    CategoryEntry created,
+    DateTime targetDate,
+  ) {
+    final dateString = JournalState._dateFormat.format(targetDate);
+    final updatedEntries = [...state.entries, created];
+
+    final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+    final dateMarkers = currentMarkers[dateString] ?? {};
+    dateMarkers[created.categoryId] =
+        (dateMarkers[created.categoryId] ?? 0) + 1;
+    currentMarkers[dateString] = dateMarkers;
+
+    final focusKey = _cacheKey(targetDate.year, targetDate.month);
+    _markerCache[focusKey] = currentMarkers;
+
+    final isNewDay = !state.daysWithEntries.contains(dateString);
+    final todayStr = JournalState._dateFormat.format(DateTime.now());
+    final yesterdayStr = JournalState._dateFormat.format(
+      DateTime.now().subtract(const Duration(days: 1)),
+    );
+    int optimisticStreak = state.currentStreak;
+    if (isNewDay && (dateString == todayStr || dateString == yesterdayStr)) {
+      optimisticStreak = state.currentStreak + 1;
+    }
+
+    emit(
+      state.copyWith(
+        status: JournalStatus.loaded,
+        entries: updatedEntries,
+        monthCategoryMarkers: currentMarkers,
+        currentStreak: optimisticStreak,
+        lastJournalDate: dateString,
+      ),
+    );
+  }
+
   Future<void> _onLoadEntries(
     LoadEntries event,
     Emitter<JournalState> emit,
@@ -257,40 +297,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.categoryId,
         event.text,
       );
-      // Optimistic: update UI immediately with the new entry
-      final updatedEntries = [...state.entries, created];
-
-      // Optimistic: update category markers
-      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
-      final dateMarkers = currentMarkers[dateString] ?? {};
-      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
-      currentMarkers[dateString] = dateMarkers;
-
-      // Update cache
-      final focusKey = _cacheKey(targetDate.year, targetDate.month);
-      _markerCache[focusKey] = currentMarkers;
-
-      // Optimistic streak: if this date wasn't in markers, it's a new day
-      final isNewDay = !state.daysWithEntries.contains(dateString);
-      final todayStr = JournalState._dateFormat.format(DateTime.now());
-      final yesterdayStr = JournalState._dateFormat.format(
-        DateTime.now().subtract(const Duration(days: 1)),
-      );
-      int optimisticStreak = state.currentStreak;
-      if (isNewDay) {
-        if (dateString == todayStr || dateString == yesterdayStr) {
-          optimisticStreak = state.currentStreak + 1;
-        }
-      }
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          entries: updatedEntries,
-          monthCategoryMarkers: currentMarkers,
-          currentStreak: optimisticStreak,
-          lastJournalDate: dateString,
-        ),
-      );
+      _emitOptimisticUpdate(emit, created, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
@@ -314,39 +321,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         transcript: event.transcript,
         tags: event.tags,
       );
-      // Optimistic: update UI immediately with the new entry
-      final updatedEntries = [...state.entries, created];
-
-      // Optimistic: update category markers
-      final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
-      final dateMarkers = currentMarkers[dateString] ?? {};
-      dateMarkers[event.categoryId] = (dateMarkers[event.categoryId] ?? 0) + 1;
-      currentMarkers[dateString] = dateMarkers;
-
-      // Update cache
-      final focusKey = _cacheKey(targetDate.year, targetDate.month);
-      _markerCache[focusKey] = currentMarkers;
-
-      final isNewDay = !state.daysWithEntries.contains(dateString);
-      final todayStr = JournalState._dateFormat.format(DateTime.now());
-      final yesterdayStr = JournalState._dateFormat.format(
-        DateTime.now().subtract(const Duration(days: 1)),
-      );
-      int optimisticStreak = state.currentStreak;
-      if (isNewDay) {
-        if (dateString == todayStr || dateString == yesterdayStr) {
-          optimisticStreak = state.currentStreak + 1;
-        }
-      }
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          entries: updatedEntries,
-          monthCategoryMarkers: currentMarkers,
-          currentStreak: optimisticStreak,
-          lastJournalDate: dateString,
-        ),
-      );
+      _emitOptimisticUpdate(emit, created, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
