@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/settings/cubit/dev_settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/data/models/category_config.dart';
@@ -21,6 +22,9 @@ class MockCategoryCubit extends MockCubit<CategoryState>
 
 class MockSettingsCubit extends MockCubit<SettingsState>
     implements SettingsCubit {}
+
+class MockDevSettingsCubit extends MockCubit<DevSettingsState>
+    implements DevSettingsCubit {}
 
 class MockThemeCubit extends MockCubit<ThemeMode> implements ThemeCubit {}
 
@@ -41,17 +45,20 @@ extension PumpApp on WidgetTester {
     JournalState? journalState,
     CategoryState? categoryState,
     SettingsState? settingsState,
+    DevSettingsState? devSettingsState,
     ThemeMode? themeMode,
     MockAuthBloc? authBloc,
     MockJournalBloc? journalBloc,
     MockCategoryCubit? categoryCubit,
     MockSettingsCubit? settingsCubit,
+    MockDevSettingsCubit? devSettingsCubit,
     MockThemeCubit? themeCubit,
   }) async {
     final mockAuthBloc = authBloc ?? MockAuthBloc();
     final mockJournalBloc = journalBloc ?? MockJournalBloc();
     final mockCategoryCubit = categoryCubit ?? MockCategoryCubit();
     final mockSettingsCubit = settingsCubit ?? MockSettingsCubit();
+    final mockDevSettingsCubit = devSettingsCubit ?? MockDevSettingsCubit();
     final mockThemeCubit = themeCubit ?? MockThemeCubit();
 
     // Set default states
@@ -73,6 +80,9 @@ extension PumpApp on WidgetTester {
     when(
       () => mockSettingsCubit.state,
     ).thenReturn(settingsState ?? const SettingsState(loaded: true));
+    when(
+      () => mockDevSettingsCubit.state,
+    ).thenReturn(devSettingsState ?? const DevSettingsState());
     when(() => mockThemeCubit.state).thenReturn(themeMode ?? ThemeMode.system);
 
     await pumpWidget(
@@ -82,6 +92,7 @@ extension PumpApp on WidgetTester {
           BlocProvider<JournalBloc>.value(value: mockJournalBloc),
           BlocProvider<CategoryCubit>.value(value: mockCategoryCubit),
           BlocProvider<SettingsCubit>.value(value: mockSettingsCubit),
+          BlocProvider<DevSettingsCubit>.value(value: mockDevSettingsCubit),
           BlocProvider<ThemeCubit>.value(value: mockThemeCubit),
         ],
         child: MaterialApp(home: widget),
