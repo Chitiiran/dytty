@@ -9,6 +9,7 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/daily_journal/daily_journal_screen.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/settings/cubit/dev_settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/settings/cubit/theme_cubit.dart';
 import 'package:dytty/features/settings/settings_screen.dart';
@@ -146,6 +147,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
                 CategoryCubit(repository: _categoryRepository)
                   ..loadCategories(),
           ),
+          BlocProvider(create: (_) => DevSettingsCubit()..loadSettings()),
         ],
         child: _themedApp(
           context,
