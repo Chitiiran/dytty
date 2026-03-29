@@ -385,13 +385,19 @@ TestLayer buildPlaywrightLayer(
 TestLayer buildMaestroLayer(
   TestLayerResults results,
   List<Screenshot> screenshots,
-  String environment,
-) {
+  String environment, {
+  String label = 'Emulator',
+}) {
+  final isDevice = label != 'Emulator';
+  final id = isDevice ? 'maestro-device' : 'maestro';
+  final cmd = isDevice
+      ? 'bash scripts/device-test.sh'
+      : 'bash scripts/maestro-test.sh';
   return TestLayer(
-    name: 'Device E2E — Maestro',
-    id: 'maestro',
+    name: 'Maestro E2E — $label',
+    id: id,
     suites: results.suites,
-    generateCmd: 'bash scripts/maestro-test.sh',
+    generateCmd: cmd,
     screenshots: screenshots,
     durationMs: results.durationMs,
     environment: environment,

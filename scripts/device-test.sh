@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAESTRO_DIR="$PROJECT_DIR/.maestro"
 HELPERS_DIR="$MAESTRO_DIR/helpers"
-SCREENSHOT_DIR="$PROJECT_DIR/test-output/latest/device-e2e/maestro"
+SCREENSHOT_DIR="$PROJECT_DIR/test-output/latest/device-e2e/device"
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 
 # Parse arguments
@@ -130,6 +130,19 @@ echo "  login.yaml -> login-device.yaml (real Google Sign-In)"
 
 # ── Create output directory ───────────────────────────
 mkdir -p "$SCREENSHOT_DIR"
+
+# ── Write env.json metadata ──────────────────────────
+DEVICE_MODEL=$(adb -s "$DEVICE_SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
+DEVICE_SDK=$(adb -s "$DEVICE_SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
+cat > "$SCREENSHOT_DIR/env.json" <<ENVJSON
+{
+  "runner": "physical",
+  "device": "${DEVICE_MODEL:-unknown}",
+  "serial": "${DEVICE_SERIAL}",
+  "sdk": "${DEVICE_SDK:-unknown}",
+  "platform": "android"
+}
+ENVJSON
 
 # ── Run Maestro flows ─────────────────────────────────
 echo ""

@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: device-screenshots
-          path: test-output/latest/device-e2e/maestro/
+          path: test-output/latest/device-e2e/device/
           retention-days: 14
 
   analyze-test:
@@ -240,13 +240,13 @@ jobs:
           disable-animations: true
           script: |
             adb install build/app/outputs/flutter-apk/app-debug.apk
-            mkdir -p test-output/latest/device-e2e/maestro
-            maestro test --debug-output test-output/latest/device-e2e/maestro --format junit --output test-output/latest/device-e2e/maestro/results.xml --include-tags=smoke,state .maestro/
+            mkdir -p test-output/latest/device-e2e/emulator
+            maestro test --debug-output test-output/latest/device-e2e/emulator --format junit --output test-output/latest/device-e2e/emulator/results.xml --include-tags=smoke,state .maestro/
 
       - name: Upload Maestro screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: maestro-screenshots
-          path: test-output/latest/device-e2e/maestro/
+          path: test-output/latest/device-e2e/emulator/
           retention-days: 14
