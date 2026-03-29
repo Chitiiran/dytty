@@ -247,6 +247,42 @@ void main() {
     });
 
     blocTest<JournalBloc, JournalState>(
+      'AddEntry includes entry in state.entries optimistically',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) =>
+          bloc.add(const AddEntry(categoryId: 'positive', text: 'Optimistic')),
+      verify: (bloc) {
+        // Entry must be in state.entries immediately after save completes,
+        // without relying on Firestore stream (critical for real device).
+        expect(bloc.state.entries, isNotEmpty);
+        expect(bloc.state.entries.any((e) => e.text == 'Optimistic'), isTrue);
+        expect(bloc.state.status, JournalStatus.loaded);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'AddVoiceEntry includes entry in state.entries optimistically',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: DateTime(2026, 3, 1)),
+      act: (bloc) => bloc.add(
+        const AddVoiceEntry(
+          categoryId: 'gratitude',
+          text: 'Voice optimistic',
+          transcript: 'Full transcript here',
+          tags: ['test'],
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.entries, isNotEmpty);
+        expect(
+          bloc.state.entries.any((e) => e.text == 'Voice optimistic'),
+          isTrue,
+        );
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
       'AddEntry updates daysWithEntries (calendar markers)',
       build: () => JournalBloc(repository: repository),
       seed: () => JournalState(selectedDate: DateTime(2026, 3, 10)),
