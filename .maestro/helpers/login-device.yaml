@@ -18,8 +18,9 @@ name: "Reusable: login via real Google Sign-In (device)"
     timeout: 10000
 
 # Select the test account from the Google account picker.
+# DEVICE_TEST_EMAIL must be set in the environment.
 - tapOn:
-    text: ".*creativecraftours.*"
+    text: ".*${DEVICE_TEST_EMAIL}.*"
     retryTapIfNoChange: true
 
 # Wait for auth + Firestore data loading + home screen render.

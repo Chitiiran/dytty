@@ -57,6 +57,16 @@ if [[ -d "$LOCALAPPDATA/Android/Sdk/platform-tools" ]]; then
   export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
 fi
 
+# ── Load test email from .env if not set ──────────────
+if [[ -z "${DEVICE_TEST_EMAIL:-}" && -f "$PROJECT_DIR/.env" ]]; then
+  DEVICE_TEST_EMAIL=$(grep DEVICE_TEST_EMAIL "$PROJECT_DIR/.env" | cut -d= -f2 || true)
+fi
+if [[ -z "${DEVICE_TEST_EMAIL:-}" ]]; then
+  echo "ERROR: DEVICE_TEST_EMAIL not set. Add to .env or export it."
+  exit 1
+fi
+export DEVICE_TEST_EMAIL
+
 # ── Cleanup trap ──────────────────────────────────────
 # Always restore the original login helper, even on failure
 cleanup() {

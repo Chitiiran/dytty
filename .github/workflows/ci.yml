@@ -57,7 +57,9 @@ jobs:
         shell: bash
         env:
           FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
-        run: bash scripts/device-test.sh --skip-cleanup
+          DEVICE_TEST_EMAIL: ${{ secrets.DEVICE_TEST_EMAIL }}
+          DEVICE_TEST_UID: ${{ secrets.DEVICE_TEST_UID }}
+        run: bash scripts/device-test.sh
 
       - name: Cleanup test data
         if: env.SKIP_DEVICE_TEST != 'true' && always()
