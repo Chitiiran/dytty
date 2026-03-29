@@ -10,7 +10,7 @@ name: "Reusable: login via real Google Sign-In (device)"
 
 # Tap the real Google Sign-In button
 - tapOn:
-    text: "Continue with Google"
+    text: "Sign in with Google"
     retryTapIfNoChange: true
 
 # Wait for Google account picker to appear
@@ -18,11 +18,8 @@ name: "Reusable: login via real Google Sign-In (device)"
     timeout: 10000
 
 # Select the test account from the Google account picker.
-# UPDATE THIS: Replace with the test account email shown in the picker.
-# Run `maestro test .maestro/helpers/login-device.yaml` to see what
-# the picker displays, then update the regex below to match.
 - tapOn:
-    text: ".*REPLACE_WITH_TEST_EMAIL.*"
+    text: ".*creativecraftours.*"
     retryTapIfNoChange: true
 
 # Wait for auth + Firestore data loading + home screen render.
