@@ -22,7 +22,11 @@ tags:
 
 # Type an entry
 - tapOn: "What good things happened today.*"
-- inputText: "Today I completed the Maestro test setup"
+- eraseText
+- inputText: "Maestro device test entry"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ".maestro/screenshots/latest/journal/03b-text-entered"
 
 # Confirm
 - tapOn: "Save"
@@ -32,4 +36,4 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/journal/04-after-add-entry"
 
 # Verify entry appears
-- assertVisible: ".*Today I completed the Maestro test setup.*"
+- assertVisible: ".*Maestro device test entry.*"

@@ -128,6 +128,13 @@ cp "$HELPERS_DIR/login.yaml" "$HELPERS_DIR/login.yaml.bak"
 cp "$HELPERS_DIR/login-device.yaml" "$HELPERS_DIR/login.yaml"
 echo "  login.yaml -> login-device.yaml (real Google Sign-In)"
 
+# ── Pre-run cleanup: clear test data so flows start from zero ──
+if [[ "$SKIP_CLEANUP" == false ]] && command -v firebase &>/dev/null; then
+  echo ""
+  echo "=== Pre-run: cleaning test data from Firestore ==="
+  bash "$SCRIPT_DIR/device-cleanup.sh" 2>/dev/null || echo "  WARNING: Pre-run cleanup failed (non-fatal)"
+fi
+
 # ── Create output directory ───────────────────────────
 mkdir -p "$SCREENSHOT_DIR"
 
@@ -176,6 +183,10 @@ for dir in "$MAESTRO_DIR"/*/; do
   for flow in "${yamls[@]}"; do
     flowname=$(basename "$flow")
     echo "  > $flowname"
+    # Clean test data between flows so each starts from zero
+    if [[ "$SKIP_CLEANUP" == false ]] && command -v firebase &>/dev/null; then
+      bash "$SCRIPT_DIR/device-cleanup.sh" 2>/dev/null || true
+    fi
     if ! $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1; then
       TEST_FAILED=true
     fi

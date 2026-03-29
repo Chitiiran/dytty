@@ -13,6 +13,7 @@ tags:
 - tapOn: "Add Positive Things entry"
 - waitForAnimationToEnd
 - tapOn: "What good things happened today.*"
+- eraseText
 - inputText: "Positive entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -22,6 +23,7 @@ tags:
 - tapOn: "Add Negative Things entry"
 - waitForAnimationToEnd
 - tapOn: "What was challenging today.*"
+- eraseText
 - inputText: "Negative entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -31,6 +33,7 @@ tags:
 - tapOn: "Add Gratitude entry"
 - waitForAnimationToEnd
 - tapOn: "What are you grateful for today.*"
+- eraseText
 - inputText: "Gratitude entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -44,6 +47,7 @@ tags:
 - tapOn: "Add Beauty entry"
 - waitForAnimationToEnd
 - tapOn: "What was beautiful today.*"
+- eraseText
 - inputText: "Beauty entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -62,6 +66,7 @@ tags:
     timeout: 5000
 - waitForAnimationToEnd:
     timeout: 5000
+- eraseText
 - inputText: "Identity entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:

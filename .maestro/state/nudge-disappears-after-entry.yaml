@@ -23,6 +23,7 @@ tags:
 - waitForAnimationToEnd
 
 - tapOn: "What good things happened today.*"
+- eraseText
 - inputText: "Nudge state test entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:
