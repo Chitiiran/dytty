@@ -24,13 +24,16 @@ tags:
 - tapOn: "Today button"
 - waitForAnimationToEnd:
     timeout: 10000
-- assertVisible: "Positive Things"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Positive Things.*"
 
 - tapOn:
     text: "Add Positive Things entry"
     retryTapIfNoChange: true
 - waitForAnimationToEnd
 - tapOn: "What good things happened today.*"
+- eraseText
 - inputText: "Ring test entry 1"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -54,6 +57,7 @@ tags:
     retryTapIfNoChange: true
 - waitForAnimationToEnd
 - tapOn: "What are you grateful for today.*"
+- eraseText
 - inputText: "Ring test entry 2"
 - tapOn: "Save"
 - waitForAnimationToEnd:

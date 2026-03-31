@@ -35,11 +35,13 @@ void main(List<String> args) {
   final String outputPath;
   final String covPath;
   final String playwrightPath;
-  final String maestroDir;
+  final String emulatorMaestroDir;
+  final String deviceMaestroDir;
   final String playwrightScreenshotDir;
   final String flutterEnvPath;
   final String playwrightEnvPath;
-  final String maestroEnvPath;
+  final String emulatorMaestroEnvPath;
+  final String deviceMaestroEnvPath;
 
   if (runDir != null) {
     inputPath = filteredArgs.isNotEmpty
@@ -50,21 +52,25 @@ void main(List<String> args) {
         : '$runDir/report.html';
     covPath = '$runDir/flutter/lcov.info';
     playwrightPath = '$runDir/playwright/results.json';
-    maestroDir = '$runDir/device-e2e/maestro';
+    emulatorMaestroDir = '$runDir/device-e2e/emulator';
+    deviceMaestroDir = '$runDir/device-e2e/device';
     playwrightScreenshotDir = '$runDir/playwright/screenshots';
     flutterEnvPath = '$runDir/flutter/env.json';
     playwrightEnvPath = '$runDir/playwright/env.json';
-    maestroEnvPath = '$runDir/device-e2e/maestro/env.json';
+    emulatorMaestroEnvPath = '$runDir/device-e2e/emulator/env.json';
+    deviceMaestroEnvPath = '$runDir/device-e2e/device/env.json';
   } else {
     inputPath = filteredArgs.isNotEmpty ? filteredArgs[0] : 'test-results.json';
     outputPath = filteredArgs.length > 1 ? filteredArgs[1] : 'test-report.html';
     covPath = 'coverage/lcov.info';
     playwrightPath = 'playwright-results.json';
-    maestroDir = '.maestro/screenshots/latest';
+    emulatorMaestroDir = '.maestro/screenshots/latest';
+    deviceMaestroDir = '';
     playwrightScreenshotDir = 'test-results';
     flutterEnvPath = '';
     playwrightEnvPath = '';
-    maestroEnvPath = '';
+    emulatorMaestroEnvPath = '';
+    deviceMaestroEnvPath = '';
   }
 
   // --- Parse all data sources ---
@@ -72,10 +78,19 @@ void main(List<String> args) {
   final flutterSuites = flutterResults.suites;
   final covFiles = parseLcov(covPath);
   final playwrightResults = parsePlaywrightResults(playwrightPath);
-  final maestroResults = parseMaestroResults(maestroDir);
-  final maestroScreenshots = noScreenshots
+
+  // Emulator Maestro results
+  final emulatorMaestroResults = parseMaestroResults(emulatorMaestroDir);
+  final emulatorMaestroScreenshots = noScreenshots
       ? <Screenshot>[]
-      : collectScreenshots(maestroDir);
+      : collectScreenshots(emulatorMaestroDir);
+
+  // Device Maestro results
+  final deviceMaestroResults = parseMaestroResults(deviceMaestroDir);
+  final deviceMaestroScreenshots = noScreenshots
+      ? <Screenshot>[]
+      : collectScreenshots(deviceMaestroDir);
+
   final playwrightScreenshots = noScreenshots
       ? <Screenshot>[]
       : collectScreenshots(playwrightScreenshotDir);
@@ -101,7 +116,8 @@ void main(List<String> args) {
   // --- Read environment metadata ---
   final flutterEnv = readEnvLabel(flutterEnvPath);
   final playwrightEnv = readEnvLabel(playwrightEnvPath);
-  final maestroEnv = readEnvLabel(maestroEnvPath);
+  final emulatorMaestroEnv = readEnvLabel(emulatorMaestroEnvPath);
+  final deviceMaestroEnv = readEnvLabel(deviceMaestroEnvPath);
 
   // --- Build test layers ---
   final layers = <TestLayer>[
@@ -131,7 +147,18 @@ void main(List<String> args) {
       playwrightScreenshots,
       playwrightEnv,
     ),
-    buildMaestroLayer(maestroResults, maestroScreenshots, maestroEnv),
+    buildMaestroLayer(
+      emulatorMaestroResults,
+      emulatorMaestroScreenshots,
+      emulatorMaestroEnv,
+      label: 'Emulator',
+    ),
+    buildMaestroLayer(
+      deviceMaestroResults,
+      deviceMaestroScreenshots,
+      deviceMaestroEnv,
+      label: 'Physical Device',
+    ),
   ];
 
   // --- Generate HTML ---

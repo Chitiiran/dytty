@@ -21,6 +21,7 @@ tags:
 - tapOn: "Add Positive Things entry"
 - waitForAnimationToEnd
 - tapOn: "What good things happened today.*"
+- eraseText
 - inputText: "Progress test entry 1"
 - tapOn: "Save"
 - waitForAnimationToEnd:
@@ -43,6 +44,7 @@ tags:
 - tapOn: "Add Gratitude entry"
 - waitForAnimationToEnd
 - tapOn: "What are you grateful for today.*"
+- eraseText
 - inputText: "Progress test entry 2"
 - tapOn: "Save"
 - waitForAnimationToEnd:

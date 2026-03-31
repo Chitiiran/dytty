@@ -2,11 +2,82 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'dev/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'dev/**']
+  merge_group:
+    branches: [main, 'dev/**']
 
 jobs:
+  # ──────────────────────────────────────────────────
+  # Gate 1.5: Device E2E on physical phone (~8-12 min)
+  # Runs on self-hosted runner with dedicated test phone
+  # Advisory (continue-on-error) until stable
+  # Skips gracefully if runner offline or phone disconnected
+  # ──────────────────────────────────────────────────
+  device-test:
+    name: "Gate 1.5: Device E2E (Physical Phone)"
+    runs-on: [self-hosted, device-test]
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check device connected
+        shell: bash
+        run: |
+          export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+          DEVICE_COUNT=$(adb devices | grep -v 'emulator' | grep -c 'device$' || true)
+          if [[ "$DEVICE_COUNT" -eq 0 ]]; then
+            echo "::warning::No physical device connected. Skipping device tests."
+            echo "SKIP_DEVICE_TEST=true" >> $GITHUB_ENV
+          else
+            echo "Device connected: $(adb devices | grep 'device$' | head -1)"
+            echo "SKIP_DEVICE_TEST=false" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Flutter
+        if: env.SKIP_DEVICE_TEST != 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          cache: true
+
+      - name: Install dependencies
+        if: env.SKIP_DEVICE_TEST != 'true'
+        run: flutter pub get
+
+      - name: Restore google-services.json
+        if: env.SKIP_DEVICE_TEST != 'true'
+        shell: bash
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+
+      - name: Run device tests
+        if: env.SKIP_DEVICE_TEST != 'true'
+        shell: bash
+        env:
+          FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
+          DEVICE_TEST_EMAIL: ${{ secrets.DEVICE_TEST_EMAIL }}
+          DEVICE_TEST_UID: ${{ secrets.DEVICE_TEST_UID }}
+        run: bash scripts/device-test.sh
+
+      - name: Cleanup test data
+        if: env.SKIP_DEVICE_TEST != 'true' && always()
+        shell: bash
+        env:
+          DEVICE_TEST_UID: ${{ secrets.DEVICE_TEST_UID }}
+        run: bash scripts/device-cleanup.sh || true
+
+      - name: Upload device screenshots
+        if: env.SKIP_DEVICE_TEST != 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-screenshots
+          path: test-output/latest/device-e2e/device/
+          retention-days: 14
+
   analyze-test:
     name: Analyze, Test & Build
     runs-on: ubuntu-latest
@@ -39,7 +110,7 @@ jobs:
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
         with:
-          min_coverage: 50
+          min_coverage: 80
 
       - name: Generate test report
         if: always()
@@ -173,13 +244,13 @@ jobs:
           disable-animations: true
           script: |
             adb install build/app/outputs/flutter-apk/app-debug.apk
-            mkdir -p test-output/latest/device-e2e/maestro
-            maestro test --debug-output test-output/latest/device-e2e/maestro --format junit --output test-output/latest/device-e2e/maestro/results.xml --include-tags=smoke,state .maestro/
+            mkdir -p test-output/latest/device-e2e/emulator
+            maestro test --debug-output test-output/latest/device-e2e/emulator --format junit --output test-output/latest/device-e2e/emulator/results.xml --include-tags=smoke,state .maestro/
 
       - name: Upload Maestro screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: maestro-screenshots
-          path: test-output/latest/device-e2e/maestro/
+          path: test-output/latest/device-e2e/emulator/
           retention-days: 14
