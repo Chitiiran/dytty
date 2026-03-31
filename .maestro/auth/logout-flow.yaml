@@ -6,8 +6,8 @@ tags:
 ---
 - runFlow: "../helpers/login.yaml"
 
-# Navigate to settings (icon shows as "?" in accessibility tree)
-- tapOn: "\\?"
+# Navigate to settings (tooltip on the settings IconButton)
+- tapOn: "Settings"
 
 - waitForAnimationToEnd:
     timeout: 5000

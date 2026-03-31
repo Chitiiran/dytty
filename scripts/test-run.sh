@@ -58,7 +58,7 @@ echo "  Layers: flutter=$RUN_FLUTTER playwright=$RUN_PLAYWRIGHT maestro=$RUN_MAE
 mkdir -p "$RUN_DIR"
 [[ "$RUN_FLUTTER" == true ]] && mkdir -p "$RUN_DIR/flutter"
 [[ "$RUN_PLAYWRIGHT" == true ]] && mkdir -p "$RUN_DIR/playwright/screenshots"
-[[ "$RUN_MAESTRO" == true ]] && mkdir -p "$RUN_DIR/device-e2e/maestro"
+[[ "$RUN_MAESTRO" == true ]] && mkdir -p "$RUN_DIR/device-e2e/emulator"
 
 # Create/update latest symlink/junction (before tests, so Playwright config can reference it)
 LATEST="$OUTPUT_BASE/latest"
@@ -147,9 +147,9 @@ if [[ "$RUN_MAESTRO" == true ]]; then
     DEVICE_NAME=$(adb shell getprop ro.product.model 2>/dev/null | tr -d '\r' || echo "unknown")
     DEVICE_SDK=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || echo "unknown")
     DEVICE_SERIAL=$(adb get-serialno 2>/dev/null | tr -d '\r' || echo "unknown")
-    echo "{\"device\":\"$DEVICE_NAME\",\"sdk\":\"$DEVICE_SDK\",\"serial\":\"$DEVICE_SERIAL\",\"platform\":\"android\"}" > "$RUN_DIR/device-e2e/maestro/env.json"
+    echo "{\"device\":\"$DEVICE_NAME\",\"sdk\":\"$DEVICE_SDK\",\"serial\":\"$DEVICE_SERIAL\",\"platform\":\"android\"}" > "$RUN_DIR/device-e2e/emulator/env.json"
 
-    if bash scripts/maestro-test.sh --output-dir "$RUN_DIR/device-e2e/maestro" --skip-build 2>&1; then
+    if bash scripts/maestro-test.sh --output-dir "$RUN_DIR/device-e2e/emulator" --skip-build 2>&1; then
       echo "  Maestro tests completed"
     else
       echo "  Maestro tests had failures"

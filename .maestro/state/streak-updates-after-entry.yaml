@@ -17,6 +17,7 @@ tags:
 - tapOn: "Add Positive Things entry"
 - waitForAnimationToEnd
 - tapOn: "What good things happened today.*"
+- eraseText
 - inputText: "Streak test entry"
 - tapOn: "Save"
 - waitForAnimationToEnd:

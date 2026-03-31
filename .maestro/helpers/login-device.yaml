@@ -1,0 +1,33 @@
+appId: com.dytty.dytty
+name: "Reusable: login via real Google Sign-In (device)"
+---
+- launchApp:
+    clearState: true
+
+# Wait for Flutter cold start (Firebase init + first frame render)
+- waitForAnimationToEnd:
+    timeout: 15000
+
+# Tap the real Google Sign-In button
+- tapOn:
+    text: "Sign in with Google"
+    retryTapIfNoChange: true
+
+# Wait for Google account picker to appear
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# Select the test account from the Google account picker.
+# DEVICE_TEST_EMAIL must be set in the environment.
+- tapOn:
+    text: ".*${DEVICE_TEST_EMAIL}.*"
+    retryTapIfNoChange: true
+
+# Wait for auth + Firestore data loading + home screen render.
+# Triple wait handles: route transition -> loading spinner -> settle.
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 10000

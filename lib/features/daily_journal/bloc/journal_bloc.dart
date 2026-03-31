@@ -274,10 +274,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     }
   }
 
-  /// Shared optimistic marker/streak update for both AddEntry and AddVoiceEntry.
-  /// Entries come from the snapshot stream — this only updates markers and streak.
-  void _emitOptimisticMarkerUpdate(
+  /// Shared optimistic update for both AddEntry and AddVoiceEntry.
+  /// Immediately adds the created entry to state.entries so the UI refreshes
+  /// without waiting for the Firestore stream (critical on real devices with
+  /// network latency). Also updates markers and streak.
+  void _emitOptimisticUpdate(
     Emitter<JournalState> emit,
+    CategoryEntry created,
     String categoryId,
     DateTime targetDate,
   ) {
@@ -304,6 +307,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     emit(
       state.copyWith(
         status: JournalStatus.loaded,
+        entries: [...state.entries.where((e) => e.id != created.id), created],
         monthCategoryMarkers: currentMarkers,
         currentStreak: optimisticStreak,
         lastJournalDate: dateString,
@@ -328,12 +332,12 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     }
 
     try {
-      await _repository.addCategoryEntry(
+      final created = await _repository.addCategoryEntry(
         dateString,
         event.categoryId,
         event.text,
       );
-      _emitOptimisticMarkerUpdate(emit, event.categoryId, targetDate);
+      _emitOptimisticUpdate(emit, created, event.categoryId, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
@@ -359,7 +363,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     }
 
     try {
-      await _repository.addCategoryEntry(
+      final created = await _repository.addCategoryEntry(
         dateString,
         event.categoryId,
         event.text,
@@ -367,7 +371,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         transcript: event.transcript,
         tags: event.tags,
       );
-      _emitOptimisticMarkerUpdate(emit, event.categoryId, targetDate);
+      _emitOptimisticUpdate(emit, created, event.categoryId, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
