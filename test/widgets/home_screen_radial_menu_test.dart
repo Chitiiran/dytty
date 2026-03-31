@@ -142,9 +142,8 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 1));
 
-      // Find today's date cell and get its position
+      // Find today's date cell and tap it
       final dateFinder = find.text('${today.day}').first;
-      final dateCenter = tester.getCenter(dateFinder);
 
       // Tap the date
       await tester.tap(dateFinder);

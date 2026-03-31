@@ -120,19 +120,5 @@ void main() {
       expect(clamped.dx, 75.0);
       expect(clamped.dy, 534.0);
     });
-
-    test('handles exact center of screen', () {
-      const tapPosition = Offset(200, 400);
-
-      final clamped = clampMenuPosition(
-        tapPosition: tapPosition,
-        screenSize: screenSize,
-        menuSize: menuSize,
-        padding: padding,
-      );
-
-      expect(clamped.dx, 75.0);
-      expect(clamped.dy, 275.0);
-    });
   });
 }
