@@ -90,7 +90,7 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 - Agent work targets `dev/*` branches, not `main`.
 - Agent chooses branch base per-task: `dev/*` if touching recent changes, `main` if independent.
 - You create `dev/*` branches, agents target them.
-- PRs to `dev/*` go through merge queue with labels (`dev-next`, `dev-hold`).
+- PRs to `dev/*` require passing Gate 1 CI before merge.
 - Compose `dev/release` from selected `dev/*` branches before promoting to `main`.
 - Fix forward, never revert on `dev/*`.
 
@@ -166,6 +166,24 @@ API keys in `.env` (gitignored), injected via `--dart-define`. See `.env.example
 - Agents: always use worktree's absolute path. Never write to project root.
 - Post-merge: clean up worktree + local branch. Windows: `rm -rf` if `git worktree remove` fails.
 - Session start: if 5+ worktrees exist, offer cleanup.
+
+### Post-Implementation Chain (mandatory, never skip)
+
+After `executing-plans` or `subagent-driven-development` completes ALL tasks:
+1. `verification-before-completion` — run tests, verify claims with evidence
+2. `finishing-a-development-branch` — handles PR creation (never create PR manually)
+3. `requesting-code-review` — auto-chains after PR, never ask "want me to review?"
+4. Update `kb/PROGRESS.md` — log entry with decisions/tradeoffs
+
+Each step invokes the next. Do not stop between steps or ask the user.
+
+### Blocker Protocol
+
+When any workflow step fails (e.g., can't push branch, CI blocks, permission denied):
+- **STOP.** Do not skip the step or make autonomous workarounds.
+- **Report** the exact error to the user.
+- **Ask** for direction before proceeding.
+- Never retarget PRs, skip dev/* branches, or bypass workflow steps without explicit user approval.
 
 ## Conventions
 - Files: `snake_case` (daily_journal_screen.dart)

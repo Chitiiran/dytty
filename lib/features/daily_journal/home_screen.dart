@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:dytty/core/utils/menu_position_utils.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _focusedDay = DateTime.now();
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   OverlayEntry? _radialMenuOverlay;
+  Offset? _lastTapGlobalPosition;
 
   @override
   void initState() {
@@ -156,114 +158,128 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Calendar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Semantics(
-                    label: 'Calendar',
-                    child: TableCalendar(
-                      firstDay: DateTime(2020),
-                      lastDay: DateTime(2030),
-                      focusedDay: _focusedDay,
-                      calendarFormat: _calendarFormat,
-                      selectedDayPredicate: (day) =>
-                          isSameDay(journalState.selectedDate, day),
-                      onDaySelected: (selectedDay, focusedDay) {
-                        setState(() {
+                  child: Listener(
+                    onPointerDown: (event) {
+                      _lastTapGlobalPosition = event.position;
+                    },
+                    child: Semantics(
+                      label: 'Calendar',
+                      child: TableCalendar(
+                        firstDay: DateTime(2020),
+                        lastDay: DateTime(2030),
+                        focusedDay: _focusedDay,
+                        calendarFormat: _calendarFormat,
+                        selectedDayPredicate: (day) =>
+                            isSameDay(journalState.selectedDate, day),
+                        onDaySelected: (selectedDay, focusedDay) {
+                          setState(() {
+                            _focusedDay = focusedDay;
+                          });
+                          context.read<JournalBloc>().add(
+                            SelectDate(selectedDay),
+                          );
+                          _showRadialMenu(
+                            context,
+                            selectedDay,
+                            tapPosition: _lastTapGlobalPosition,
+                          );
+                        },
+                        onFormatChanged: (format) {
+                          setState(() {
+                            _calendarFormat = format;
+                          });
+                        },
+                        onPageChanged: (focusedDay) {
                           _focusedDay = focusedDay;
-                        });
-                        context.read<JournalBloc>().add(
-                          SelectDate(selectedDay),
-                        );
-                        _showRadialMenu(context, selectedDay);
-                      },
-                      onFormatChanged: (format) {
-                        setState(() {
-                          _calendarFormat = format;
-                        });
-                      },
-                      onPageChanged: (focusedDay) {
-                        _focusedDay = focusedDay;
-                        context.read<JournalBloc>().add(
-                          LoadMonthMarkers(
-                            year: focusedDay.year,
-                            month: focusedDay.month,
-                          ),
-                        );
-                      },
-                      calendarBuilders: CalendarBuilders(
-                        defaultBuilder: (context, day, focusedDay) =>
-                            CompletionRingCell(
-                              day: day,
-                              categoryMarkers:
-                                  journalState.monthCategoryMarkers[_dateFormat
-                                      .format(day)],
-                              activeCategories: categoryState.activeCategories,
+                          context.read<JournalBloc>().add(
+                            LoadMonthMarkers(
+                              year: focusedDay.year,
+                              month: focusedDay.month,
                             ),
-                        todayBuilder: (context, day, focusedDay) =>
-                            CompletionRingCell(
-                              day: day,
-                              categoryMarkers:
-                                  journalState.monthCategoryMarkers[_dateFormat
-                                      .format(day)],
-                              activeCategories: categoryState.activeCategories,
-                              isToday: true,
+                          );
+                        },
+                        calendarBuilders: CalendarBuilders(
+                          defaultBuilder: (context, day, focusedDay) =>
+                              CompletionRingCell(
+                                day: day,
+                                categoryMarkers:
+                                    journalState
+                                        .monthCategoryMarkers[_dateFormat
+                                        .format(day)],
+                                activeCategories:
+                                    categoryState.activeCategories,
+                              ),
+                          todayBuilder: (context, day, focusedDay) =>
+                              CompletionRingCell(
+                                day: day,
+                                categoryMarkers:
+                                    journalState
+                                        .monthCategoryMarkers[_dateFormat
+                                        .format(day)],
+                                activeCategories:
+                                    categoryState.activeCategories,
+                                isToday: true,
+                              ),
+                          selectedBuilder: (context, day, focusedDay) =>
+                              CompletionRingCell(
+                                day: day,
+                                categoryMarkers:
+                                    journalState
+                                        .monthCategoryMarkers[_dateFormat
+                                        .format(day)],
+                                activeCategories:
+                                    categoryState.activeCategories,
+                                isSelected: true,
+                                isToday: isSameDay(day, DateTime.now()),
+                              ),
+                        ),
+                        headerStyle: HeaderStyle(
+                          formatButtonVisible: true,
+                          titleCentered: true,
+                          formatButtonShowsNext: false,
+                          titleTextStyle: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          formatButtonDecoration: BoxDecoration(
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant,
                             ),
-                        selectedBuilder: (context, day, focusedDay) =>
-                            CompletionRingCell(
-                              day: day,
-                              categoryMarkers:
-                                  journalState.monthCategoryMarkers[_dateFormat
-                                      .format(day)],
-                              activeCategories: categoryState.activeCategories,
-                              isSelected: true,
-                              isToday: isSameDay(day, DateTime.now()),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          formatButtonPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          leftChevronIcon: Icon(
+                            Icons.chevron_left_rounded,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          rightChevronIcon: Icon(
+                            Icons.chevron_right_rounded,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        calendarStyle: CalendarStyle(
+                          outsideDaysVisible: false,
+                          weekendTextStyle: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
                             ),
-                      ),
-                      headerStyle: HeaderStyle(
-                        formatButtonVisible: true,
-                        titleCentered: true,
-                        formatButtonShowsNext: false,
-                        titleTextStyle: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        formatButtonDecoration: BoxDecoration(
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        formatButtonPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        leftChevronIcon: Icon(
-                          Icons.chevron_left_rounded,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        rightChevronIcon: Icon(
-                          Icons.chevron_right_rounded,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                      calendarStyle: CalendarStyle(
-                        outsideDaysVisible: false,
-                        weekendTextStyle: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
                           ),
                         ),
-                      ),
-                      daysOfWeekStyle: DaysOfWeekStyle(
-                        weekdayStyle: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        weekendStyle: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
+                        daysOfWeekStyle: DaysOfWeekStyle(
+                          weekdayStyle: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          weekendStyle: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
@@ -377,7 +393,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _radialMenuOverlay = null;
   }
 
-  void _showRadialMenu(BuildContext context, DateTime selectedDay) {
+  void _showRadialMenu(
+    BuildContext context,
+    DateTime selectedDay, {
+    Offset? tapPosition,
+  }) {
     _dismissRadialMenu();
 
     final categoryState = context.read<CategoryCubit>().state;
@@ -402,67 +422,85 @@ class _HomeScreenState extends State<HomeScreen> {
     // Need at least 2 for circular_menu
     if (categories.length < 2) return;
 
+    final screenSize = MediaQuery.of(context).size;
+    const menuSize = 250.0;
+    const menuPadding = 16.0;
+
+    // Fall back to screen center if no tap position
+    final effectiveTap =
+        tapPosition ?? Offset(screenSize.width / 2, screenSize.height / 2);
+
+    final menuOffset = clampMenuPosition(
+      tapPosition: effectiveTap,
+      screenSize: screenSize,
+      menuSize: menuSize,
+      padding: menuPadding,
+    );
+
     _radialMenuOverlay = OverlayEntry(
       builder: (overlayContext) => Material(
         color: Colors.black54,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _dismissRadialMenu,
-          child: Center(
-            child: GestureDetector(
-              onTap: () {}, // Absorb taps on the menu itself
-              child: SizedBox(
-                width: 250,
-                height: 250,
-                child: CategoryRadialMenu(
-                  categories: categories,
-                  filledCounts: filledCounts,
-                  onCategoryTap: (category) async {
-                    _dismissRadialMenu();
-                    final selectedDate = journalBloc.state.selectedDate;
+          child: Stack(
+            children: [
+              Positioned(
+                left: menuOffset.dx,
+                top: menuOffset.dy,
+                child: GestureDetector(
+                  onTap: () {}, // Absorb taps on the menu itself
+                  child: SizedBox(
+                    width: menuSize,
+                    height: menuSize,
+                    child: CategoryRadialMenu(
+                      categories: categories,
+                      filledCounts: filledCounts,
+                      onCategoryTap: (category) async {
+                        _dismissRadialMenu();
+                        final selectedDate = journalBloc.state.selectedDate;
 
-                    if (category.isArchived) {
-                      if (context.mounted) {
-                        Navigator.pushNamed(
+                        if (category.isArchived) {
+                          if (context.mounted) {
+                            Navigator.pushNamed(
+                              context,
+                              '/category-detail',
+                              arguments: category.id,
+                            );
+                          }
+                          return;
+                        }
+
+                        if (!context.mounted) return;
+                        final text = await showEntryBottomSheet(
                           context,
-                          '/category-detail',
-                          arguments: category.id,
+                          category: category,
                         );
-                      }
-                      return;
-                    }
-
-                    if (!context.mounted) return;
-                    final text = await showEntryBottomSheet(
-                      context,
-                      category: category,
-                    );
-                    if (text != null && context.mounted) {
-                      journalBloc.add(
-                        AddEntry(
-                          categoryId: category.id,
-                          text: text,
-                          date: selectedDate,
-                        ),
-                      );
-                    }
-                  },
-                  onVoiceTap: () {
-                    _dismissRadialMenu();
-                    Navigator.pushNamed(context, '/voice-call');
-                  },
+                        if (text != null && context.mounted) {
+                          journalBloc.add(
+                            AddEntry(
+                              categoryId: category.id,
+                              text: text,
+                              date: selectedDate,
+                            ),
+                          );
+                        }
+                      },
+                      onVoiceTap: () {
+                        _dismissRadialMenu();
+                        Navigator.pushNamed(context, '/voice-call');
+                      },
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
 
     Overlay.of(context).insert(_radialMenuOverlay!);
-
-    // Semantics announcement is handled by the Semantics widget
-    // wrapping CategoryRadialMenu (label: 'Category menu').
   }
 
   Future<void> _openVoiceNote(BuildContext context) async {
