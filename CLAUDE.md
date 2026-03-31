@@ -90,7 +90,7 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 - Agent work targets `dev/*` branches, not `main`.
 - Agent chooses branch base per-task: `dev/*` if touching recent changes, `main` if independent.
 - You create `dev/*` branches, agents target them.
-- PRs to `dev/*` go through merge queue with labels (`dev-next`, `dev-hold`).
+- PRs to `dev/*` require passing Gate 1 CI before merge.
 - Compose `dev/release` from selected `dev/*` branches before promoting to `main`.
 - Fix forward, never revert on `dev/*`.
 
