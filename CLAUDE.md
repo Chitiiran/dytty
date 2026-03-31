@@ -99,7 +99,7 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 | Gate | Trigger | Time | Runner | What runs |
 |------|---------|------|--------|-----------|
 | Gate 1 | PR to dev/* or main | ~3-5 min | Cloud | format, analyze, unit/widget tests, coverage (80%), web build, debug APK |
-| Gate 1.5 | Local only | ~8-12 min | Self-hosted + phone | Maestro on physical device, real Firebase, real Google Sign-In |
+| Gate 1.5 | PR (advisory) | ~8-12 min | Self-hosted + phone | Maestro on physical device, real Firebase, real Google Sign-In |
 | Gate 2 | Push to dev/release | ~5-7 min | Cloud | Gate 1 + distribute debug APK to `developers` group. Planned: Playwright, Patrol |
 | Gate 3 | Push to main | ~8-10 min | Cloud | Gate 1 + release APK + distribute to `private testers` group. Planned: Playwright, Patrol, Goldens (#48) |
 
