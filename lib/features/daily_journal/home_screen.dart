@@ -458,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       filledCounts: filledCounts,
                       onCategoryTap: (category) async {
                         _dismissRadialMenu();
-                        final selectedDate = journalBloc.state.selectedDate;
+                        final selectedDate = selectedDay;
 
                         if (category.isArchived) {
                           if (context.mounted) {

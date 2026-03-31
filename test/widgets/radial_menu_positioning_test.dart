@@ -120,5 +120,26 @@ void main() {
       expect(clamped.dx, 75.0);
       expect(clamped.dy, 534.0);
     });
+
+    test('does not crash on very small screen (smaller than menu)', () {
+      // Screen is 200x200 but menu is 250x250 — maxLeft/maxTop would be
+      // negative without the safety clamp, causing ArgumentError.
+      const tapPosition = Offset(100, 100);
+      const smallScreen = Size(200, 200);
+
+      final clamped = clampMenuPosition(
+        tapPosition: tapPosition,
+        screenSize: smallScreen,
+        menuSize: menuSize,
+        padding: padding,
+      );
+
+      // maxLeft = (200 - 250 - 16).clamp(0, inf) = 0
+      // maxTop  = (200 - 250 - 16).clamp(0, inf) = 0
+      // left = (100 - 125).clamp(min(16,0), 0) = 0
+      // top  = (100 - 125).clamp(min(16,0), 0) = 0
+      expect(clamped.dx, 0.0);
+      expect(clamped.dy, 0.0);
+    });
   });
 }

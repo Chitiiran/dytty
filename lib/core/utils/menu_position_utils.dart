@@ -10,11 +10,20 @@ Offset clampMenuPosition({
   required double padding,
 }) {
   final half = menuSize / 2;
-  final maxLeft = screenSize.width - menuSize - padding;
-  final maxTop = screenSize.height - menuSize - padding;
+  final maxLeft = (screenSize.width - menuSize - padding).clamp(
+    0.0,
+    double.infinity,
+  );
+  final maxTop = (screenSize.height - menuSize - padding).clamp(
+    0.0,
+    double.infinity,
+  );
 
-  final left = (tapPosition.dx - half).clamp(padding, maxLeft);
-  final top = (tapPosition.dy - half).clamp(padding, maxTop);
+  final left = (tapPosition.dx - half).clamp(
+    padding.clamp(0.0, maxLeft),
+    maxLeft,
+  );
+  final top = (tapPosition.dy - half).clamp(padding.clamp(0.0, maxTop), maxTop);
 
   return Offset(left, top);
 }
