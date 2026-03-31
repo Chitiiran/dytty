@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'dev/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'dev/**']
+  merge_group:
+    branches: [main, 'dev/**']
 
 jobs:
   # ──────────────────────────────────────────────────
@@ -108,7 +110,7 @@ jobs:
       - name: Coverage check
         uses: VeryGoodOpenSource/very_good_coverage@v3
         with:
-          min_coverage: 50
+          min_coverage: 80
 
       - name: Generate test report
         if: always()
