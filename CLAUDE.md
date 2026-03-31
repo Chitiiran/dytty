@@ -141,6 +141,24 @@ The superpowers plugin provides structured workflows. Always check for applicabl
 
 Process skills (brainstorming, debugging) come first, then implementation skills (TDD, plans). Follow rigid skills exactly.
 
+### Post-Implementation Chain (mandatory, never skip)
+
+After `executing-plans` or `subagent-driven-development` completes ALL tasks:
+1. `verification-before-completion` — run tests, verify claims with evidence
+2. `finishing-a-development-branch` — handles PR creation (never create PR manually)
+3. `requesting-code-review` — auto-chains after PR, never ask "want me to review?"
+4. Update `kb/PROGRESS.md` — log entry with decisions/tradeoffs
+
+Each step invokes the next. Do not stop between steps or ask the user.
+
+### Blocker Protocol
+
+When any workflow step fails (e.g., can't push branch, CI blocks, permission denied):
+- **STOP.** Do not skip the step or make autonomous workarounds.
+- **Report** the exact error to the user.
+- **Ask** for direction before proceeding.
+- Never retarget PRs, skip dev/* branches, or bypass workflow steps without explicit user approval.
+
 ## Conventions
 - Files: snake_case (daily_journal_screen.dart)
 - Classes: PascalCase
