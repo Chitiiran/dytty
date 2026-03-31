@@ -96,14 +96,12 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 
 ## CI/CD Gates
 
-3-tier gates — full details in `kb/workflow/CI-GATES.md`:
-
 | Gate | Trigger | Time | Runner | What runs |
 |------|---------|------|--------|-----------|
-| Gate 1 | PR to dev/* | ~3-5 min | Cloud | format, analyze, unit/widget tests, coverage, web build. Patrol optional |
-| Gate 1.5 | PR (any) | ~8-12 min | Self-hosted + phone | Maestro on physical device, real Firebase, real Google Sign-In. Advisory. → `device-e2e/device/` |
-| Gate 2 | dev/release | ~10-15 min | Cloud | Gate 1 + debug APK, Playwright, Maestro smoke (emulator), Patrol. → `device-e2e/emulator/`. Auto-distributes on pass |
-| Gate 3 | PR to main | ~15-20 min | Cloud | Gate 2 + release APK, full Maestro, goldens. Auto-deploys on merge |
+| Gate 1 | PR to dev/* or main | ~3-5 min | Cloud | format, analyze, unit/widget tests, coverage (80%), web build, debug APK |
+| Gate 1.5 | PR (advisory) | ~8-12 min | Self-hosted + phone | Maestro on physical device, real Firebase, real Google Sign-In |
+| Gate 2 | Push to dev/release | ~5-7 min | Cloud | Gate 1 + distribute debug APK to `developers` group. Planned: Playwright, Patrol |
+| Gate 3 | Push to main | ~8-10 min | Cloud | Gate 1 + release APK + distribute to `private testers` group. Planned: Playwright, Patrol, Goldens (#48) |
 
 ## Testing
 
