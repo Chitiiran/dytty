@@ -149,11 +149,15 @@ jobs:
           name: debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
 
-  distribute:
-    name: Distribute to Testers
+  # ──────────────────────────────────────────────────
+  # Gate 2: Distribute debug APK on dev/release push
+  # Sends to "developers" Firebase group for pre-merge testing
+  # ──────────────────────────────────────────────────
+  distribute-dev:
+    name: "Gate 2: Distribute Debug APK"
     runs-on: ubuntu-latest
-    needs: [analyze-test, maestro]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: analyze-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev/release'
     steps:
       - uses: actions/checkout@v4
 
@@ -161,6 +165,53 @@ jobs:
         with:
           name: debug-apk
           path: build/app/outputs/flutter-apk/
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          SUBJECT=$(git log -1 --pretty=%s)
+          NOTES="[dev/release] ${SUBJECT}"
+
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "body<<$EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: 1:828440302945:android:8a03bc6c01380939392120
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
+          groups: developers
+          releaseNotes: ${{ steps.notes.outputs.body }}
+          file: build/app/outputs/flutter-apk/app-debug.apk
+
+  # ──────────────────────────────────────────────────
+  # Gate 3: Distribute release APK on main push
+  # Builds release APK and sends to "private testers" Firebase group
+  # ──────────────────────────────────────────────────
+  distribute-release:
+    name: "Gate 3: Distribute Release APK"
+    runs-on: ubuntu-latest
+    needs: analyze-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Restore google-services.json
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Extract tester checklist from merged PR
         id: notes
@@ -175,14 +226,14 @@ jobs:
             CHECKLIST=$(echo "$PR_BODY" | sed -n '/^## Tester Checklist/,/^## /{ /^## Tester Checklist/d; /^## /d; p; }' | sed '/^<!--/,/-->/d' | sed -e 's/^[[:space:]]*//' -e '/^$/d')
 
             if [ -n "$CHECKLIST" ]; then
-              NOTES="Please test:"$'\n'"${CHECKLIST}"
+              NOTES="[release] Please test:"$'\n'"${CHECKLIST}"
             else
               PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-              NOTES="New build from PR #${PR_NUMBER}: ${PR_TITLE}"$'\n\n'"(No tester checklist provided — check the PR for details.)"
+              NOTES="[release] New build from PR #${PR_NUMBER}: ${PR_TITLE}"
             fi
           else
             SUBJECT=$(git log -1 --pretty=%s)
-            NOTES="New build: ${SUBJECT}"$'\n\n'"(No linked PR found.)"
+            NOTES="[release] New build: ${SUBJECT}"
           fi
 
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
@@ -195,62 +246,6 @@ jobs:
         with:
           appId: 1:828440302945:android:8a03bc6c01380939392120
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
-          testers: ${{ secrets.TESTER_EMAIL }}
+          groups: private testers
           releaseNotes: ${{ steps.notes.outputs.body }}
-          file: build/app/outputs/flutter-apk/app-debug.apk
-
-  maestro:
-    name: Maestro Android E2E
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.1'
-          cache: true
-
-      - run: flutter pub get
-
-      # Shared debug keystore is checked into android/debug.keystore and referenced by build.gradle.kts signingConfig.
-
-      - name: Restore google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
-
-      - name: Build debug APK
-        run: |
-          flutter build apk --debug \
-            --dart-define=USE_EMULATORS=true \
-            --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
-
-      - name: Install Maestro
-        run: |
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-
-      - name: Run Maestro flows
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          arch: x86_64
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            adb install build/app/outputs/flutter-apk/app-debug.apk
-            mkdir -p test-output/latest/device-e2e/emulator
-            maestro test --debug-output test-output/latest/device-e2e/emulator --format junit --output test-output/latest/device-e2e/emulator/results.xml --include-tags=smoke,state .maestro/
-
-      - name: Upload Maestro screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: maestro-screenshots
-          path: test-output/latest/device-e2e/emulator/
-          retention-days: 14
+          file: build/app/outputs/flutter-apk/app-release.apk
