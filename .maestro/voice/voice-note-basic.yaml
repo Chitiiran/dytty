@@ -4,25 +4,20 @@ tags:
   - voice
   - voice-note
 ---
+# UI-only flow — audio playback handled by orchestrate.py
 - runFlow: "../helpers/login.yaml"
 
 # Tap the mic FAB to start recording
 - tapOn: "Record voice note"
 
-# Wait for recording sheet to appear (Listening state)
+# Wait for recording sheet (Listening state)
+# Orchestrator watches logcat for "[DYTTY] Voice note state: listening"
+# and plays audio when it detects this
 - extendedWaitUntil:
     visible: ".*Listening.*"
     timeout: 5000
 
-# Play audio — play-only mode (no logcat monitoring).
-# speech_to_text runs on-device, no [DYTTY] tags. We assert the UI instead.
-- runScript:
-    file: "../../scripts/voice-test/maestro-play.sh"
-    env:
-      WAV: "voice-note-basic_0.wav"
-      PLAY_ONLY: "true"
-
-# Verify transcript appeared on screen (partial match on key words)
+# Wait for transcript to appear (orchestrator plays audio in parallel)
 - extendedWaitUntil:
     visible: ".*grocery.*"
-    timeout: 15000
+    timeout: 20000

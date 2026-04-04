@@ -4,9 +4,9 @@ tags:
   - voice
   - daily-call
 ---
+# UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login.yaml"
 
-# Open radial menu
 - tapOn:
     point: "7%,35%"
 - extendedWaitUntil:
@@ -14,39 +14,19 @@ tags:
     timeout: 5000
 
 - tapOn: "Start voice call"
-
-- runScript:
-    file: "../../scripts/voice-test/maestro-clear-logcat.sh"
-
 - tapOn: "Start Call"
 
 - extendedWaitUntil:
     visible: "In call.*"
     timeout: 20000
 
-# Turn 1
-- runScript:
-    file: "../../scripts/voice-test/maestro-play.sh"
-    env:
-      WAV: "multi-turn-daily-call_0.wav"
-      WAIT_FOR: "Turn complete"
-      TIMEOUT: "10"
-
-# Turn 2
-- runScript:
-    file: "../../scripts/voice-test/maestro-play.sh"
-    env:
-      WAV: "multi-turn-daily-call_1.wav"
-      WAIT_FOR: "Turn complete"
-      TIMEOUT: "10"
+# Orchestrator plays both utterances with Turn complete signals between them
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 45000
 
 - tapOn: "End call"
 
 - extendedWaitUntil:
     visible: "Call Summary"
     timeout: 10000
-
-- runScript:
-    file: "../../scripts/voice-test/maestro-verify.sh"
-    env:
-      SCENARIO: "multi-turn-daily-call"

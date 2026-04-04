@@ -4,6 +4,7 @@ tags:
   - voice
   - daily-call
 ---
+# UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login.yaml"
 
 # Open radial menu by tapping a calendar date
@@ -16,25 +17,19 @@ tags:
 # Navigate to voice call screen
 - tapOn: "Start voice call"
 
-# Clear logcat and start capture
-- runScript:
-    file: "../../scripts/voice-test/maestro-clear-logcat.sh"
-
 # Start the call
 - tapOn: "Start Call"
 
 # Wait for call to connect
+# Orchestrator watches for "[DYTTY] Call state: active" and plays audio
 - extendedWaitUntil:
     visible: "In call.*"
     timeout: 20000
 
-# Play audio and wait for AI to finish responding
-- runScript:
-    file: "../../scripts/voice-test/maestro-play.sh"
-    env:
-      WAV: "basic-call-liveness_0.wav"
-      WAIT_FOR: "Turn complete"
-      TIMEOUT: "10"
+# Wait for AI response (orchestrator plays audio, AI processes)
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 30000
 
 # End call
 - tapOn: "End call"
@@ -43,9 +38,3 @@ tags:
 - extendedWaitUntil:
     visible: "Call Summary"
     timeout: 10000
-
-# Verify results from logcat
-- runScript:
-    file: "../../scripts/voice-test/maestro-verify.sh"
-    env:
-      SCENARIO: "basic-call-liveness"
