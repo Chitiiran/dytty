@@ -26,7 +26,10 @@ class Transcript {
 ///
 /// Manages session lifecycle, audio I/O, tool calling, and latency tracking.
 class GeminiLiveService {
-  static const _model = 'gemini-2.5-flash-preview-native-audio';
+  /// Preview model — subject to deprecation/rename by Google.
+  /// If daily call breaks with WebSocket 1008 "model not found", check:
+  /// https://firebase.google.com/docs/ai-logic/models
+  static const _model = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
   /// Tag used for structured log lines, filterable via `adb logcat`.
   static const _logTag = '[DYTTY]';
