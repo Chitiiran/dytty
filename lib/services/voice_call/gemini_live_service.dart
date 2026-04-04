@@ -28,6 +28,9 @@ class Transcript {
 class GeminiLiveService {
   static const _model = 'gemini-2.5-flash-preview-native-audio';
 
+  /// Tag used for structured log lines, filterable via `adb logcat`.
+  static const _logTag = '[DYTTY]';
+
   /// Connection timeout for the initial Gemini Live session.
   static const connectionTimeout = Duration(seconds: 15);
 
@@ -51,6 +54,15 @@ class GeminiLiveService {
   Stream<GeminiLiveState> get stateStream => _stateController.stream;
 
   bool get isConnected => _session != null;
+
+  /// Emit a structured log line with the [DYTTY] tag for logcat filtering.
+  static void _log(String message) => debugPrint('$_logTag $message');
+
+  /// Emit a state change with logging for test observability.
+  void _emitState(GeminiLiveState state) {
+    _log('Call state: ${state.name}');
+    _stateController.add(state);
+  }
 
   /// High-resolution monotonic timer for latency measurement.
   final Stopwatch _latencyStopwatch = Stopwatch();
@@ -80,7 +92,7 @@ class GeminiLiveService {
     String? systemPrompt,
     List<FunctionDeclaration>? tools,
   }) async {
-    _stateController.add(GeminiLiveState.connecting);
+    _emitState(GeminiLiveState.connecting);
     _latencyTracker.reset();
     _modelTurnComplete = true;
     _measuring = false;
@@ -110,11 +122,11 @@ class GeminiLiveService {
         ),
       );
       _listenToResponses();
-      _stateController.add(GeminiLiveState.active);
+      _emitState(GeminiLiveState.active);
     } catch (e, stackTrace) {
       debugPrint('Gemini Live connect error: $e');
       debugPrint('Stack trace: $stackTrace');
-      _stateController.add(GeminiLiveState.error);
+      _emitState(GeminiLiveState.error);
       rethrow;
     }
   }
@@ -153,11 +165,11 @@ class GeminiLiveService {
 
   /// Disconnect and clean up.
   Future<void> disconnect() async {
-    _stateController.add(GeminiLiveState.disconnecting);
+    _emitState(GeminiLiveState.disconnecting);
     final session = _session;
     _session = null; // Break receive loop before closing
     await session?.close();
-    _stateController.add(GeminiLiveState.idle);
+    _emitState(GeminiLiveState.idle);
   }
 
   void dispose() {
@@ -195,10 +207,11 @@ class GeminiLiveService {
         }
         // receive() returned (turnComplete) — model's turn is done
         _modelTurnComplete = true;
+        _log('Turn complete');
       }
     } catch (e) {
       debugPrint('Gemini Live stream error: $e');
-      _stateController.add(GeminiLiveState.error);
+      _emitState(GeminiLiveState.error);
       return;
     }
     // If we exit the while loop, session was set to null (graceful disconnect)
@@ -225,21 +238,19 @@ class GeminiLiveService {
 
     // Handle transcriptions
     if (content.inputTranscription?.text != null) {
+      final text = content.inputTranscription!.text!;
+      final isFinal = content.inputTranscription!.finished == true;
+      _log('User said: $text (final: $isFinal)');
       _transcriptController.add(
-        Transcript(
-          speaker: Speaker.user,
-          text: content.inputTranscription!.text!,
-          isFinal: content.inputTranscription!.finished == true,
-        ),
+        Transcript(speaker: Speaker.user, text: text, isFinal: isFinal),
       );
     }
     if (content.outputTranscription?.text != null) {
+      final text = content.outputTranscription!.text!;
+      final isFinal = content.outputTranscription!.finished == true;
+      _log('AI said: $text (final: $isFinal)');
       _transcriptController.add(
-        Transcript(
-          speaker: Speaker.ai,
-          text: content.outputTranscription!.text!,
-          isFinal: content.outputTranscription!.finished == true,
-        ),
+        Transcript(speaker: Speaker.ai, text: text, isFinal: isFinal),
       );
     }
   }
