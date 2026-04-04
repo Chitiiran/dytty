@@ -1,6 +1,0 @@
-kokoro>=0.9
-misaki[en]>=0.9
-soundfile>=0.12
-torch>=2.0
-sounddevice>=0.4
-numpy>=1.24
