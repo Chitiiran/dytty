@@ -1,0 +1,51 @@
+appId: com.dytty.dytty
+name: "Voice: Daily call liveness — AI responds to greeting"
+tags:
+  - voice
+  - daily-call
+---
+- runFlow: "../helpers/login.yaml"
+
+# Open radial menu by tapping a calendar date
+- tapOn:
+    point: "7%,35%"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+# Navigate to voice call screen
+- tapOn: "Start voice call"
+
+# Clear logcat and start capture
+- runScript:
+    file: "../../scripts/voice-test/maestro-clear-logcat.sh"
+
+# Start the call
+- tapOn: "Start Call"
+
+# Wait for call to connect
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Play audio and wait for AI to finish responding
+- runScript:
+    file: "../../scripts/voice-test/maestro-play.sh"
+    env:
+      WAV: "basic-call-liveness_0.wav"
+      WAIT_FOR: "Turn complete"
+      TIMEOUT: "10"
+
+# End call
+- tapOn: "End call"
+
+# Wait for post-call screen
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 10000
+
+# Verify results from logcat
+- runScript:
+    file: "../../scripts/voice-test/maestro-verify.sh"
+    env:
+      SCENARIO: "basic-call-liveness"

@@ -1,0 +1,29 @@
+appId: com.dytty.dytty
+name: "Voice: Basic voice note — transcript captured"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login.yaml"
+
+# Tap the mic FAB to start recording
+- tapOn: "Record voice note"
+
+# Wait for recording sheet to appear (Listening state)
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+# Play audio — for voice notes we wait for the transcript to appear
+# rather than a [DYTTY] signal (speech_to_text is on-device, not Gemini)
+- runScript:
+    file: "../../scripts/voice-test/maestro-play.sh"
+    env:
+      WAV: "voice-note-basic_0.wav"
+      WAIT_FOR: "User said"
+      TIMEOUT: "10"
+
+# Verify transcript appeared on screen (partial match)
+- assertVisible:
+    text: ".*grocery.*"
+    timeout: 10000
