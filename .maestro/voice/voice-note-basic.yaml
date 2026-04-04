@@ -14,16 +14,15 @@ tags:
     visible: ".*Listening.*"
     timeout: 5000
 
-# Play audio — for voice notes we wait for the transcript to appear
-# rather than a [DYTTY] signal (speech_to_text is on-device, not Gemini)
+# Play audio — play-only mode (no logcat monitoring).
+# speech_to_text runs on-device, no [DYTTY] tags. We assert the UI instead.
 - runScript:
     file: "../../scripts/voice-test/maestro-play.sh"
     env:
       WAV: "voice-note-basic_0.wav"
-      WAIT_FOR: "User said"
-      TIMEOUT: "10"
+      PLAY_ONLY: "true"
 
-# Verify transcript appeared on screen (partial match)
-- assertVisible:
-    text: ".*grocery.*"
-    timeout: 10000
+# Verify transcript appeared on screen (partial match on key words)
+- extendedWaitUntil:
+    visible: ".*grocery.*"
+    timeout: 15000
