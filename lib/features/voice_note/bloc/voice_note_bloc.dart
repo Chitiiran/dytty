@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
@@ -157,6 +158,10 @@ class VoiceNoteState extends Equatable {
 // --- Bloc ---
 
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
+  /// Tag for structured log lines, filterable via `adb logcat`.
+  static const _logTag = '[DYTTY]';
+  static void _log(String message) => debugPrint('$_logTag $message');
+
   final SpeechService _speechService;
   final LlmService _llmService;
   final Duration _categorizationTimeout;
@@ -209,6 +214,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     StartListening event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: listening');
     emit(state.copyWith(status: VoiceNoteStatus.listening, transcript: ''));
     await _speechService.startListening(
       onResult: (result) {
@@ -226,8 +232,10 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     _SpeechResultReceived event,
     Emitter<VoiceNoteState> emit,
   ) {
+    _log('User said: ${event.text} (final: ${event.isFinal})');
     emit(state.copyWith(transcript: event.text));
     if (event.isFinal && event.text.isNotEmpty) {
+      _log('Voice note state: transcriptReview');
       emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
     }
   }
