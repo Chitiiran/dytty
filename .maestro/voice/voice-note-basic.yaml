@@ -1,23 +1,49 @@
 appId: com.dytty.dytty
-name: "Voice: Basic voice note — transcript captured"
+name: "Voice: Happy path — record, summarize, select category, save"
 tags:
   - voice
   - voice-note
 ---
-# UI-only flow — audio playback handled by orchestrate.py
-- runFlow: "../helpers/login.yaml"
+# UI-only flow — orchestrator plays audio during Listening state
+- runFlow: "../helpers/login-device.yaml"
 
-# Tap the mic FAB to start recording
+# Start voice note
 - tapOn: "Record voice note"
 
-# Wait for recording sheet (Listening state)
-# Orchestrator watches logcat for "[DYTTY] Voice note state: listening"
-# and plays audio when it detects this
+# Wait for listening (orchestrator plays audio here)
 - extendedWaitUntil:
     visible: ".*Listening.*"
     timeout: 5000
 
-# Wait for transcript to appear (orchestrator plays audio in parallel)
+# Wait for transcript review screen
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+# Assert transcript has content
 - extendedWaitUntil:
     visible: ".*grocery.*"
-    timeout: 20000
+    timeout: 5000
+
+# Tap Summarize
+- tapOn: "Summarize"
+
+# Wait for reviewing state
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Assert key review elements visible
+- assertVisible: "Summary"
+- assertVisible: "Category"
+
+# Select a category (use partial match — names may vary)
+- tapOn: "Positive Things"
+
+# Save
+- tapOn: "Save"
+
+# Assert entry was saved — journal detail or home screen visible
+- extendedWaitUntil:
+    visible: ".*Positive Things.*"
+    timeout: 5000
