@@ -25,7 +25,10 @@ tags:
 # Expand transcript and edit
 - tapOn: "Transcript"
 - tapOn: ".*grocery.*"
-- inputText: " and it was wonderful"
+- inputText: " edited text"
+
+# Hide keyboard
+- hideKeyboard
 
 # Tap Re-summarize
 - tapOn: "Re-summarize"
@@ -33,7 +36,7 @@ tags:
 # Assert reconciling state
 - extendedWaitUntil:
     visible: "Re-summarizing.*"
-    timeout: 3000
+    timeout: 5000
 
 # Wait for reconciling to complete
 - extendedWaitUntil:

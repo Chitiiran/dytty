@@ -21,6 +21,9 @@ tags:
 - tapOn: ".*grocery.*"
 - inputText: " and I loved it"
 
+# Hide keyboard so Summarize button is visible
+- hideKeyboard
+
 # Tap Summarize with edited text
 - tapOn: "Summarize"
 

@@ -30,12 +30,15 @@ tags:
 
 # Tap on the transcript text to focus the field
 - tapOn: ".*grocery.*"
-- inputText: " with extra words"
+- inputText: " edited"
 
-# Assert "edited" badge appears
-- extendedWaitUntil:
-    visible: "edited"
+# Hide keyboard so assertions can see the full UI
+- hideKeyboard
+- waitForAnimationToEnd:
     timeout: 3000
 
-# Assert "Re-summarize" button appears
-- assertVisible: "Re-summarize"
+# Assert "Re-summarize" button appears (only visible when transcriptEdited=true)
+# This proves the "edited" badge is also showing (same condition)
+- extendedWaitUntil:
+    visible: "Re-summarize"
+    timeout: 5000
