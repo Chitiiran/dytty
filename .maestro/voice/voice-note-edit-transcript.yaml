@@ -1,0 +1,36 @@
+appId: com.dytty.dytty
+name: "Voice: Edit transcript before summarization"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+# Wait for transcript review
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+# Clear and type new text
+- tapOn:
+    hint: "Edit transcript before summarizing.*"
+- eraseText: 200
+- inputText: "I edited this transcript manually"
+
+# Tap Summarize with edited text
+- tapOn: "Summarize"
+
+# Wait for review — summary should be based on edited text
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Assert we reached the review screen
+- assertVisible: "Summary"
+- assertVisible: "Category"

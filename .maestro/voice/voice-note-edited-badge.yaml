@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "Voice: Edited badge appears after transcript edit in review"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Assert "edited" badge is NOT visible before editing
+- assertNotVisible: "edited"
+
+# Expand transcript section
+- tapOn: "Transcript"
+
+# Edit transcript in the expanded field
+- tapOn:
+    hint: "Edit transcript.*"
+- inputText: " with extra words"
+
+# Assert "edited" badge appears
+- extendedWaitUntil:
+    visible: "edited"
+    timeout: 3000
+
+# Assert "Re-summarize" button appears
+- assertVisible: "Re-summarize"

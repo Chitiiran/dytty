@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "Voice: Re-summarize after transcript edit"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Expand transcript and edit
+- tapOn: "Transcript"
+- tapOn:
+    hint: "Edit transcript.*"
+- inputText: " and it was wonderful"
+
+# Tap Re-summarize
+- tapOn: "Re-summarize"
+
+# Assert reconciling state
+- extendedWaitUntil:
+    visible: "Re-summarizing.*"
+    timeout: 3000
+
+# Wait for reconciling to complete
+- extendedWaitUntil:
+    visible: "Re-summarize"
+    timeout: 15000
