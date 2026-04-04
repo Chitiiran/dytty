@@ -28,9 +28,8 @@ tags:
 # Expand transcript section
 - tapOn: "Transcript"
 
-# Edit transcript in the expanded field
-- tapOn:
-    hint: "Edit transcript.*"
+# Tap on the transcript text to focus the field
+- tapOn: ".*grocery.*"
 - inputText: " with extra words"
 
 # Assert "edited" badge appears

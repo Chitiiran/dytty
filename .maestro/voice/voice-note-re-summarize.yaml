@@ -24,8 +24,7 @@ tags:
 
 # Expand transcript and edit
 - tapOn: "Transcript"
-- tapOn:
-    hint: "Edit transcript.*"
+- tapOn: ".*grocery.*"
 - inputText: " and it was wonderful"
 
 # Tap Re-summarize

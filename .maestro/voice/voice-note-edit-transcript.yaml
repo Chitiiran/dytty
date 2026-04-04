@@ -17,16 +17,14 @@ tags:
     visible: "Review transcript"
     timeout: 20000
 
-# Clear and type new text
-- tapOn:
-    hint: "Edit transcript before summarizing.*"
-- eraseText: 200
-- inputText: "I edited this transcript manually"
+# Tap transcript text to focus the field, then append edited text
+- tapOn: ".*grocery.*"
+- inputText: " and I loved it"
 
 # Tap Summarize with edited text
 - tapOn: "Summarize"
 
-# Wait for review — summary should be based on edited text
+# Wait for review
 - extendedWaitUntil:
     visible: "Review your note"
     timeout: 15000
