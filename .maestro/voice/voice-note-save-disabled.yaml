@@ -22,17 +22,21 @@ tags:
     visible: "Review your note"
     timeout: 15000
 
-# Assert Save button is visible
-- assertVisible: "Save"
-
-# Try tapping Save — if LLM pre-selected a category, this will work.
-# If no category selected, Save is disabled and we stay on review.
-# Tap Save to test:
+# Tap Save — if disabled (no category), we stay on review screen
 - tapOn: "Save"
 
-# If we're still on review screen, Save was disabled (no category).
-# If we navigated away, LLM pre-selected. Either way, assert the
-# flow doesn't crash.
+# Assert we're still on review screen (Save didn't navigate away)
+# Note: if LLM pre-selected a category, Save will succeed and this
+# assertion fails — that's a known limitation (LLM behavior varies)
+- assertVisible: "Review your note"
+
+# Now select a category
+- tapOn: "Positive Things"
+
+# Tap Save again — should work now
+- tapOn: "Save"
+
+# Assert we left the review screen
 - extendedWaitUntil:
-    visible: ".*"
-    timeout: 3000
+    visible: ".*Positive Things.*"
+    timeout: 5000
