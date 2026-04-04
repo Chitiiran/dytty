@@ -591,6 +591,84 @@ void main() {
       ],
     );
 
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'valid partial followed by empty final preserves transcript and transitions (#199)',
+      build: () {
+        final bloc = VoiceNoteBloc(
+          speechService: speechService,
+          llmService: llmService,
+        );
+        return bloc;
+      },
+      seed: () => const VoiceNoteState(status: VoiceNoteStatus.ready),
+      act: (bloc) async {
+        bloc.add(const StartListening());
+        await Future<void>.delayed(Duration.zero);
+
+        // Simulate: valid partial results (STT recognizing speech)
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('today', ['today'], 0.9),
+          ], false),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('today I went grocery shopping', [
+              'today I went grocery shopping',
+            ], 0.9),
+          ], false),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Simulate: STT clears — empty partials
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('', [''], 0.0),
+          ], false),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Simulate: empty final result
+        speechService.lastOnResult?.call(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('', [''], 0.0),
+          ], true),
+        );
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => [
+        // listening from StartListening
+        isA<VoiceNoteState>().having(
+          (s) => s.status,
+          'status',
+          VoiceNoteStatus.listening,
+        ),
+        // partial: "today"
+        isA<VoiceNoteState>().having(
+          (s) => s.transcript,
+          'transcript',
+          'today',
+        ),
+        // partial: "today I went grocery shopping"
+        isA<VoiceNoteState>().having(
+          (s) => s.transcript,
+          'transcript',
+          'today I went grocery shopping',
+        ),
+        // empty partial should NOT overwrite — transcript preserved
+        // empty final should trigger transcriptReview with preserved transcript
+        isA<VoiceNoteState>()
+            .having((s) => s.status, 'status', VoiceNoteStatus.transcriptReview)
+            .having(
+              (s) => s.transcript,
+              'transcript',
+              'today I went grocery shopping',
+            ),
+      ],
+    );
+
     test('close disposes speech service', () async {
       final bloc = VoiceNoteBloc(
         speechService: speechService,
