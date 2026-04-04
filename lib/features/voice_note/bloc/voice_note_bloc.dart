@@ -244,8 +244,10 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     StopListening event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: stopped');
     await _speechService.stopListening();
     if (state.transcript.isNotEmpty) {
+      _log('Voice note state: transcriptReview');
       emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
     } else {
       emit(state.copyWith(status: VoiceNoteStatus.ready));
@@ -263,11 +265,13 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     CategorizeTranscript event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: processing');
     emit(state.copyWith(status: VoiceNoteStatus.processing));
     try {
       final result = await _llmService
           .categorizeEntry(state.transcript)
           .timeout(_categorizationTimeout);
+      _log('Voice note state: reviewing');
       emit(
         state.copyWith(
           status: VoiceNoteStatus.reviewing,
