@@ -85,3 +85,6 @@ test/goldens/failures/
 
 # Error screenshots (local debugging)
 Error Screenshots/
+
+# Generated voice test audio (regenerate with: python scripts/voice-test/generate.py)
+test/fixtures/audio/generated/
