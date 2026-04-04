@@ -1,0 +1,32 @@
+appId: com.dytty.dytty
+name: "Voice: Daily call tool call — save_entry invoked"
+tags:
+  - voice
+  - daily-call
+---
+# UI-only flow — audio + logcat handled by orchestrate.py
+- runFlow: "../helpers/login.yaml"
+
+- tapOn:
+    point: "7%,35%"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+- tapOn: "Start voice call"
+- tapOn: "Start Call"
+
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Orchestrator plays utterance and monitors for tool call
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 30000
+
+- tapOn: "End call"
+
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 10000

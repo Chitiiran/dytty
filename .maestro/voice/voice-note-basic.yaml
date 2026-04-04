@@ -1,0 +1,23 @@
+appId: com.dytty.dytty
+name: "Voice: Basic voice note — transcript captured"
+tags:
+  - voice
+  - voice-note
+---
+# UI-only flow — audio playback handled by orchestrate.py
+- runFlow: "../helpers/login.yaml"
+
+# Tap the mic FAB to start recording
+- tapOn: "Record voice note"
+
+# Wait for recording sheet (Listening state)
+# Orchestrator watches logcat for "[DYTTY] Voice note state: listening"
+# and plays audio when it detects this
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+# Wait for transcript to appear (orchestrator plays audio in parallel)
+- extendedWaitUntil:
+    visible: ".*grocery.*"
+    timeout: 20000

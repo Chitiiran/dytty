@@ -1,0 +1,32 @@
+appId: com.dytty.dytty
+name: "Voice: Multi-turn daily call — two exchanges"
+tags:
+  - voice
+  - daily-call
+---
+# UI-only flow — audio + logcat handled by orchestrate.py
+- runFlow: "../helpers/login.yaml"
+
+- tapOn:
+    point: "7%,35%"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+- tapOn: "Start voice call"
+- tapOn: "Start Call"
+
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Orchestrator plays both utterances with Turn complete signals between them
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 45000
+
+- tapOn: "End call"
+
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 10000
