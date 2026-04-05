@@ -1,0 +1,30 @@
+appId: com.dytty.dytty
+name: "Voice: Discard voice note from transcript review"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+# Assert transcript has content
+- extendedWaitUntil:
+    visible: ".*grocery.*"
+    timeout: 5000
+
+# Tap Discard
+- tapOn: "Discard"
+
+# Assert back on home screen — bottom sheet dismissed
+- extendedWaitUntil:
+    visible: ".*haven't journaled.*"
+    timeout: 5000

@@ -233,10 +233,19 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     Emitter<VoiceNoteState> emit,
   ) {
     _log('User said: ${event.text} (final: ${event.isFinal})');
-    emit(state.copyWith(transcript: event.text));
-    if (event.isFinal && event.text.isNotEmpty) {
-      _log('Voice note state: transcriptReview');
-      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+
+    // Don't overwrite a valid transcript with empty partials.
+    // STT can send empty strings after valid speech when the audio
+    // stream ends or silence is detected (#199).
+    final text = event.text.isNotEmpty ? event.text : state.transcript;
+    emit(state.copyWith(transcript: text));
+
+    if (event.isFinal) {
+      if (text.isNotEmpty) {
+        _log('Voice note state: transcriptReview');
+        emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      }
+      // If both event.text and state.transcript are empty, stay listening.
     }
   }
 

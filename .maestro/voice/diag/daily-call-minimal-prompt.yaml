@@ -1,0 +1,65 @@
+appId: com.dytty.dytty
+name: "Diag: Daily call with minimal prompt — does AI respond?"
+tags:
+  - voice
+  - daily-call
+  - diag
+---
+# Diagnostic flow for #157: AI not responding after prompt rewrite.
+# Tests with MINIMAL prompt toggled ON.
+# UI-only — orchestrator handles audio + logcat.
+
+- runFlow: "../../helpers/login.yaml"
+
+# Enable minimal prompt in developer settings
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Developer"
+    timeout: 5000
+- scrollUntilVisible:
+    element: "Minimal system prompt"
+    direction: DOWN
+    timeout: 5000
+- tapOn: "Minimal system prompt"
+- extendedWaitUntil:
+    visible: ".*Active.*minimal.*"
+    timeout: 3000
+
+# Go back to main screen
+- pressKey: back
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 3000
+
+# Open radial menu by tapping a calendar date
+- tapOn:
+    point: "7%,35%"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+# Navigate to voice call screen
+- tapOn: "Start voice call"
+
+# Start the call
+- tapOn: "Start Call"
+
+# Wait for call to connect
+# Orchestrator watches for "[DYTTY] Call state: active" and plays audio
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Wait long enough for audio play + AI response
+# Orchestrator monitors logcat for AI response
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 30000
+
+# End call
+- tapOn: "End call"
+
+# Wait for post-call screen (don't assert specific content — diagnostic)
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 10000

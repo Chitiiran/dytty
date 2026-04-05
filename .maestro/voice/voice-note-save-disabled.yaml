@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "Voice: Save button disabled until category selected"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Tap Save — if disabled (no category), we stay on review screen
+- tapOn: "Save"
+
+# Assert we're still on review screen (Save didn't navigate away)
+# Note: if LLM pre-selected a category, Save will succeed and this
+# assertion fails — that's a known limitation (LLM behavior varies)
+- assertVisible: "Review your note"
+
+# Now select a category
+- tapOn: "Positive Things"
+
+# Tap Save again — should work now
+- tapOn: "Save"
+
+# Assert we left the review screen
+- extendedWaitUntil:
+    visible: ".*Positive Things.*"
+    timeout: 5000
