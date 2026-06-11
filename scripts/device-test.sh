@@ -61,6 +61,13 @@ fi
 if [[ -z "${DEVICE_TEST_EMAIL:-}" && -f "$PROJECT_DIR/.env" ]]; then
   DEVICE_TEST_EMAIL=$(grep DEVICE_TEST_EMAIL "$PROJECT_DIR/.env" | cut -d= -f2 || true)
 fi
+# UID powers device-cleanup.sh's direct path — the auth:export email
+# lookup fallback does not work (#206), so cleanup silently no-ops
+# between flows and every flow after the first inherits stale data.
+if [[ -z "${DEVICE_TEST_UID:-}" && -f "$PROJECT_DIR/.env" ]]; then
+  DEVICE_TEST_UID=$(grep DEVICE_TEST_UID "$PROJECT_DIR/.env" | cut -d= -f2 || true)
+  export DEVICE_TEST_UID
+fi
 if [[ -z "${DEVICE_TEST_EMAIL:-}" ]]; then
   echo "ERROR: DEVICE_TEST_EMAIL not set. Add to .env or export it."
   exit 1
@@ -170,6 +177,10 @@ echo ""
 MAESTRO_BASE="maestro test"
 MAESTRO_BASE="$MAESTRO_BASE --debug-output $SCREENSHOT_DIR"
 MAESTRO_BASE="$MAESTRO_BASE --format junit"
+# Maestro flows cannot read plain shell exports: ${DEVICE_TEST_EMAIL} in
+# login-device.yaml only resolves from -e params. Without this the account
+# tap never matches and login hangs (#206, regression from fa97007).
+MAESTRO_BASE="$MAESTRO_BASE -e DEVICE_TEST_EMAIL=$DEVICE_TEST_EMAIL"
 
 if [[ -n "$TAGS" ]]; then
   MAESTRO_BASE="$MAESTRO_BASE --include-tags=$TAGS"
