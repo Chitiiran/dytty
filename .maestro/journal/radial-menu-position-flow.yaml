@@ -1,5 +1,5 @@
 appId: com.dytty.dytty
-name: "Radial menu opens near tapped date (#175)"
+name: "Radial menu opens anchored on tapped date"
 tags:
   - smoke
   - journal

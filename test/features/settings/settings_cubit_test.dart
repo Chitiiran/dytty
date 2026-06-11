@@ -395,6 +395,70 @@ void main() {
     );
   });
 
+  group('voiceNoteHandling preference (#32)', () {
+    blocTest<SettingsCubit, SettingsState>(
+      'setVoiceNoteHandling emits and persists',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) => cubit.setVoiceNoteHandling(VoiceNoteHandling.raw),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.voiceNoteHandling,
+          'voiceNoteHandling',
+          VoiceNoteHandling.raw,
+        ),
+      ],
+      verify: (_) async {
+        final settings = await repository.getUserSettings();
+        expect(settings['voiceNoteHandling'], 'raw');
+      },
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'loadSettings reads persisted voiceNoteHandling',
+      setUp: () async {
+        await repository.ensureUserProfile('Test', 'test@test.com');
+        await repository.updateUserSettings({'voiceNoteHandling': 'summarize'});
+      },
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      act: (cubit) => cubit.loadSettings(),
+      expect: () => [
+        isA<SettingsState>()
+            .having(
+              (s) => s.voiceNoteHandling,
+              'voiceNoteHandling',
+              VoiceNoteHandling.summarize,
+            )
+            .having((s) => s.loaded, 'loaded', true),
+      ],
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setVoiceNoteHandling is a no-op when value is unchanged',
+      build: () => SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) => cubit.setVoiceNoteHandling(VoiceNoteHandling.ask),
+      expect: () => <SettingsState>[],
+    );
+
+    test('initial state defaults to ask', () {
+      final cubit = SettingsCubit(
+        repository: repository,
+        notificationService: notificationService,
+      );
+      expect(cubit.state.voiceNoteHandling, VoiceNoteHandling.ask);
+    });
+  });
+
   group('SettingsCubit error paths', () {
     late MockJournalRepository mockRepository;
     late FakeNotificationService notificationService;
@@ -420,6 +484,33 @@ void main() {
         isA<SettingsState>()
             .having((s) => s.loaded, 'loaded', true)
             .having((s) => s.hideEntries, 'hideEntries', false),
+      ],
+    );
+
+    blocTest<SettingsCubit, SettingsState>(
+      'setVoiceNoteHandling reverts on repository error',
+      setUp: () {
+        when(
+          () => mockRepository.updateUserSettings(any()),
+        ).thenThrow(Exception('Write failed'));
+      },
+      build: () => SettingsCubit(
+        repository: mockRepository,
+        notificationService: notificationService,
+      ),
+      seed: () => const SettingsState(loaded: true),
+      act: (cubit) => cubit.setVoiceNoteHandling(VoiceNoteHandling.raw),
+      expect: () => [
+        isA<SettingsState>().having(
+          (s) => s.voiceNoteHandling,
+          'voiceNoteHandling',
+          VoiceNoteHandling.raw,
+        ),
+        isA<SettingsState>().having(
+          (s) => s.voiceNoteHandling,
+          'voiceNoteHandling',
+          VoiceNoteHandling.ask,
+        ),
       ],
     );
 

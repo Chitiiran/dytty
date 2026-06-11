@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
+import 'package:dytty/features/voice_note/voice_note_result.dart';
 import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
@@ -48,7 +50,14 @@ void main() {
 
   /// Builds a widget tree with all required providers, then taps a button
   /// to open the voice recording sheet via the real [showVoiceRecordingSheet].
-  Future<void> openSheet(WidgetTester tester) async {
+  Future<void> openSheet(
+    WidgetTester tester, {
+    VoiceNoteHandling handling = VoiceNoteHandling.ask,
+  }) async {
+    final settingsCubit = MockSettingsCubit();
+    when(
+      () => settingsCubit.state,
+    ).thenReturn(SettingsState(loaded: true, voiceNoteHandling: handling));
     await tester.pumpWidget(
       MaterialApp(
         home: MultiRepositoryProvider(
@@ -58,8 +67,11 @@ void main() {
             ),
             RepositoryProvider<LlmService>(create: (_) => mockLlm),
           ],
-          child: BlocProvider<CategoryCubit>.value(
-            value: mockCategoryCubit,
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<CategoryCubit>.value(value: mockCategoryCubit),
+              BlocProvider<SettingsCubit>.value(value: settingsCubit),
+            ],
             child: Builder(
               builder: (context) => Scaffold(
                 body: ElevatedButton(
@@ -400,7 +412,10 @@ void main() {
     testWidgets('tapping a different category chip selects it', (tester) async {
       await openSheetToReviewing(tester, category: 'positive');
 
-      // Tap the "Gratitude" chip
+      // Scroll the chip into view (sheet content sits lower since the
+      // cancel header was added) and tap it.
+      await tester.ensureVisible(find.text('Gratitude'));
+      await tester.pump();
       await tester.tap(find.text('Gratitude'));
       await tester.pump();
 
@@ -529,7 +544,8 @@ void main() {
   });
 
   group('LLM error during categorization', () {
-    testWidgets('shows error state when LLM throws', (tester) async {
+    testWidgets('falls back to raw review when LLM throws '
+        '(owner-verify: Gemini 500)', (tester) async {
       await openSheetToTranscriptReview(tester, 'Some text');
 
       when(
@@ -543,8 +559,242 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
+      // The user's words survive the LLM outage: straight to review with
+      // the raw transcript, category picked manually — never a dead end.
+      expect(find.text('Review your note'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Some text'), findsWidgets);
+      expect(find.text('Something went wrong'), findsNothing);
+    });
+  });
+
+  group('save-as-is and handling preference (#32)', () {
+    testWidgets('transcriptReview shows Save as-is between Discard and '
+        'Summarize', (tester) async {
+      await openSheetToTranscriptReview(tester, 'raw words');
+
+      expect(find.text('Discard'), findsOneWidget);
+      expect(find.text('Save as-is'), findsOneWidget);
+      expect(find.text('Summarize'), findsOneWidget);
+    });
+
+    testWidgets('Save as-is reaches reviewing with raw transcript, no LLM', (
+      tester,
+    ) async {
+      await openSheetToTranscriptReview(tester, 'keep this exact text');
+
+      await tester.tap(find.text('Save as-is'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Review your note'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'keep this exact text'),
+        findsWidgets,
+      );
+      verifyNever(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      );
+    });
+
+    testWidgets('transcriptReview action row fits a 360dp-wide screen', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      // Overflow throws a RenderFlex exception in debug, failing the test.
+      await openSheetToTranscriptReview(tester, 'narrow screen check');
+      expect(find.text('Save as-is'), findsOneWidget);
+    });
+
+    testWidgets('handling=raw skips transcriptReview entirely', (tester) async {
+      setupSttWithImmediateFinalResult('straight to review');
+      await openSheet(tester, handling: VoiceNoteHandling.raw);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Review transcript'), findsNothing);
+      expect(find.text('Review your note'), findsOneWidget);
+      verifyNever(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      );
+    });
+  });
+
+  group('cancel button (#187)', () {
+    testWidgets('visible in unavailable state', (tester) async {
+      await openSheet(tester);
+
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in error state', (tester) async {
+      when(() => mockStt.initialize()).thenThrow(Exception('STT failed'));
+
+      await openSheet(tester);
+
       expect(find.text('Something went wrong'), findsOneWidget);
-      expect(find.textContaining('Failed to categorize'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in listening state', (tester) async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+      when(
+        () => mockStt.listen(
+          onResult: any(named: 'onResult'),
+          pauseFor: any(named: 'pauseFor'),
+          listenFor: any(named: 'listenFor'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await openSheet(tester);
+
+      expect(find.text('Listening...'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+
+      // Flush flutter_animate timers before teardown.
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('visible in transcriptReview state', (tester) async {
+      await openSheetToTranscriptReview(tester, 'today was a good day');
+
+      expect(find.text('Review transcript'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in initial state', (tester) async {
+      // Initialization never completes — sheet stays in initial.
+      when(
+        () => mockStt.initialize(),
+      ).thenAnswer((_) => Completer<bool>().future);
+
+      await openSheet(tester);
+
+      expect(find.text('Initializing...'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in processing state', (tester) async {
+      await openSheetToTranscriptReview(tester, 'a long day at work');
+
+      // Completer holds the sheet in processing until we release it.
+      final completer = Completer<CategorizationResult>();
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenAnswer((_) => completer.future);
+
+      await tester.tap(find.text('Summarize'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Processing...'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+
+      // Release the future so teardown has no pending work.
+      completer.complete(
+        const CategorizationResult(
+          suggestedCategory: 'positive',
+          summary: 'Long day',
+          confidence: 0.9,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('visible in reviewing state', (tester) async {
+      await openSheetToTranscriptReview(tester, 'a long day at work');
+
+      when(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      ).thenAnswer(
+        (_) async => CategorizationResult(
+          suggestedCategory: 'positive',
+          summary: 'Long day',
+          confidence: 0.9,
+          suggestedTags: const ['work'],
+        ),
+      );
+
+      await tester.tap(find.text('Summarize'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Review your note'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('tapping cancel resolves with null and releases the mic', (
+      tester,
+    ) async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+      when(
+        () => mockStt.listen(
+          onResult: any(named: 'onResult'),
+          pauseFor: any(named: 'pauseFor'),
+          listenFor: any(named: 'listenFor'),
+        ),
+      ).thenAnswer((_) async {});
+
+      // Inline variant of openSheet that captures the sheet's result future.
+      final settingsCubit = MockSettingsCubit();
+      when(
+        () => settingsCubit.state,
+      ).thenReturn(const SettingsState(loaded: true));
+      Future<VoiceNoteResult?>? resultFuture;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<SpeechService>(
+                create: (_) => SpeechService(speech: mockStt),
+              ),
+              RepositoryProvider<LlmService>(create: (_) => mockLlm),
+            ],
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<CategoryCubit>.value(value: mockCategoryCubit),
+                BlocProvider<SettingsCubit>.value(value: settingsCubit),
+              ],
+              child: Builder(
+                builder: (context) => Scaffold(
+                  body: ElevatedButton(
+                    onPressed: () =>
+                        resultFuture = showVoiceRecordingSheet(context),
+                    child: const Text('Open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Cancel voice note'));
+      await tester.pumpAndSettle();
+
+      // Sheet dismissed mid-recording, host route intact, null result so
+      // the caller saves nothing, and the mic is released (#187).
+      expect(find.text('Listening...'), findsNothing);
+      expect(find.text('Open'), findsOneWidget);
+      await expectLater(resultFuture, completion(isNull));
+      verify(() => mockStt.cancel()).called(greaterThanOrEqualTo(1));
     });
   });
 }
