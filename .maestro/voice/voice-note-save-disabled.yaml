@@ -16,18 +16,19 @@ tags:
     visible: "Review transcript"
     timeout: 20000
 
-- tapOn: "Summarize"
+# Save-as-is (#32) guarantees NO category is pre-selected — the old
+# Summarize path gambled on the LLM not suggesting one (it usually
+# does), which made this flow nondeterministic.
+- tapOn: "Save as-is"
 
 - extendedWaitUntil:
     visible: "Review your note"
     timeout: 15000
 
-# Tap Save — if disabled (no category), we stay on review screen
+# Tap Save — disabled with no category, we stay on review screen
 - tapOn: "Save"
 
-# Assert we're still on review screen (Save didn't navigate away)
-# Note: if LLM pre-selected a category, Save will succeed and this
-# assertion fails — that's a known limitation (LLM behavior varies)
+# Deterministic now: no category can be selected on the save-as-is path
 - assertVisible: "Review your note"
 
 # Now select a category

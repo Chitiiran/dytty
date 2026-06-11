@@ -33,12 +33,11 @@ tags:
 # Tap Re-summarize
 - tapOn: "Re-summarize"
 
-# Assert reconciling state
-- extendedWaitUntil:
-    visible: "Re-summarizing.*"
-    timeout: 5000
-
-# Wait for reconciling to complete
+# Wait for reconciling to complete. Do NOT assert the transient
+# "Re-summarizing..." label — a fast LLM response makes it vanish
+# before Maestro polls (intermittent failure). Assert the outcome:
+# the button returns and the review screen is still intact.
 - extendedWaitUntil:
     visible: "Re-summarize"
-    timeout: 15000
+    timeout: 20000
+- assertVisible: "Review your note"
