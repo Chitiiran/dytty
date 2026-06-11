@@ -113,6 +113,17 @@ class JournalState extends Equatable {
   final DateTime selectedDate;
   final List<CategoryEntry> entries;
   final Map<String, Map<String, int>> monthCategoryMarkers;
+
+  /// Today's per-category entry counts, independent of which month
+  /// [monthCategoryMarkers] currently holds. Survives month navigation so
+  /// the dashboard (nudge + progress card) always reflects today (#154).
+  /// Stored with the date it was computed for; read through
+  /// [todayCategoryCounts] which returns empty once that date has passed
+  /// (midnight rollover must not show yesterday as "today").
+  final Map<String, int> _todayCategoryCounts;
+
+  /// 'yyyy-MM-dd' the stored counts belong to.
+  final String todayCountsDate;
   final int currentStreak;
   final String? lastJournalDate;
   final String? error;
@@ -124,22 +135,36 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     this.entries = const [],
     this.monthCategoryMarkers = const {},
+    Map<String, int>? todayCategoryCounts,
+    String? todayCountsDate,
     this.currentStreak = 0,
     this.lastJournalDate,
     this.error,
-  }) : selectedDate = selectedDate ?? DateTime.now();
+  }) : selectedDate = selectedDate ?? DateTime.now(),
+       // Derive from markers when not explicitly provided, so directly
+       // constructed states (tests, initial load) stay consistent.
+       _todayCategoryCounts =
+           todayCategoryCounts ??
+           Map<String, int>.from(
+             monthCategoryMarkers[_dateFormat.format(DateTime.now())] ??
+                 const {},
+           ),
+       todayCountsDate = todayCountsDate ?? _dateFormat.format(DateTime.now());
 
   String get selectedDateString => _dateFormat.format(selectedDate);
 
   /// Backward-compatible derived getter — dates that have any entries.
   Set<String> get daysWithEntries => monthCategoryMarkers.keys.toSet();
 
-  /// Whether the user has journaled today (based on monthCategoryMarkers).
-  bool get journaledToday {
-    final now = DateTime.now();
-    final todayStr = _dateFormat.format(now);
-    return daysWithEntries.contains(todayStr);
-  }
+  /// Today's counts, empty when the stored counts are for a past date
+  /// (midnight rollover).
+  Map<String, int> get todayCategoryCounts =>
+      todayCountsDate == _dateFormat.format(DateTime.now())
+      ? _todayCategoryCounts
+      : const {};
+
+  /// Whether the user has journaled today.
+  bool get journaledToday => todayCategoryCounts.isNotEmpty;
 
   List<CategoryEntry> entriesForCategory(String categoryId) {
     return entries.where((e) => e.categoryId == categoryId).toList();
@@ -150,6 +175,7 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     List<CategoryEntry>? entries,
     Map<String, Map<String, int>>? monthCategoryMarkers,
+    Map<String, int>? todayCategoryCounts,
     int? currentStreak,
     String? lastJournalDate,
     String? error,
@@ -159,6 +185,13 @@ class JournalState extends Equatable {
       selectedDate: selectedDate ?? this.selectedDate,
       entries: entries ?? this.entries,
       monthCategoryMarkers: monthCategoryMarkers ?? this.monthCategoryMarkers,
+      todayCategoryCounts: todayCategoryCounts ?? _todayCategoryCounts,
+      // Fresh counts are always computed "for now" — restamp their date.
+      // Preserved counts keep their original date so the rollover gate
+      // in the getter stays correct.
+      todayCountsDate: todayCategoryCounts != null
+          ? JournalState._dateFormat.format(DateTime.now())
+          : todayCountsDate,
       currentStreak: currentStreak ?? this.currentStreak,
       lastJournalDate: lastJournalDate ?? this.lastJournalDate,
       error: error,
@@ -171,6 +204,8 @@ class JournalState extends Equatable {
     selectedDate,
     entries,
     monthCategoryMarkers,
+    _todayCategoryCounts,
+    todayCountsDate,
     currentStreak,
     lastJournalDate,
     error,
@@ -215,6 +250,20 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     return source.map((k, v) => MapEntry(k, Map<String, int>.from(v)));
   }
 
+  /// Today's counts from [markers] when ([year], [month]) is the current
+  /// month, else null so copyWith preserves the existing value (#154).
+  Map<String, int>? _todayCountsIfCurrentMonth(
+    Map<String, Map<String, int>> markers,
+    int year,
+    int month,
+  ) {
+    final now = DateTime.now();
+    if (year != now.year || month != now.month) return null;
+    return Map<String, int>.from(
+      markers[JournalState._dateFormat.format(now)] ?? const {},
+    );
+  }
+
   Future<void> _onLoadEntries(
     LoadEntries event,
     Emitter<JournalState> emit,
@@ -241,37 +290,70 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     // Cancel previous date's subscription
     await _entriesSubscription?.cancel();
 
-    try {
-      final dateString = JournalState._dateFormat.format(event.date);
+    final dateString = JournalState._dateFormat.format(event.date);
 
-      // Subscribe to entry stream (cache-first, auto-updates on sync)
-      _entriesSubscription = _repository
-          .watchCategoryEntries(dateString)
-          .listen((entries) => add(_EntriesUpdated(entries)));
+    // Subscribe to entry stream (cache-first, auto-updates on sync)
+    _entriesSubscription = _repository
+        .watchCategoryEntries(dateString)
+        .listen((entries) => add(_EntriesUpdated(entries)));
 
-      // Fetch markers and streak in parallel
-      final results = await Future.wait([
-        _repository.getMonthCategoryMarkers(event.date.year, event.date.month),
-        _repository.getStreakData(),
-      ]);
+    // Fetch markers and streak independently: one failure must not discard
+    // the other's data (#189/#49/#151 — a failing streak query silently
+    // dropped successfully-fetched month markers).
+    String? loadError;
 
-      final markers = results[0] as Map<String, Map<String, int>>;
-      final streak = results[1] as StreakData;
-
-      final key = _cacheKey(event.date.year, event.date.month);
-      _markerCache[key] = markers;
-
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          monthCategoryMarkers: markers,
-          currentStreak: streak.currentStreak,
-          lastJournalDate: streak.lastJournalDate,
-        ),
-      );
-    } catch (e) {
-      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
+    Future<Map<String, Map<String, int>>?> fetchMarkers() async {
+      try {
+        return await _repository.getMonthCategoryMarkers(
+          event.date.year,
+          event.date.month,
+        );
+      } catch (e) {
+        loadError = e.toString();
+        return null;
+      }
     }
+
+    Future<StreakData?> fetchStreak() async {
+      try {
+        return await _repository.getStreakData();
+      } catch (e) {
+        loadError ??= e.toString();
+        return null;
+      }
+    }
+
+    final results = await Future.wait<Object?>([fetchMarkers(), fetchStreak()]);
+    final markers = results[0] as Map<String, Map<String, int>>?;
+    final streak = results[1] as StreakData?;
+
+    if (markers != null) {
+      _markerCache[_cacheKey(event.date.year, event.date.month)] = markers;
+    }
+
+    // Nothing usable loaded → error state; partial data → loaded with the
+    // error surfaced so the UI can show a banner with retry (#170).
+    if (markers == null && streak == null) {
+      emit(state.copyWith(status: JournalStatus.error, error: loadError));
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        status: JournalStatus.loaded,
+        monthCategoryMarkers: markers ?? state.monthCategoryMarkers,
+        todayCategoryCounts: markers != null
+            ? _todayCountsIfCurrentMonth(
+                markers,
+                event.date.year,
+                event.date.month,
+              )
+            : null,
+        currentStreak: streak?.currentStreak ?? state.currentStreak,
+        lastJournalDate: streak?.lastJournalDate ?? state.lastJournalDate,
+        error: loadError,
+      ),
+    );
   }
 
   /// Shared optimistic update for both AddEntry and AddVoiceEntry.
@@ -304,11 +386,21 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       optimisticStreak = state.currentStreak + 1;
     }
 
+    // Increment today's counts from their current value — the marker map
+    // may hold a different month after calendar navigation, so deriving
+    // from it would wipe today's other categories (review finding, #154).
+    Map<String, int>? todayCounts;
+    if (dateString == JournalState._dateFormat.format(DateTime.now())) {
+      todayCounts = Map<String, int>.from(state.todayCategoryCounts);
+      todayCounts[categoryId] = (todayCounts[categoryId] ?? 0) + 1;
+    }
+
     emit(
       state.copyWith(
         status: JournalStatus.loaded,
         entries: [...state.entries.where((e) => e.id != created.id), created],
         monthCategoryMarkers: currentMarkers,
+        todayCategoryCounts: todayCounts,
         currentStreak: optimisticStreak,
         lastJournalDate: dateString,
       ),
@@ -437,10 +529,25 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       );
       _markerCache[focusKey] = currentMarkers;
 
+      // Decrement today's counts from their current value, not from the
+      // marker map (which may hold another month — review finding, #154).
+      Map<String, int>? todayCounts;
+      if (dateStr == JournalState._dateFormat.format(DateTime.now()) &&
+          deletedEntry != null) {
+        todayCounts = Map<String, int>.from(state.todayCategoryCounts);
+        final count = (todayCounts[deletedEntry.categoryId] ?? 1) - 1;
+        if (count <= 0) {
+          todayCounts.remove(deletedEntry.categoryId);
+        } else {
+          todayCounts[deletedEntry.categoryId] = count;
+        }
+      }
+
       emit(
         state.copyWith(
           status: JournalStatus.loaded,
           monthCategoryMarkers: currentMarkers,
+          todayCategoryCounts: todayCounts,
         ),
       );
       // Refresh streak in background (non-blocking for UI)
@@ -467,7 +574,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final key = _cacheKey(event.year, event.month);
       if (_markerCache.containsKey(key)) {
-        emit(state.copyWith(monthCategoryMarkers: _markerCache[key]));
+        final cached = _markerCache[key]!;
+        emit(
+          state.copyWith(
+            monthCategoryMarkers: cached,
+            todayCategoryCounts: _todayCountsIfCurrentMonth(
+              cached,
+              event.year,
+              event.month,
+            ),
+          ),
+        );
         return;
       }
       final markers = await _repository.getMonthCategoryMarkers(
@@ -475,7 +592,16 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.month,
       );
       _markerCache[key] = markers;
-      emit(state.copyWith(monthCategoryMarkers: markers));
+      emit(
+        state.copyWith(
+          monthCategoryMarkers: markers,
+          todayCategoryCounts: _todayCountsIfCurrentMonth(
+            markers,
+            event.year,
+            event.month,
+          ),
+        ),
+      );
     } catch (_) {
       // Non-critical — silently fail for markers
     }
@@ -503,7 +629,15 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     final status = state.status == JournalStatus.saving
         ? JournalStatus.saving
         : JournalStatus.loaded;
-    emit(state.copyWith(status: status, entries: event.entries));
+    // Preserve any pending load error — the cache-first stream otherwise
+    // masks marker/streak failures and the user never sees feedback (#170).
+    emit(
+      state.copyWith(
+        status: status,
+        entries: event.entries,
+        error: state.error,
+      ),
+    );
   }
 
   @override

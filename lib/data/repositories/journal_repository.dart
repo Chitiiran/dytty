@@ -241,9 +241,10 @@ class JournalRepository {
   /// Computes streak data by walking dailyEntries backward from today.
   /// Returns {currentStreak, longestStreak, lastJournalDate}.
   Future<StreakData> getStreakData() async {
-    final snapshot = await _dailyEntriesCollection
-        .orderBy(FieldPath.documentId, descending: true)
-        .get();
+    // No server-side orderBy: doc IDs are collected into a Set and sorted
+    // client-side below. orderBy(__name__ DESC) required a composite index
+    // that was never deployed, failing every cold start (#170, #189).
+    final snapshot = await _dailyEntriesCollection.get();
 
     final dates = snapshot.docs.map((doc) => doc.id).toSet();
     if (dates.isEmpty) {
