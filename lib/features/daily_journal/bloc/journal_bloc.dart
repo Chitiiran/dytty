@@ -241,37 +241,63 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     // Cancel previous date's subscription
     await _entriesSubscription?.cancel();
 
-    try {
-      final dateString = JournalState._dateFormat.format(event.date);
+    final dateString = JournalState._dateFormat.format(event.date);
 
-      // Subscribe to entry stream (cache-first, auto-updates on sync)
-      _entriesSubscription = _repository
-          .watchCategoryEntries(dateString)
-          .listen((entries) => add(_EntriesUpdated(entries)));
+    // Subscribe to entry stream (cache-first, auto-updates on sync)
+    _entriesSubscription = _repository
+        .watchCategoryEntries(dateString)
+        .listen((entries) => add(_EntriesUpdated(entries)));
 
-      // Fetch markers and streak in parallel
-      final results = await Future.wait([
-        _repository.getMonthCategoryMarkers(event.date.year, event.date.month),
-        _repository.getStreakData(),
-      ]);
+    // Fetch markers and streak independently: one failure must not discard
+    // the other's data (#189/#49/#151 — a failing streak query silently
+    // dropped successfully-fetched month markers).
+    String? loadError;
 
-      final markers = results[0] as Map<String, Map<String, int>>;
-      final streak = results[1] as StreakData;
-
-      final key = _cacheKey(event.date.year, event.date.month);
-      _markerCache[key] = markers;
-
-      emit(
-        state.copyWith(
-          status: JournalStatus.loaded,
-          monthCategoryMarkers: markers,
-          currentStreak: streak.currentStreak,
-          lastJournalDate: streak.lastJournalDate,
-        ),
-      );
-    } catch (e) {
-      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
+    Future<Map<String, Map<String, int>>?> fetchMarkers() async {
+      try {
+        return await _repository.getMonthCategoryMarkers(
+          event.date.year,
+          event.date.month,
+        );
+      } catch (e) {
+        loadError = e.toString();
+        return null;
+      }
     }
+
+    Future<StreakData?> fetchStreak() async {
+      try {
+        return await _repository.getStreakData();
+      } catch (e) {
+        loadError ??= e.toString();
+        return null;
+      }
+    }
+
+    final results = await Future.wait<Object?>([fetchMarkers(), fetchStreak()]);
+    final markers = results[0] as Map<String, Map<String, int>>?;
+    final streak = results[1] as StreakData?;
+
+    if (markers != null) {
+      _markerCache[_cacheKey(event.date.year, event.date.month)] = markers;
+    }
+
+    // Nothing usable loaded → error state; partial data → loaded with the
+    // error surfaced so the UI can show a banner with retry (#170).
+    if (markers == null && streak == null) {
+      emit(state.copyWith(status: JournalStatus.error, error: loadError));
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        status: JournalStatus.loaded,
+        monthCategoryMarkers: markers ?? state.monthCategoryMarkers,
+        currentStreak: streak?.currentStreak ?? state.currentStreak,
+        lastJournalDate: streak?.lastJournalDate ?? state.lastJournalDate,
+        error: loadError,
+      ),
+    );
   }
 
   /// Shared optimistic update for both AddEntry and AddVoiceEntry.
@@ -503,7 +529,15 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     final status = state.status == JournalStatus.saving
         ? JournalStatus.saving
         : JournalStatus.loaded;
-    emit(state.copyWith(status: status, entries: event.entries));
+    // Preserve any pending load error — the cache-first stream otherwise
+    // masks marker/streak failures and the user never sees feedback (#170).
+    emit(
+      state.copyWith(
+        status: status,
+        entries: event.entries,
+        error: state.error,
+      ),
+    );
   }
 
   @override

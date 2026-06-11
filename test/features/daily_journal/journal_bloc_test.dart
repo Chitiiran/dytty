@@ -1012,4 +1012,101 @@ void main() {
       ],
     );
   });
+
+  group('JournalBloc SelectDate resilience (#189/#49/#151/#170)', () {
+    late MockJournalRepository mockRepository;
+
+    const streak = StreakData(
+      currentStreak: 2,
+      longestStreak: 4,
+      lastJournalDate: '2026-03-01',
+    );
+    final markers = {
+      '2026-03-01': {'positive': 1},
+    };
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'applies markers and surfaces error when getStreakData throws',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer((_) async => markers);
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenThrow(Exception('FAILED_PRECONDITION: index missing'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.monthCategoryMarkers, markers);
+        expect(bloc.state.error, contains('FAILED_PRECONDITION'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'applies streak and surfaces error when getMonthCategoryMarkers throws',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenThrow(Exception('markers failed'));
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenAnswer((_) async => streak);
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.currentStreak, 2);
+        expect(bloc.state.lastJournalDate, '2026-03-01');
+        expect(bloc.state.error, contains('markers failed'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'entry stream emission does not clear a pending load error',
+      setUp: () {
+        when(() => mockRepository.watchCategoryEntries(any())).thenAnswer(
+          (_) => Stream.value([
+            CategoryEntry(
+              id: 'e1',
+              categoryId: 'positive',
+              text: 'cached entry',
+              createdAt: DateTime(2026, 3, 1),
+            ),
+          ]),
+        );
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenThrow(Exception('markers failed'));
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenAnswer((_) async => streak);
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.entries.length, 1);
+        expect(
+          bloc.state.error,
+          contains('markers failed'),
+          reason: 'stream emits must not mask load errors (#170)',
+        );
+      },
+    );
+  });
 }
