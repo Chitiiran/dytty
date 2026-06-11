@@ -191,4 +191,82 @@ void main() {
       }
     });
   });
+
+  group('resolveMenuLayout (adaptive radius, owner-verify feedback)', () {
+    const screen = Size(411, 800);
+    const bubble = 24.0;
+
+    test('interior anchors get the tight radius with a full circle', () {
+      final layout = resolveMenuLayout(
+        categoryCount: 5,
+        center: const Offset(205, 400),
+        screen: screen,
+        bubbleRadius: bubble,
+      );
+      expect(layout.window.sweep, closeTo(2 * pi, 1e-9));
+      expect(layout.radius, lessThan(menuRadius(5)));
+      expect(layout.radius, menuRadiusTight(5));
+    });
+
+    test('edge anchors fall back to the wide radius', () {
+      final layout = resolveMenuLayout(
+        categoryCount: 5,
+        center: const Offset(30, 400),
+        screen: screen,
+        bubbleRadius: bubble,
+      );
+      expect(layout.window.sweep, lessThan(2 * pi - 1e-6));
+      expect(layout.radius, menuRadius(5));
+    });
+
+    test('tight radius keeps full-circle bubbles clear of each other and '
+        'the mic', () {
+      for (var n = 2; n <= 8; n++) {
+        final r = menuRadiusTight(n);
+        // Mic visual circle is 20dp; bubble inner edge must clear it.
+        expect(r - bubble, greaterThanOrEqualTo(28), reason: 'n=$n mic gap');
+        final spacing = 2 * pi / n;
+        final chord = 2 * r * sin(spacing / 2);
+        expect(
+          chord,
+          greaterThanOrEqualTo(2 * bubble),
+          reason: 'n=$n adjacent bubbles overlap at tight radius',
+        );
+      }
+    });
+
+    test('resolved layout keeps every bubble on-screen across anchors and '
+        'counts', () {
+      for (final cx in [30.0, 114.0, 205.0, 370.0]) {
+        for (final cy in [30.0, 114.0, 400.0, 686.0, 770.0]) {
+          for (var n = 2; n <= 8; n++) {
+            final layout = resolveMenuLayout(
+              categoryCount: n,
+              center: Offset(cx, cy),
+              screen: screen,
+              bubbleRadius: bubble,
+            );
+            final isFull = layout.window.sweep >= 2 * pi - 1e-6;
+            final lo = isFull ? bubble - 0.5 : bubble + 8 - 0.5;
+            for (final a in bubbleAngles(n, layout.window)) {
+              final p = Offset(
+                cx + layout.radius * cos(a),
+                cy + layout.radius * sin(a),
+              );
+              expect(
+                p.dx,
+                inInclusiveRange(lo, screen.width - lo),
+                reason: 'anchor ($cx,$cy) n=$n',
+              );
+              expect(
+                p.dy,
+                inInclusiveRange(lo, screen.height - lo),
+                reason: 'anchor ($cx,$cy) n=$n',
+              );
+            }
+          }
+        }
+      }
+    });
+  });
 }

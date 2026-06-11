@@ -508,13 +508,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final effectiveAnchor =
         anchor ?? Offset(screenSize.width / 2, screenSize.height / 2);
 
-    final radius = menuRadius(categories.length);
-    final window = visibleArcWindow(
+    final layout = resolveMenuLayout(
+      categoryCount: categories.length,
       center: effectiveAnchor,
       screen: screenSize,
-      radius: radius,
       bubbleRadius: bubbleRadius,
     );
+    final radius = layout.radius;
+    final window = layout.window;
     final boxSize = 2 * (radius + bubbleRadius);
 
     // Follow the cell, don't pin to open-time coordinates: keyboard insets

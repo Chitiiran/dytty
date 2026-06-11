@@ -11,8 +11,50 @@ import 'dart:ui';
 /// stay reachable one-handed.
 double menuRadius(int count) => (40 + 7.0 * count).clamp(54.0, 96.0);
 
+/// Tighter orbit for anchors with the full circle available (interior
+/// cells): bubbles hug the mic (owner feedback — the wide orbit felt far
+/// from the cell). Edge/corner windows keep [menuRadius]: packing the
+/// same bubbles into a partial arc at this radius would collide
+/// neighbors. Floor keeps a 48dp bubble clear of the 40dp mic.
+double menuRadiusTight(int count) => (36 + 5.0 * count).clamp(56.0, 96.0);
+
 /// A contiguous angular window: [start] in radians, [sweep] in radians.
 typedef ArcWindow = ({double start, double sweep});
+
+/// Resolves radius and window together: tight radius when its window is
+/// the full circle, otherwise the wide radius with its own (partial)
+/// window so edge-cell spacing guarantees hold. Radii are dp — identical
+/// on phones and tablets; only the window adapts to the screen.
+({double radius, ArcWindow window}) resolveMenuLayout({
+  required int categoryCount,
+  required Offset center,
+  required Size screen,
+  required double bubbleRadius,
+  double padding = 16,
+}) {
+  final tight = menuRadiusTight(categoryCount);
+  final tightWindow = visibleArcWindow(
+    center: center,
+    screen: screen,
+    radius: tight,
+    bubbleRadius: bubbleRadius,
+    padding: padding,
+  );
+  if (tightWindow.sweep >= 2 * pi - 1e-9) {
+    return (radius: tight, window: tightWindow);
+  }
+  final wide = menuRadius(categoryCount);
+  return (
+    radius: wide,
+    window: visibleArcWindow(
+      center: center,
+      screen: screen,
+      radius: wide,
+      bubbleRadius: bubbleRadius,
+      padding: padding,
+    ),
+  );
+}
 
 /// Largest contiguous angular window in which a bubble of [bubbleRadius]
 /// at [radius] from [center] stays fully on-screen with [padding] from
