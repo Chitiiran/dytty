@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/voice_note_handling.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
+
+export 'package:dytty/core/constants/voice_note_handling.dart'
+    show VoiceNoteHandling;
 
 // --- Events ---
 
@@ -161,10 +165,6 @@ class VoiceNoteState extends Equatable {
 }
 
 // --- Bloc ---
-
-/// How a finished recording proceeds (#32): pause for transcript review,
-/// summarize immediately, or keep the raw transcript immediately.
-enum VoiceNoteHandling { ask, summarize, raw }
 
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   final SpeechService _speechService;
