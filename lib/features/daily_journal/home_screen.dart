@@ -29,6 +29,29 @@ class _HomeScreenState extends State<HomeScreen> {
   OverlayEntry? _radialMenuOverlay;
   Offset? _lastTapGlobalPosition;
 
+  /// Stable key per visible day cell so the radial menu can anchor to the
+  /// tapped cell's center instead of the raw tap position (#188).
+  ///
+  /// INVARIANT: relies on `outsideDaysVisible: false` on the calendar.
+  /// table_calendar renders outside days before the custom builders only
+  /// when they are hidden; with visible outside days a selected/today
+  /// boundary date would build on BOTH adjacent month pages mid-swipe and
+  /// duplicate a GlobalKey (framework crash).
+  final Map<String, GlobalKey> _dayCellKeys = {};
+
+  GlobalKey _dayCellKey(DateTime day) =>
+      _dayCellKeys.putIfAbsent(_dateFormat.format(day), GlobalKey.new);
+
+  /// Global center of the rendered cell for [day], or null if not laid out.
+  Offset? _dayCellCenter(DateTime day) {
+    final box =
+        _dayCellKeys[_dateFormat.format(day)]?.currentContext
+                ?.findRenderObject()
+            as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -181,7 +204,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           _showRadialMenu(
                             context,
                             selectedDay,
-                            tapPosition: _lastTapGlobalPosition,
+                            // Anchor to the cell center; fall back to the
+                            // tap position when the cell has no key/box —
+                            // e.g. outside days in week/two-week formats,
+                            // which skip the custom builders (#188).
+                            anchor:
+                                _dayCellCenter(selectedDay) ??
+                                _lastTapGlobalPosition,
                           );
                         },
                         onFormatChanged: (format) {
@@ -200,37 +229,46 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         calendarBuilders: CalendarBuilders(
                           defaultBuilder: (context, day, focusedDay) =>
-                              CompletionRingCell(
-                                day: day,
-                                categoryMarkers:
-                                    journalState
-                                        .monthCategoryMarkers[_dateFormat
-                                        .format(day)],
-                                activeCategories:
-                                    categoryState.activeCategories,
+                              KeyedSubtree(
+                                key: _dayCellKey(day),
+                                child: CompletionRingCell(
+                                  day: day,
+                                  categoryMarkers:
+                                      journalState
+                                          .monthCategoryMarkers[_dateFormat
+                                          .format(day)],
+                                  activeCategories:
+                                      categoryState.activeCategories,
+                                ),
                               ),
                           todayBuilder: (context, day, focusedDay) =>
-                              CompletionRingCell(
-                                day: day,
-                                categoryMarkers:
-                                    journalState
-                                        .monthCategoryMarkers[_dateFormat
-                                        .format(day)],
-                                activeCategories:
-                                    categoryState.activeCategories,
-                                isToday: true,
+                              KeyedSubtree(
+                                key: _dayCellKey(day),
+                                child: CompletionRingCell(
+                                  day: day,
+                                  categoryMarkers:
+                                      journalState
+                                          .monthCategoryMarkers[_dateFormat
+                                          .format(day)],
+                                  activeCategories:
+                                      categoryState.activeCategories,
+                                  isToday: true,
+                                ),
                               ),
                           selectedBuilder: (context, day, focusedDay) =>
-                              CompletionRingCell(
-                                day: day,
-                                categoryMarkers:
-                                    journalState
-                                        .monthCategoryMarkers[_dateFormat
-                                        .format(day)],
-                                activeCategories:
-                                    categoryState.activeCategories,
-                                isSelected: true,
-                                isToday: isSameDay(day, DateTime.now()),
+                              KeyedSubtree(
+                                key: _dayCellKey(day),
+                                child: CompletionRingCell(
+                                  day: day,
+                                  categoryMarkers:
+                                      journalState
+                                          .monthCategoryMarkers[_dateFormat
+                                          .format(day)],
+                                  activeCategories:
+                                      categoryState.activeCategories,
+                                  isSelected: true,
+                                  isToday: isSameDay(day, DateTime.now()),
+                                ),
                               ),
                         ),
                         headerStyle: HeaderStyle(
@@ -396,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showRadialMenu(
     BuildContext context,
     DateTime selectedDay, {
-    Offset? tapPosition,
+    Offset? anchor,
   }) {
     _dismissRadialMenu();
 
@@ -426,12 +464,12 @@ class _HomeScreenState extends State<HomeScreen> {
     const menuSize = 250.0;
     const menuPadding = 16.0;
 
-    // Fall back to screen center if no tap position
-    final effectiveTap =
-        tapPosition ?? Offset(screenSize.width / 2, screenSize.height / 2);
+    // Fall back to screen center if no anchor is available
+    final effectiveAnchor =
+        anchor ?? Offset(screenSize.width / 2, screenSize.height / 2);
 
     final menuOffset = clampMenuPosition(
-      tapPosition: effectiveTap,
+      tapPosition: effectiveAnchor,
       screenSize: screenSize,
       menuSize: menuSize,
       padding: menuPadding,
