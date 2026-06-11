@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:dytty/data/models/category_config.dart';
-import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
@@ -178,6 +177,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     .fadeIn(duration: 400.ms)
                     .slideX(begin: -0.05, end: 0, duration: 400.ms),
 
+                // Load failure feedback with retry (#170)
+                if (journalState.error != null)
+                  MaterialBanner(
+                    leading: Icon(
+                      Icons.cloud_off_rounded,
+                      color: theme.colorScheme.error,
+                    ),
+                    content: const Text("Couldn't load your journal data."),
+                    actions: [
+                      TextButton(
+                        onPressed: () => context.read<JournalBloc>().add(
+                          SelectDate(journalState.selectedDate),
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+
+                if (journalState.status == JournalStatus.loading)
+                  const LinearProgressIndicator(minHeight: 2),
+
                 // Calendar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -342,9 +362,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _ProgressCard(
-                        entries: journalState.entries,
+                        // Always today's status, independent of the
+                        // selected date (#154).
+                        filledCategoryIds: journalState.todayCategoryCounts.keys
+                            .toSet(),
                         categories: categoryState.activeCategories,
-                        selectedDate: journalState.selectedDate,
                         currentStreak: journalState.currentStreak,
                         onCategoryTap: (categoryId) {
                           Navigator.pushNamed(
@@ -640,16 +662,14 @@ class _InitialsAvatar extends StatelessWidget {
 }
 
 class _ProgressCard extends StatelessWidget {
-  final List<CategoryEntry> entries;
+  final Set<String> filledCategoryIds;
   final List<CategoryConfig> categories;
   final int currentStreak;
-  final DateTime selectedDate;
   final void Function(String categoryId)? onCategoryTap;
 
   const _ProgressCard({
-    required this.entries,
+    required this.filledCategoryIds,
     required this.categories,
-    required this.selectedDate,
     this.currentStreak = 0,
     this.onCategoryTap,
   });
@@ -657,10 +677,6 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final filledCategoryIds = <String>{};
-    for (final entry in entries) {
-      filledCategoryIds.add(entry.categoryId);
-    }
     final total = categories.length;
     final filled = filledCategoryIds
         .intersection(categories.map((c) => c.id).toSet())
@@ -689,9 +705,7 @@ class _ProgressCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    isSameDay(selectedDate, DateTime.now())
-                        ? "Today's Progress"
-                        : '${DateFormat('MMM d').format(selectedDate)} Progress',
+                    "Today's Progress",
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
