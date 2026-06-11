@@ -31,6 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Stable key per visible day cell so the radial menu can anchor to the
   /// tapped cell's center instead of the raw tap position (#188).
+  ///
+  /// INVARIANT: relies on `outsideDaysVisible: false` on the calendar.
+  /// table_calendar renders outside days before the custom builders only
+  /// when they are hidden; with visible outside days a selected/today
+  /// boundary date would build on BOTH adjacent month pages mid-swipe and
+  /// duplicate a GlobalKey (framework crash).
   final Map<String, GlobalKey> _dayCellKeys = {};
 
   GlobalKey _dayCellKey(DateTime day) =>
@@ -199,7 +205,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             selectedDay,
                             // Anchor to the cell center; fall back to the
-                            // tap position if the cell isn't laid out (#188).
+                            // tap position when the cell has no key/box —
+                            // e.g. outside days in week/two-week formats,
+                            // which skip the custom builders (#188).
                             anchor:
                                 _dayCellCenter(selectedDay) ??
                                 _lastTapGlobalPosition,

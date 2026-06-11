@@ -424,16 +424,21 @@ void main() {
     testWidgets('menu centers on the tapped cell, not the tap position', (
       tester,
     ) async {
-      final today = DateTime.now();
-      final todayStr = dateFormat.format(today);
+      // Fixed mid-month day: the 15th is never in the first calendar row
+      // and exists in every month, so the assertion's discrimination power
+      // does not depend on the date the suite runs (review finding on
+      // DateTime.now()-based cells in clamp-adjacent columns).
+      final now = DateTime.now();
+      final fixedDay = DateTime(now.year, now.month, 15);
+      final dayStr = dateFormat.format(fixedDay);
 
       await tester.pumpApp(
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          selectedDate: today,
+          selectedDate: fixedDay,
           monthCategoryMarkers: {
-            todayStr: {'positive': 1},
+            dayStr: {'positive': 1},
           },
         ),
         categoryState: CategoryState(
@@ -443,15 +448,16 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 1));
 
-      // Locate today's cell and tap OFF-center, near its top-left corner.
+      // Locate the cell and tap OFF-center, near its top-left corner.
       final cellFinder = find
           .ancestor(
-            of: find.text('${today.day}').first,
+            of: find.text('15').first,
             matching: find.byType(CompletionRingCell),
           )
           .first;
       final cellRect = tester.getRect(cellFinder);
-      await tester.tapAt(cellRect.topLeft + const Offset(4, 4));
+      final tapPoint = cellRect.topLeft + const Offset(4, 4);
+      await tester.tapAt(tapPoint);
       await tester.pumpAndSettle();
 
       expect(find.byType(CategoryRadialMenu), findsOneWidget);
@@ -466,17 +472,30 @@ void main() {
         menuSize: 250,
         padding: 16,
       );
-      final menuRect = tester.getRect(
+      final buggyTopLeft = clampMenuPosition(
+        tapPosition: tapPoint,
+        screenSize: screenSize,
+        menuSize: 250,
+        padding: 16,
+      );
+      final positioned = tester.widget<Positioned>(
         find
             .ancestor(
               of: find.byType(CategoryRadialMenu),
-              matching: find.byType(SizedBox),
+              matching: find.byType(Positioned),
             )
             .first,
       );
 
-      expect(menuRect.left, closeTo(expectedTopLeft.dx, 1.0));
-      expect(menuRect.top, closeTo(expectedTopLeft.dy, 1.0));
+      expect(positioned.left, closeTo(expectedTopLeft.dx, 1.0));
+      expect(positioned.top, closeTo(expectedTopLeft.dy, 1.0));
+      // Guard the test's own discrimination power: the cell-center anchor
+      // must be distinguishable from the old tap-position anchor here.
+      expect(
+        (buggyTopLeft - expectedTopLeft).distance,
+        greaterThan(2.0),
+        reason: 'corner tap and cell center must clamp to different anchors',
+      );
     });
   });
 }
