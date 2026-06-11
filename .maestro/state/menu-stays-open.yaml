@@ -28,15 +28,26 @@ tags:
 - waitForAnimationToEnd:
     timeout: 5000
 
-# Menu must still be open after the save (#158)
+# Menu must still be open after the save (#158). Today's progress card
+# is intentionally NOT asserted — the mid-grid tap selects an arbitrary
+# date and the dashboard is today-sourced (#154). Badge reactivity is
+# covered at widget level; the device-level proof of stay-open is that
+# a SECOND category is immediately reachable.
 - assertVisible: "Start voice call"
 - takeScreenshot: ".maestro/screenshots/latest/state/158-menu-still-open"
 
-# Back gesture dismisses the MENU, not the screen
+# Multi-category flow: second bubble opens its sheet directly
+- tapOn: "Add Negative Things entry from menu"
+- waitForAnimationToEnd
+- assertVisible: "What was challenging today.*"
+# Dismiss keyboard first — otherwise the next back only closes it
+- hideKeyboard
+- back
+- waitForAnimationToEnd
+
+# Back gesture now dismisses the MENU, not the screen
 - back
 - waitForAnimationToEnd:
     timeout: 5000
 - assertNotVisible: "Start voice call"
-
-# Entry registered on the dashboard
-- assertVisible: "Progress 1 of 5.*"
+- assertVisible: "Write"
