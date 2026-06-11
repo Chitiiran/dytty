@@ -63,8 +63,10 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
                     children: [
                       // Drag handle + always-visible cancel — swipe-down is
                       // not discoverable, user must never be trapped (#187).
+                      // 48 keeps the IconButton at the Material minimum
+                      // touch target.
                       SizedBox(
-                        height: 40,
+                        height: 48,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
