@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/voice_note/voice_note_result.dart';
 import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -49,7 +50,14 @@ void main() {
 
   /// Builds a widget tree with all required providers, then taps a button
   /// to open the voice recording sheet via the real [showVoiceRecordingSheet].
-  Future<void> openSheet(WidgetTester tester) async {
+  Future<void> openSheet(
+    WidgetTester tester, {
+    VoiceNoteHandling handling = VoiceNoteHandling.ask,
+  }) async {
+    final settingsCubit = MockSettingsCubit();
+    when(
+      () => settingsCubit.state,
+    ).thenReturn(SettingsState(loaded: true, voiceNoteHandling: handling));
     await tester.pumpWidget(
       MaterialApp(
         home: MultiRepositoryProvider(
@@ -59,8 +67,11 @@ void main() {
             ),
             RepositoryProvider<LlmService>(create: (_) => mockLlm),
           ],
-          child: BlocProvider<CategoryCubit>.value(
-            value: mockCategoryCubit,
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<CategoryCubit>.value(value: mockCategoryCubit),
+              BlocProvider<SettingsCubit>.value(value: settingsCubit),
+            ],
             child: Builder(
               builder: (context) => Scaffold(
                 body: ElevatedButton(
@@ -552,6 +563,54 @@ void main() {
     });
   });
 
+  group('save-as-is and handling preference (#32)', () {
+    testWidgets('transcriptReview shows Save as-is between Discard and '
+        'Summarize', (tester) async {
+      await openSheetToTranscriptReview(tester, 'raw words');
+
+      expect(find.text('Discard'), findsOneWidget);
+      expect(find.text('Save as-is'), findsOneWidget);
+      expect(find.text('Summarize'), findsOneWidget);
+    });
+
+    testWidgets('Save as-is reaches reviewing with raw transcript, no LLM', (
+      tester,
+    ) async {
+      await openSheetToTranscriptReview(tester, 'keep this exact text');
+
+      await tester.tap(find.text('Save as-is'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Review your note'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'keep this exact text'),
+        findsWidgets,
+      );
+      verifyNever(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      );
+    });
+
+    testWidgets('handling=raw skips transcriptReview entirely', (tester) async {
+      setupSttWithImmediateFinalResult('straight to review');
+      await openSheet(tester, handling: VoiceNoteHandling.raw);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Review transcript'), findsNothing);
+      expect(find.text('Review your note'), findsOneWidget);
+      verifyNever(
+        () => mockLlm.categorizeEntry(
+          any(),
+          categoryIds: any(named: 'categoryIds'),
+        ),
+      );
+    });
+  });
+
   group('cancel button (#187)', () {
     testWidgets('visible in unavailable state', (tester) async {
       await openSheet(tester);
@@ -674,6 +733,10 @@ void main() {
       ).thenAnswer((_) async {});
 
       // Inline variant of openSheet that captures the sheet's result future.
+      final settingsCubit = MockSettingsCubit();
+      when(
+        () => settingsCubit.state,
+      ).thenReturn(const SettingsState(loaded: true));
       Future<VoiceNoteResult?>? resultFuture;
       await tester.pumpWidget(
         MaterialApp(
@@ -684,8 +747,11 @@ void main() {
               ),
               RepositoryProvider<LlmService>(create: (_) => mockLlm),
             ],
-            child: BlocProvider<CategoryCubit>.value(
-              value: mockCategoryCubit,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<CategoryCubit>.value(value: mockCategoryCubit),
+                BlocProvider<SettingsCubit>.value(value: settingsCubit),
+              ],
               child: Builder(
                 builder: (context) => Scaffold(
                   body: ElevatedButton(
