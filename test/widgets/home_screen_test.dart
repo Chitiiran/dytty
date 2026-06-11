@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
@@ -79,20 +80,7 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good day',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e2',
-              categoryId: 'gratitude',
-              text: 'Thankful',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {'positive': 1, 'gratitude': 1},
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
@@ -104,6 +92,92 @@ void main() {
       robot = HomeScreenRobot(tester);
       // 2 categories filled out of 5 defaults
       robot.expectProgressVisible(2, 5);
+    });
+
+    testWidgets('progress card shows today counts when a past date is '
+        'selected (#154)', (tester) async {
+      final pastDate = DateTime.now().subtract(const Duration(days: 10));
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: pastDate,
+          // Selected (past) date has a single entry loaded...
+          entries: [
+            CategoryEntry(
+              id: 'e1',
+              categoryId: 'positive',
+              text: 'Old entry',
+              createdAt: pastDate,
+            ),
+          ],
+          // ...but today has 3 filled categories.
+          todayCategoryCounts: const {
+            'positive': 1,
+            'gratitude': 2,
+            'beauty': 1,
+          },
+        ),
+        categoryState: CategoryState(
+          categories: CategoryConfig.defaults,
+          loaded: true,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      robot = HomeScreenRobot(tester);
+      // Dashboard reflects today (3/5), not the selected date (1/5).
+      robot.expectProgressVisible(3, 5);
+      expect(find.text("Today's Progress"), findsOneWidget);
+    });
+
+    testWidgets('shows error banner with retry when load failed (#170)', (
+      tester,
+    ) async {
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          error: 'FAILED_PRECONDITION: index missing',
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.textContaining("Couldn't load"), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testWidgets('tapping retry dispatches SelectDate for the selected date', (
+      tester,
+    ) async {
+      final selected = DateTime(2026, 6, 1);
+      final journalBloc = MockJournalBloc();
+
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalBloc: journalBloc,
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: selected,
+          error: 'network down',
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+
+      verify(() => journalBloc.add(SelectDate(selected))).called(1);
+    });
+
+    testWidgets('no error banner when error is null', (tester) async {
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(status: JournalStatus.loaded),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Retry'), findsNothing);
     });
 
     testWidgets('mic FAB is present', (tester) async {
@@ -170,26 +244,11 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e2',
-              categoryId: 'gratitude',
-              text: 'Thanks',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e3',
-              categoryId: 'beauty',
-              text: 'Sunset',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {
+            'positive': 1,
+            'gratitude': 1,
+            'beauty': 1,
+          },
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
@@ -207,38 +266,13 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e2',
-              categoryId: 'negative',
-              text: 'Bad',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e3',
-              categoryId: 'gratitude',
-              text: 'Thanks',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e4',
-              categoryId: 'beauty',
-              text: 'Sunset',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e5',
-              categoryId: 'identity',
-              text: 'Growth',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {
+            'positive': 1,
+            'negative': 1,
+            'gratitude': 1,
+            'beauty': 1,
+            'identity': 1,
+          },
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
@@ -335,38 +369,13 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e2',
-              categoryId: 'negative',
-              text: 'Bad',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e3',
-              categoryId: 'gratitude',
-              text: 'Thanks',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e4',
-              categoryId: 'beauty',
-              text: 'Sunset',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e5',
-              categoryId: 'identity',
-              text: 'Growth',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {
+            'positive': 1,
+            'negative': 1,
+            'gratitude': 1,
+            'beauty': 1,
+            'identity': 1,
+          },
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
@@ -385,14 +394,7 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {'positive': 1},
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
@@ -412,32 +414,12 @@ void main() {
         const HomeScreen(),
         journalState: JournalState(
           status: JournalStatus.loaded,
-          entries: [
-            CategoryEntry(
-              id: 'e1',
-              categoryId: 'positive',
-              text: 'Good',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e2',
-              categoryId: 'negative',
-              text: 'Bad',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e3',
-              categoryId: 'gratitude',
-              text: 'Thanks',
-              createdAt: DateTime.now(),
-            ),
-            CategoryEntry(
-              id: 'e4',
-              categoryId: 'beauty',
-              text: 'Sunset',
-              createdAt: DateTime.now(),
-            ),
-          ],
+          todayCategoryCounts: const {
+            'positive': 1,
+            'negative': 1,
+            'gratitude': 1,
+            'beauty': 1,
+          },
         ),
         categoryState: CategoryState(
           categories: CategoryConfig.defaults,
