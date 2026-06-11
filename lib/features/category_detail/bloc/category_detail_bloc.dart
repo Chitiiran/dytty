@@ -457,19 +457,18 @@ class CategoryDetailBloc
 
     emit(state.copyWith(recentEntries: updatedGroups));
 
-    // Persist to Firestore
-    for (final ref in event.entries) {
-      try {
-        await _repository.markEntryReviewed(ref.date, ref.entryId);
-      } catch (e) {
-        emit(
-          state.copyWith(
-            recentEntries: previousGroups,
-            error: 'Failed to mark entry as reviewed: $e',
-          ),
-        );
-        return;
-      }
+    // Persist to Firestore in a single batch write (#110)
+    try {
+      await _repository.markEntriesReviewed([
+        for (final ref in event.entries) (date: ref.date, entryId: ref.entryId),
+      ]);
+    } catch (e) {
+      emit(
+        state.copyWith(
+          recentEntries: previousGroups,
+          error: 'Failed to mark entries as reviewed: $e',
+        ),
+      );
     }
   }
 

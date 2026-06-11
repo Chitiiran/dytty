@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "State: adding entry on a past date fills that date's ring, not today's"
+tags:
+  - state
+  - regression
+---
+# Regression test for #162 (state-management E2E): an entry added on a
+# past date must mark THAT date — today's dashboard stays untouched.
+
+- runFlow: "../helpers/login.yaml"
+
+# Clean slate
+- assertVisible: "Progress 0 of 5"
+
+# Open today's journal and step back one day
+- tapOn: "Today button"
+- waitForAnimationToEnd
+- tapOn: "Previous day"
+- waitForAnimationToEnd
+
+# Add an entry on the past date
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- eraseText
+- inputText: "Past date ring entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Past date ring entry.*"
+
+# Back to home: today's progress must STILL be 0 of 5 — the entry
+# belongs to yesterday, not today. (".*" — yesterday's entry bumps the
+# streak, so the label gains a ", streak 1 day" suffix. Apostrophe in
+# the nudge is typographic; match with ".*" like sibling flows.)
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Progress 0 of 5.*"
+- assertVisible: "You haven.*journaled today.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/162-past-date-ring"
