@@ -393,6 +393,62 @@ void main() {
       });
     });
 
+    group('markEntriesReviewed (batch, #110)', () {
+      test('marks all referenced entries reviewed across dates', () async {
+        final a = await repository.addCategoryEntry(
+          '2026-03-01',
+          'positive',
+          'x',
+        );
+        final b = await repository.addCategoryEntry(
+          '2026-03-01',
+          'gratitude',
+          'y',
+        );
+        final c = await repository.addCategoryEntry(
+          '2026-03-02',
+          'positive',
+          'z',
+        );
+
+        await repository.markEntriesReviewed([
+          (date: '2026-03-01', entryId: a.id),
+          (date: '2026-03-01', entryId: b.id),
+          (date: '2026-03-02', entryId: c.id),
+        ]);
+
+        final day1 = await repository.getCategoryEntries('2026-03-01');
+        final day2 = await repository.getCategoryEntries('2026-03-02');
+        expect(day1.firstWhere((e) => e.id == a.id).isReviewed, true);
+        expect(day1.firstWhere((e) => e.id == b.id).isReviewed, true);
+        expect(day2.firstWhere((e) => e.id == c.id).isReviewed, true);
+      });
+
+      test('leaves unreferenced entries untouched', () async {
+        final a = await repository.addCategoryEntry(
+          '2026-03-01',
+          'positive',
+          'x',
+        );
+        final other = await repository.addCategoryEntry(
+          '2026-03-01',
+          'gratitude',
+          'y',
+        );
+
+        await repository.markEntriesReviewed([
+          (date: '2026-03-01', entryId: a.id),
+        ]);
+
+        final day = await repository.getCategoryEntries('2026-03-01');
+        expect(day.firstWhere((e) => e.id == other.id).isReviewed, false);
+      });
+
+      test('no-op on empty list', () async {
+        await repository.markEntriesReviewed(const []);
+      });
+    });
+
     group('markEntryReviewed', () {
       test('sets isReviewed to true on an entry', () async {
         final entry = await repository.addCategoryEntry(

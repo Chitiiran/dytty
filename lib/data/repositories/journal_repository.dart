@@ -157,6 +157,22 @@ class JournalRepository {
     await _categoryEntries(date).doc(entryId).update({'isReviewed': true});
   }
 
+  /// Marks many entries reviewed using batched writes (#110).
+  /// Chunked at 500 operations — the Firestore WriteBatch limit.
+  Future<void> markEntriesReviewed(
+    List<({String date, String entryId})> refs,
+  ) async {
+    for (var i = 0; i < refs.length; i += 500) {
+      final batch = _firestore.batch();
+      for (final ref in refs.skip(i).take(500)) {
+        batch.update(_categoryEntries(ref.date).doc(ref.entryId), {
+          'isReviewed': true,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   /// Saves or updates a review summary.
   /// Upserts by categoryId + weekStart — updates if exists, creates if not.
   Future<void> saveReviewSummary(ReviewSummary summary) async {
