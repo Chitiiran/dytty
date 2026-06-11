@@ -392,22 +392,23 @@ void main() {
       await tester.tap(find.text('${today.day}').first);
       await tester.pumpAndSettle();
 
-      // Get the Positioned widget
-      final positioned = tester.widget<Positioned>(
-        find.ancestor(
-          of: find.byType(CategoryRadialMenu),
-          matching: find.byType(Positioned),
-        ),
-      );
-
       final screenSize =
           tester.view.physicalSize / tester.view.devicePixelRatio;
 
-      // Menu (250x250) with 16px padding should be within bounds
-      expect(positioned.left!, greaterThanOrEqualTo(16.0));
-      expect(positioned.top!, greaterThanOrEqualTo(16.0));
-      expect(positioned.left! + 250, lessThanOrEqualTo(screenSize.width - 16));
-      expect(positioned.top! + 250, lessThanOrEqualTo(screenSize.height - 16));
+      // Assert on rendered geometry, not Positioned fields — follower mode
+      // lays the box out at 0,0 and paints it at the cell. Every bubble
+      // must land on-screen for a mid-calendar cell.
+      for (final cat in CategoryConfig.defaults) {
+        final rect = tester.getRect(find.byIcon(cat.icon).last);
+        expect(rect.left, greaterThanOrEqualTo(0), reason: cat.id);
+        expect(rect.top, greaterThanOrEqualTo(0), reason: cat.id);
+        expect(rect.right, lessThanOrEqualTo(screenSize.width), reason: cat.id);
+        expect(
+          rect.bottom,
+          lessThanOrEqualTo(screenSize.height),
+          reason: cat.id,
+        );
+      }
     });
 
     testWidgets('radial menu shows mic button for voice call', (tester) async {
@@ -481,6 +482,37 @@ void main() {
       await tester.pumpAndSettle();
       return cellRect;
     }
+
+    testWidgets('menu tracks the cell when insets shift the layout under it '
+        '(owner-verify finding)', (tester) async {
+      final cellBefore = await openMenuOnDay15(tester);
+
+      // Simulate a system inset change (keyboard settling, status bar) that
+      // pushes the page content down while the menu route stays up. The
+      // anchor was captured at open; an un-tracked menu goes stale.
+      tester.view.padding = const FakeViewPadding(top: 200);
+      addTearDown(tester.view.reset);
+      await tester.pumpAndSettle();
+
+      final cellAfter = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('15', skipOffstage: false).first,
+              matching: find.byType(CompletionRingCell),
+            )
+            .first,
+      );
+      // Guard: the simulation must actually move the calendar.
+      expect(
+        (cellAfter.center.dy - cellBefore.center.dy).abs(),
+        greaterThan(5),
+        reason: 'inset change should shift the cell',
+      );
+
+      final mic = tester.getCenter(find.bySemanticsLabel('Start voice call'));
+      expect(mic.dx, closeTo(cellAfter.center.dx, 1.0));
+      expect(mic.dy, closeTo(cellAfter.center.dy, 1.0));
+    });
 
     testWidgets('menu box centers exactly on the tapped cell (#188/#190)', (
       tester,

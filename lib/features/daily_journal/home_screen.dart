@@ -41,6 +41,15 @@ class _HomeScreenState extends State<HomeScreen> {
   GlobalKey _dayCellKey(DateTime day) =>
       _dayCellKeys.putIfAbsent(_dateFormat.format(day), GlobalKey.new);
 
+  /// LayerLink per day cell: the open radial menu follows the cell through
+  /// any layout shift (keyboard insets, scroll settling) instead of being
+  /// pinned to coordinates captured at open. Same one-target-per-day
+  /// invariant as [_dayCellKeys].
+  final Map<String, LayerLink> _dayCellLinks = {};
+
+  LayerLink _dayCellLink(DateTime day) =>
+      _dayCellLinks.putIfAbsent(_dateFormat.format(day), LayerLink.new);
+
   /// Global center of the rendered cell for [day], or null if not laid out.
   Offset? _dayCellCenter(DateTime day) {
     final box =
@@ -251,45 +260,54 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         calendarBuilders: CalendarBuilders(
                           defaultBuilder: (context, day, focusedDay) =>
-                              KeyedSubtree(
-                                key: _dayCellKey(day),
-                                child: CompletionRingCell(
-                                  day: day,
-                                  categoryMarkers:
-                                      journalState
-                                          .monthCategoryMarkers[_dateFormat
-                                          .format(day)],
-                                  activeCategories:
-                                      categoryState.activeCategories,
+                              CompositedTransformTarget(
+                                link: _dayCellLink(day),
+                                child: KeyedSubtree(
+                                  key: _dayCellKey(day),
+                                  child: CompletionRingCell(
+                                    day: day,
+                                    categoryMarkers:
+                                        journalState
+                                            .monthCategoryMarkers[_dateFormat
+                                            .format(day)],
+                                    activeCategories:
+                                        categoryState.activeCategories,
+                                  ),
                                 ),
                               ),
                           todayBuilder: (context, day, focusedDay) =>
-                              KeyedSubtree(
-                                key: _dayCellKey(day),
-                                child: CompletionRingCell(
-                                  day: day,
-                                  categoryMarkers:
-                                      journalState
-                                          .monthCategoryMarkers[_dateFormat
-                                          .format(day)],
-                                  activeCategories:
-                                      categoryState.activeCategories,
-                                  isToday: true,
+                              CompositedTransformTarget(
+                                link: _dayCellLink(day),
+                                child: KeyedSubtree(
+                                  key: _dayCellKey(day),
+                                  child: CompletionRingCell(
+                                    day: day,
+                                    categoryMarkers:
+                                        journalState
+                                            .monthCategoryMarkers[_dateFormat
+                                            .format(day)],
+                                    activeCategories:
+                                        categoryState.activeCategories,
+                                    isToday: true,
+                                  ),
                                 ),
                               ),
                           selectedBuilder: (context, day, focusedDay) =>
-                              KeyedSubtree(
-                                key: _dayCellKey(day),
-                                child: CompletionRingCell(
-                                  day: day,
-                                  categoryMarkers:
-                                      journalState
-                                          .monthCategoryMarkers[_dateFormat
-                                          .format(day)],
-                                  activeCategories:
-                                      categoryState.activeCategories,
-                                  isSelected: true,
-                                  isToday: isSameDay(day, DateTime.now()),
+                              CompositedTransformTarget(
+                                link: _dayCellLink(day),
+                                child: KeyedSubtree(
+                                  key: _dayCellKey(day),
+                                  child: CompletionRingCell(
+                                    day: day,
+                                    categoryMarkers:
+                                        journalState
+                                            .monthCategoryMarkers[_dateFormat
+                                            .format(day)],
+                                    activeCategories:
+                                        categoryState.activeCategories,
+                                    isSelected: true,
+                                    isToday: isSameDay(day, DateTime.now()),
+                                  ),
                                 ),
                               ),
                         ),
@@ -499,6 +517,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     final boxSize = 2 * (radius + bubbleRadius);
 
+    // Follow the cell, don't pin to open-time coordinates: keyboard insets
+    // or scroll settling shift the calendar while the menu stays open
+    // (#158), leaving a pinned menu floating off the cell. Falls back to
+    // the static anchor when the day has no laid-out cell (outside days
+    // in week formats skip the custom builders).
+    final cellLink = _dayCellCenter(selectedDay) != null
+        ? _dayCellLink(selectedDay)
+        : null;
+
     // A dialog route instead of a raw OverlayEntry: the barrier handles
     // backdrop dismissal and the navigator handles the back gesture
     // natively (#158) — a PopScope inside an OverlayEntry never registers
@@ -511,61 +538,64 @@ class _HomeScreenState extends State<HomeScreen> {
       pageBuilder: (routeContext, _, _) => Stack(
         children: [
           Positioned(
-            left: effectiveAnchor.dx - boxSize / 2,
-            top: effectiveAnchor.dy - boxSize / 2,
-            // Live checkmarks (#158): rebuild badges when markers change
-            // instead of reading them once at open.
-            child: BlocBuilder<JournalBloc, JournalState>(
-              bloc: journalBloc,
-              buildWhen: (prev, curr) =>
-                  prev.monthCategoryMarkers != curr.monthCategoryMarkers,
-              builder: (_, state) => SizedBox(
-                width: boxSize,
-                height: boxSize,
-                child: CategoryRadialMenu(
-                  categories: categories,
-                  filledCounts: Map<String, int>.from(
-                    state.monthCategoryMarkers[dateStr] ?? {},
-                  ),
-                  radius: radius,
-                  window: window,
-                  onCategoryTap: (category) async {
-                    if (category.isArchived) {
-                      _dismissRadialMenu();
-                      if (context.mounted) {
-                        Navigator.pushNamed(
-                          context,
-                          '/category-detail',
-                          arguments: category.id,
+            left: cellLink != null ? 0 : effectiveAnchor.dx - boxSize / 2,
+            top: cellLink != null ? 0 : effectiveAnchor.dy - boxSize / 2,
+            child: _FollowCell(
+              link: cellLink,
+              // Live checkmarks (#158): rebuild badges when markers change
+              // instead of reading them once at open.
+              child: BlocBuilder<JournalBloc, JournalState>(
+                bloc: journalBloc,
+                buildWhen: (prev, curr) =>
+                    prev.monthCategoryMarkers != curr.monthCategoryMarkers,
+                builder: (_, state) => SizedBox(
+                  width: boxSize,
+                  height: boxSize,
+                  child: CategoryRadialMenu(
+                    categories: categories,
+                    filledCounts: Map<String, int>.from(
+                      state.monthCategoryMarkers[dateStr] ?? {},
+                    ),
+                    radius: radius,
+                    window: window,
+                    onCategoryTap: (category) async {
+                      if (category.isArchived) {
+                        _dismissRadialMenu();
+                        if (context.mounted) {
+                          Navigator.pushNamed(
+                            context,
+                            '/category-detail',
+                            arguments: category.id,
+                          );
+                        }
+                        return;
+                      }
+
+                      // Stay open (#158): the entry sheet slides over the
+                      // menu; the badge updates underneath and the user can
+                      // pick another category. Dismissal is explicit only
+                      // (backdrop or back) — users add multiple entries to
+                      // the same category.
+                      if (!context.mounted) return;
+                      final text = await showEntryBottomSheet(
+                        context,
+                        category: category,
+                      );
+                      if (text != null && context.mounted) {
+                        journalBloc.add(
+                          AddEntry(
+                            categoryId: category.id,
+                            text: text,
+                            date: selectedDay,
+                          ),
                         );
                       }
-                      return;
-                    }
-
-                    // Stay open (#158): the entry sheet slides over the
-                    // menu; the badge updates underneath and the user can
-                    // pick another category. Dismissal is explicit only
-                    // (backdrop or back) — users add multiple entries to
-                    // the same category.
-                    if (!context.mounted) return;
-                    final text = await showEntryBottomSheet(
-                      context,
-                      category: category,
-                    );
-                    if (text != null && context.mounted) {
-                      journalBloc.add(
-                        AddEntry(
-                          categoryId: category.id,
-                          text: text,
-                          date: selectedDay,
-                        ),
-                      );
-                    }
-                  },
-                  onVoiceTap: () {
-                    _dismissRadialMenu();
-                    Navigator.pushNamed(context, '/voice-call');
-                  },
+                    },
+                    onVoiceTap: () {
+                      _dismissRadialMenu();
+                      Navigator.pushNamed(context, '/voice-call');
+                    },
+                  ),
                 ),
               ),
             ),
@@ -910,6 +940,30 @@ class _NudgeCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Wraps the radial menu in a [CompositedTransformFollower] when a cell
+/// link is available so the open menu tracks its cell through layout
+/// shifts; passes the child through untouched on the static-anchor
+/// fallback path.
+class _FollowCell extends StatelessWidget {
+  final LayerLink? link;
+  final Widget child;
+
+  const _FollowCell({required this.link, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cellLink = link;
+    if (cellLink == null) return child;
+    return CompositedTransformFollower(
+      link: cellLink,
+      showWhenUnlinked: false,
+      targetAnchor: Alignment.center,
+      followerAnchor: Alignment.center,
+      child: child,
     );
   }
 }

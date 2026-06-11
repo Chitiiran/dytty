@@ -127,10 +127,13 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
                 ),
               ),
             ),
+            // Inside the 48dp box, overlapping the circle's edge — a
+            // protruding badge collides with neighboring bubbles/chrome
+            // and makes badged items look bigger (owner-verify finding).
             if (count > 0)
               Positioned(
-                top: -4,
-                right: -4,
+                top: 0,
+                right: 0,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 4,
