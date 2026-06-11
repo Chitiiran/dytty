@@ -591,9 +591,14 @@ void main() {
 
       // ...the entry targeted the MENU's date, not whatever selectedDate
       // drifted to (the date the user is journaling on stays pinned).
+      // table_calendar emits UTC midnights from onDaySelected.
       verify(
         () => journalBloc.add(
-          AddEntry(categoryId: 'positive', text: 'Stay open', date: fixedDay),
+          AddEntry(
+            categoryId: 'positive',
+            text: 'Stay open',
+            date: DateTime.utc(fixedDay.year, fixedDay.month, fixedDay.day),
+          ),
         ),
       ).called(1);
 
