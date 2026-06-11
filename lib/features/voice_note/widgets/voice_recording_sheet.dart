@@ -61,18 +61,38 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Drag handle
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
+                      // Drag handle + always-visible cancel — swipe-down is
+                      // not discoverable, user must never be trapped (#187).
+                      // 48 keeps the IconButton at the Material minimum
+                      // touch target.
+                      SizedBox(
+                        height: 48,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                tooltip: 'Cancel voice note',
+                                icon: const Icon(Icons.close_rounded),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       _buildTitle(context, state),
                       const SizedBox(height: 24),
                       _buildContent(context, state),
