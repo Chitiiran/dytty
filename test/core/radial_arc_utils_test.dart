@@ -60,9 +60,18 @@ void main() {
       expect(sin(mid), lessThan(-0.3), reason: 'window must face up (y-down)');
     });
 
-    test('every bubble position stays on-screen across anchors and counts', () {
-      for (final cx in [30.0, 100.0, 200.0, 370.0]) {
-        for (final cy in [30.0, 200.0, 400.0, 770.0]) {
+    test('every bubble position respects the full padding margin across '
+        'anchors and counts', () {
+      // Contract (review finding): PARTIAL windows guarantee the full
+      // padding + bubbleRadius margin. Sliver-SNAPPED full circles may
+      // intrude into the padding by design (documented in
+      // visibleArcWindow) but must keep the whole bubble on-screen.
+      const partialLo = 16.0 + bubble - 0.5; // padding + bubble - tolerance
+      const snappedLo = bubble - 0.5; // bubble fully on-screen
+      // 114 sits in the former "endpoint pinch" band (~111–115px from an
+      // edge at r=75) where first/last bubbles used to overlap.
+      for (final cx in [30.0, 100.0, 114.0, 200.0, 370.0]) {
+        for (final cy in [30.0, 114.0, 200.0, 400.0, 686.0, 770.0]) {
           for (var n = 2; n <= 8; n++) {
             final r = menuRadius(n);
             final w = visibleArcWindow(
@@ -71,19 +80,70 @@ void main() {
               radius: r,
               bubbleRadius: bubble,
             );
+            final isFull = w.sweep >= 2 * pi - 1e-6;
+            final lo = isFull ? snappedLo : partialLo;
             for (final a in bubbleAngles(n, w)) {
               final p = Offset(cx + r * cos(a), cy + r * sin(a));
               expect(
                 p.dx,
-                inInclusiveRange(bubble, screen.width - bubble),
-                reason: 'anchor ($cx,$cy) n=$n angle=$a',
+                inInclusiveRange(lo, screen.width - lo),
+                reason: 'anchor ($cx,$cy) n=$n angle=$a full=$isFull',
               );
               expect(
                 p.dy,
-                inInclusiveRange(bubble, screen.height - bubble),
-                reason: 'anchor ($cx,$cy) n=$n angle=$a',
+                inInclusiveRange(lo, screen.height - lo),
+                reason: 'anchor ($cx,$cy) n=$n angle=$a full=$isFull',
               );
             }
+          }
+        }
+      }
+    });
+
+    test(
+      'sliver-blocked windows snap to a full circle (no endpoint pinch)',
+      () {
+        // Anchor 114px from the left edge at r=75 blocks only ~19° of arc —
+        // narrower than a bubble's angular width. Endpoint-inclusive
+        // placement across that gap put the first and last bubbles ~24px
+        // apart (50% overlap). Such windows must snap to the full circle:
+        // the worst bubble then sits ~12px into the 40px margin, still
+        // comfortably on-screen.
+        final w = visibleArcWindow(
+          center: const Offset(114, 400),
+          screen: screen,
+          radius: 75,
+          bubbleRadius: bubble,
+        );
+        expect(w.sweep, closeTo(2 * pi, 1e-9));
+      },
+    );
+
+    test('partial windows keep adjacent bubbles from overlapping for '
+        'half-or-wider windows', () {
+      // Edge cells (>=180° windows) must never produce overlapping
+      // bubbles. True-corner windows (~90°) with many categories are
+      // tracked separately (#213 follow-up) — excluded here.
+      for (final cy in [200.0, 400.0, 600.0]) {
+        for (var n = 2; n <= 5; n++) {
+          final r = menuRadius(n);
+          final w = visibleArcWindow(
+            center: Offset(30, cy),
+            screen: screen,
+            radius: r,
+            bubbleRadius: bubble,
+          );
+          final angles = bubbleAngles(n, w);
+          for (var i = 1; i < angles.length; i++) {
+            final gap = 2 * r * sin((angles[i] - angles[i - 1]) / 2);
+            // Allowance of 2px ≈ r·(pi/180): the 1° window sampling can
+            // shave up to one sample off each end. Visual bubbles are
+            // ~46px in the 48px target, so this stays non-overlapping.
+            expect(
+              gap,
+              greaterThanOrEqualTo(2 * bubble - 2.0),
+              reason: 'anchor (30,$cy) n=$n bubbles $i-1/$i overlap',
+            );
           }
         }
       }

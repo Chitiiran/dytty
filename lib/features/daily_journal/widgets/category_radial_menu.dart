@@ -53,10 +53,11 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    // No reverseCurve: dismissal is instant route removal, the
+    // controller never reverses.
     _animation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
     );
     _controller.forward();
   }
@@ -67,7 +68,10 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
     super.dispose();
   }
 
-  String _badgeLabel(int count) => count >= 2 ? '✓✓' : '✓';
+  String _badgeLabel(int count) {
+    if (count <= 0) return '';
+    return count >= 2 ? '✓✓' : '✓';
+  }
 
   Widget _bubble(CategoryConfig cat) {
     final count = widget.filledCounts[cat.id] ?? 0;

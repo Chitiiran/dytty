@@ -587,6 +587,14 @@ void main() {
       // Menu still mounted (#158)...
       expect(find.byType(CategoryRadialMenu), findsOneWidget);
 
+      // ...the entry targeted the MENU's date, not whatever selectedDate
+      // drifted to (the date the user is journaling on stays pinned).
+      verify(
+        () => journalBloc.add(
+          AddEntry(categoryId: 'positive', text: 'Stay open', date: fixedDay),
+        ),
+      ).called(1);
+
       // ...and a marker update from the bloc reaches the badge live.
       states.add(
         JournalState(

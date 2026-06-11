@@ -73,9 +73,24 @@ ArcWindow visibleArcWindow({
     i = j > i ? j : i + 1;
   }
 
+  // A bubble's own angular footprint at this radius.
+  final bubbleAngularWidth = 2 * asin((bubbleRadius / radius).clamp(0.0, 1.0));
+
+  // Blocked slice narrower than one bubble: endpoint-inclusive placement
+  // across that sliver puts the first and last bubbles nearly on top of
+  // each other (review finding). Snap to the full circle — the worst
+  // bubble intrudes less than bubbleRadius into the padding margin while
+  // staying fully on-screen.
+  final blocked = 2 * pi * (samples - bestLen) / samples;
+  if (blocked < bubbleAngularWidth) return fullCircle;
+
+  // The run's last FITTING sample is bestStart + bestLen - 1 (review
+  // finding: bestLen samples span bestLen - 1 steps). No further inset
+  // is needed: fits() constrains bubble CENTERS to the padded region,
+  // so endpoint bubbles already keep their full footprint plus padding.
   return (
     start: 2 * pi * bestStart / samples,
-    sweep: 2 * pi * bestLen / samples,
+    sweep: 2 * pi * (bestLen - 1) / samples,
   );
 }
 
