@@ -157,6 +157,28 @@ class JournalRepository {
     await _categoryEntries(date).doc(entryId).update({'isReviewed': true});
   }
 
+  /// Firestore's WriteBatch operation limit.
+  static const _maxBatchOps = 500;
+
+  /// Marks many entries reviewed using batched writes (#110).
+  ///
+  /// Atomic per chunk of [_maxBatchOps] only: beyond 500 refs a later
+  /// chunk can fail after earlier ones committed. Review sessions are far
+  /// below that today; revisit if they ever approach the limit.
+  Future<void> markEntriesReviewed(
+    List<({String date, String entryId})> refs,
+  ) async {
+    for (var i = 0; i < refs.length; i += _maxBatchOps) {
+      final batch = _firestore.batch();
+      for (final ref in refs.skip(i).take(_maxBatchOps)) {
+        batch.update(_categoryEntries(ref.date).doc(ref.entryId), {
+          'isReviewed': true,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   /// Saves or updates a review summary.
   /// Upserts by categoryId + weekStart — updates if exists, creates if not.
   Future<void> saveReviewSummary(ReviewSummary summary) async {
@@ -241,9 +263,10 @@ class JournalRepository {
   /// Computes streak data by walking dailyEntries backward from today.
   /// Returns {currentStreak, longestStreak, lastJournalDate}.
   Future<StreakData> getStreakData() async {
-    final snapshot = await _dailyEntriesCollection
-        .orderBy(FieldPath.documentId, descending: true)
-        .get();
+    // No server-side orderBy: doc IDs are collected into a Set and sorted
+    // client-side below. orderBy(__name__ DESC) required a composite index
+    // that was never deployed, failing every cold start (#170, #189).
+    final snapshot = await _dailyEntriesCollection.get();
 
     final dates = snapshot.docs.map((doc) => doc.id).toSet();
     if (dates.isEmpty) {
