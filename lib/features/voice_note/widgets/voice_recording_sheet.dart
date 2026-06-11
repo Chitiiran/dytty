@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
+import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 import 'package:dytty/features/voice_note/bloc/voice_note_bloc.dart';
 import 'package:dytty/features/voice_note/voice_note_result.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -22,6 +23,7 @@ Future<VoiceNoteResult?> showVoiceRecordingSheet(BuildContext context) {
         create: (_) => VoiceNoteBloc(
           speechService: context.read<SpeechService>(),
           llmService: context.read<LlmService>(),
+          handling: context.read<SettingsCubit>().state.voiceNoteHandling,
         )..add(const InitializeSpeech()),
         child: _VoiceRecordingSheetBody(
           categories: context.read<CategoryCubit>().state.activeCategories,
@@ -61,18 +63,38 @@ class _VoiceRecordingSheetBody extends StatelessWidget {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Drag handle
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
+                      // Drag handle + always-visible cancel — swipe-down is
+                      // not discoverable, user must never be trapped (#187).
+                      // 48 keeps the IconButton at the Material minimum
+                      // touch target.
+                      SizedBox(
+                        height: 48,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                tooltip: 'Cancel voice note',
+                                icon: const Icon(Icons.close_rounded),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       _buildTitle(context, state),
                       const SizedBox(height: 24),
                       _buildContent(context, state),
@@ -271,6 +293,17 @@ class _TranscriptReviewViewState extends State<_TranscriptReviewView> {
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Discard'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Save-as-is (#32): keep the raw transcript, skip the LLM.
+            // Outlined per SPEC-32 — Summarize stays the filled primary.
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  context.read<VoiceNoteBloc>().add(const SkipCategorization());
+                },
+                child: const Text('Save as-is'),
               ),
             ),
             const SizedBox(width: 12),
