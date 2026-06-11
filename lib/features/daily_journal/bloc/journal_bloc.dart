@@ -113,6 +113,11 @@ class JournalState extends Equatable {
   final DateTime selectedDate;
   final List<CategoryEntry> entries;
   final Map<String, Map<String, int>> monthCategoryMarkers;
+
+  /// Today's per-category entry counts, independent of which month
+  /// [monthCategoryMarkers] currently holds. Survives month navigation so
+  /// the dashboard (nudge + progress card) always reflects today (#154).
+  final Map<String, int> todayCategoryCounts;
   final int currentStreak;
   final String? lastJournalDate;
   final String? error;
@@ -124,22 +129,27 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     this.entries = const [],
     this.monthCategoryMarkers = const {},
+    Map<String, int>? todayCategoryCounts,
     this.currentStreak = 0,
     this.lastJournalDate,
     this.error,
-  }) : selectedDate = selectedDate ?? DateTime.now();
+  }) : selectedDate = selectedDate ?? DateTime.now(),
+       // Derive from markers when not explicitly provided, so directly
+       // constructed states (tests, initial load) stay consistent.
+       todayCategoryCounts =
+           todayCategoryCounts ??
+           Map<String, int>.from(
+             monthCategoryMarkers[_dateFormat.format(DateTime.now())] ??
+                 const {},
+           );
 
   String get selectedDateString => _dateFormat.format(selectedDate);
 
   /// Backward-compatible derived getter — dates that have any entries.
   Set<String> get daysWithEntries => monthCategoryMarkers.keys.toSet();
 
-  /// Whether the user has journaled today (based on monthCategoryMarkers).
-  bool get journaledToday {
-    final now = DateTime.now();
-    final todayStr = _dateFormat.format(now);
-    return daysWithEntries.contains(todayStr);
-  }
+  /// Whether the user has journaled today.
+  bool get journaledToday => todayCategoryCounts.isNotEmpty;
 
   List<CategoryEntry> entriesForCategory(String categoryId) {
     return entries.where((e) => e.categoryId == categoryId).toList();
@@ -150,6 +160,7 @@ class JournalState extends Equatable {
     DateTime? selectedDate,
     List<CategoryEntry>? entries,
     Map<String, Map<String, int>>? monthCategoryMarkers,
+    Map<String, int>? todayCategoryCounts,
     int? currentStreak,
     String? lastJournalDate,
     String? error,
@@ -159,6 +170,7 @@ class JournalState extends Equatable {
       selectedDate: selectedDate ?? this.selectedDate,
       entries: entries ?? this.entries,
       monthCategoryMarkers: monthCategoryMarkers ?? this.monthCategoryMarkers,
+      todayCategoryCounts: todayCategoryCounts ?? this.todayCategoryCounts,
       currentStreak: currentStreak ?? this.currentStreak,
       lastJournalDate: lastJournalDate ?? this.lastJournalDate,
       error: error,
@@ -171,6 +183,7 @@ class JournalState extends Equatable {
     selectedDate,
     entries,
     monthCategoryMarkers,
+    todayCategoryCounts,
     currentStreak,
     lastJournalDate,
     error,
@@ -213,6 +226,20 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     Map<String, Map<String, int>> source,
   ) {
     return source.map((k, v) => MapEntry(k, Map<String, int>.from(v)));
+  }
+
+  /// Today's counts from [markers] when ([year], [month]) is the current
+  /// month, else null so copyWith preserves the existing value (#154).
+  Map<String, int>? _todayCountsIfCurrentMonth(
+    Map<String, Map<String, int>> markers,
+    int year,
+    int month,
+  ) {
+    final now = DateTime.now();
+    if (year != now.year || month != now.month) return null;
+    return Map<String, int>.from(
+      markers[JournalState._dateFormat.format(now)] ?? const {},
+    );
   }
 
   Future<void> _onLoadEntries(
@@ -293,6 +320,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       state.copyWith(
         status: JournalStatus.loaded,
         monthCategoryMarkers: markers ?? state.monthCategoryMarkers,
+        todayCategoryCounts: markers != null
+            ? _todayCountsIfCurrentMonth(
+                markers,
+                event.date.year,
+                event.date.month,
+              )
+            : null,
         currentStreak: streak?.currentStreak ?? state.currentStreak,
         lastJournalDate: streak?.lastJournalDate ?? state.lastJournalDate,
         error: loadError,
@@ -335,6 +369,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         status: JournalStatus.loaded,
         entries: [...state.entries.where((e) => e.id != created.id), created],
         monthCategoryMarkers: currentMarkers,
+        todayCategoryCounts: _todayCountsIfCurrentMonth(
+          currentMarkers,
+          targetDate.year,
+          targetDate.month,
+        ),
         currentStreak: optimisticStreak,
         lastJournalDate: dateString,
       ),
@@ -467,6 +506,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.copyWith(
           status: JournalStatus.loaded,
           monthCategoryMarkers: currentMarkers,
+          todayCategoryCounts: _todayCountsIfCurrentMonth(
+            currentMarkers,
+            state.selectedDate.year,
+            state.selectedDate.month,
+          ),
         ),
       );
       // Refresh streak in background (non-blocking for UI)
@@ -493,7 +537,17 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     try {
       final key = _cacheKey(event.year, event.month);
       if (_markerCache.containsKey(key)) {
-        emit(state.copyWith(monthCategoryMarkers: _markerCache[key]));
+        final cached = _markerCache[key]!;
+        emit(
+          state.copyWith(
+            monthCategoryMarkers: cached,
+            todayCategoryCounts: _todayCountsIfCurrentMonth(
+              cached,
+              event.year,
+              event.month,
+            ),
+          ),
+        );
         return;
       }
       final markers = await _repository.getMonthCategoryMarkers(
@@ -501,7 +555,16 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         event.month,
       );
       _markerCache[key] = markers;
-      emit(state.copyWith(monthCategoryMarkers: markers));
+      emit(
+        state.copyWith(
+          monthCategoryMarkers: markers,
+          todayCategoryCounts: _todayCountsIfCurrentMonth(
+            markers,
+            event.year,
+            event.month,
+          ),
+        ),
+      );
     } catch (_) {
       // Non-critical — silently fail for markers
     }

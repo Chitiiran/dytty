@@ -1109,4 +1109,100 @@ void main() {
       },
     );
   });
+
+  group('todayCategoryCounts (#154)', () {
+    late MockJournalRepository mockRepository;
+
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    test('derived from monthCategoryMarkers when constructed directly', () {
+      final state = JournalState(
+        monthCategoryMarkers: {
+          todayStr: {'positive': 2, 'gratitude': 1},
+        },
+      );
+      expect(state.todayCategoryCounts, {'positive': 2, 'gratitude': 1});
+      expect(state.journaledToday, true);
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'refreshed when SelectDate loads the month containing today',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer(
+          (_) async => {
+            todayStr: {'positive': 1},
+          },
+        );
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 1,
+            longestStreak: 1,
+            lastJournalDate: null,
+          ),
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(today)),
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts, {'positive': 1});
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'preserved when LoadMonthMarkers swaps to a different month',
+      setUp: () {
+        when(() => mockRepository.getMonthCategoryMarkers(2025, 1)).thenAnswer(
+          (_) async => {
+            '2025-01-05': {'beauty': 1},
+          },
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        monthCategoryMarkers: {
+          todayStr: {'positive': 1},
+        },
+      ),
+      act: (bloc) => bloc.add(const LoadMonthMarkers(year: 2025, month: 1)),
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers, {
+          '2025-01-05': {'beauty': 1},
+        });
+        expect(
+          bloc.state.todayCategoryCounts,
+          {'positive': 1},
+          reason: 'today counts must survive month navigation (#154)',
+        );
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'updated by optimistic AddEntry for today',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: today),
+      act: (bloc) async {
+        bloc.add(SelectDate(today));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'today entry'));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts['positive'], 1);
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+  });
 }
