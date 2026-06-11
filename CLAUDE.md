@@ -6,8 +6,8 @@ Voice-first daily journaling app with 5 structured categories. Flutter + Firebas
 
 **Start of session:**
 1. Read `kb/PROGRESS.md` — top section only (above `## Log`).
-2. Run `gh issue list --limit 200` — GitHub Issues is the single source of truth.
-3. Brief the user: current state, blockers, top-priority next items. Keep it to a few sentences.
+2. Run `bash scripts/verify-workflow.sh --stage session-start` — checks observation periods and active workstreams.
+3. Brief the user: active workstreams, observation alerts, top priorities. Keep it to a few sentences.
 
 **Before merging a PR:** Update `kb/PROGRESS.md` — refresh "Latest on main", update test counts, log key decisions/tradeoffs. Decisions get buried in PR bodies; capture them before they're lost.
 

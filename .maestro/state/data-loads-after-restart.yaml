@@ -1,0 +1,46 @@
+appId: com.dytty.dytty
+name: "State: data loads on app restart without interaction"
+tags:
+  - state
+  - regression
+---
+# Regression test for #189/#49: calendar markers, category icons and the
+# progress card must reflect today's entries right after a cold start,
+# with zero user interaction.
+
+- runFlow: "../helpers/login.yaml"
+
+# Clean slate for this flow
+- assertVisible: "Progress 0 of 5"
+
+# Ensure today has one entry
+- tapOn: "Today button"
+- waitForAnimationToEnd
+- tapOn: "Add Positive Things entry"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- eraseText
+- inputText: "Restart persistence entry"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: ".*Restart persistence entry.*"
+
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Progress 1 of 5.*"
+
+# Kill the app and relaunch WITHOUT clearing state — auth session and
+# Firestore cache persist, mirroring a real user reopening the app.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# Dashboard must reflect today's entry with no interaction (#189/#49)
+- assertVisible: "Progress 1 of 5.*"
+
+- takeScreenshot: ".maestro/screenshots/latest/state/bug189-progress-after-restart"
