@@ -447,6 +447,26 @@ void main() {
       test('no-op on empty list', () async {
         await repository.markEntriesReviewed(const []);
       });
+
+      test('handles more refs than one batch chunk (501)', () async {
+        // Exercises the chunk-boundary arithmetic; fake_cloud_firestore
+        // does not enforce the 500-op limit itself.
+        final refs = <({String date, String entryId})>[];
+        for (var i = 0; i < 501; i++) {
+          final entry = await repository.addCategoryEntry(
+            '2026-03-01',
+            'positive',
+            'bulk $i',
+          );
+          refs.add((date: '2026-03-01', entryId: entry.id));
+        }
+
+        await repository.markEntriesReviewed(refs);
+
+        final entries = await repository.getCategoryEntries('2026-03-01');
+        expect(entries.length, 501);
+        expect(entries.every((e) => e.isReviewed), true);
+      });
     });
 
     group('markEntryReviewed', () {

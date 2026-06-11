@@ -223,6 +223,12 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   /// Active subscription to the selected date's entries.
   StreamSubscription<List<CategoryEntry>>? _entriesSubscription;
 
+  /// Tombstones for optimistically deleted entries: a snapshot generated
+  /// before the delete can arrive after it and resurrect the entry — and
+  /// on web the corrective post-delete emit is unreliable (#205).
+  /// Cleared on SelectDate (fresh subscription = fresh server truth).
+  final Set<String> _pendingDeletes = {};
+
   /// Exposes the repository for sibling blocs that share the same data source.
   JournalRepository get repository => _repository;
 
@@ -287,8 +293,10 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       state.copyWith(selectedDate: event.date, status: JournalStatus.loading),
     );
 
-    // Cancel previous date's subscription
+    // Cancel previous date's subscription; fresh subscription supersedes
+    // any pending delete tombstones.
     await _entriesSubscription?.cancel();
+    _pendingDeletes.clear();
 
     final dateString = JournalState._dateFormat.format(event.date);
 
@@ -506,6 +514,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         state.selectedDateString,
         event.entryId,
       );
+      _pendingDeletes.add(event.entryId);
       // Entries are updated via the stream subscription (_EntriesUpdated).
       // Optimistically update markers only.
       final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
@@ -635,10 +644,14 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
         : JournalStatus.loaded;
     // Preserve any pending load error — the cache-first stream otherwise
     // masks marker/streak failures and the user never sees feedback (#170).
+    // Filter tombstoned deletes: a pre-delete snapshot arriving late must
+    // not resurrect an optimistically removed entry (#205).
     emit(
       state.copyWith(
         status: status,
-        entries: event.entries,
+        entries: event.entries
+            .where((e) => !_pendingDeletes.contains(e.id))
+            .toList(),
         error: state.error,
       ),
     );

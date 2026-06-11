@@ -1158,6 +1158,72 @@ void main() {
         expect(bloc.state.status, JournalStatus.loaded);
       },
     );
+
+    blocTest<JournalBloc, JournalState>(
+      'a stale stream emit cannot resurrect a deleted entry',
+      setUp: () {
+        when(
+          () => mockRepository.deleteCategoryEntry(any(), any()),
+        ).thenAnswer((_) async {});
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 0,
+            longestStreak: 0,
+            lastJournalDate: null,
+          ),
+        );
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer((_) async => {});
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        status: JournalStatus.loaded,
+        selectedDate: DateTime(2026, 3, 1),
+      ),
+      act: (bloc) async {
+        // Subscribe via SelectDate with a controllable stream, then emit a
+        // pre-delete snapshot AFTER the delete — the web SDK can deliver
+        // exactly this ordering (#205).
+        final controller = StreamController<List<CategoryEntry>>();
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => controller.stream);
+
+        final e1 = CategoryEntry(
+          id: 'e1',
+          categoryId: 'positive',
+          text: 'doomed',
+          createdAt: DateTime(2026, 3, 1),
+        );
+        final e2 = CategoryEntry(
+          id: 'e2',
+          categoryId: 'gratitude',
+          text: 'survivor',
+          createdAt: DateTime(2026, 3, 1),
+        );
+
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 100));
+        controller.add([e1, e2]);
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        bloc.add(const DeleteEntry('e1'));
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Stale snapshot generated before the delete arrives late.
+        controller.add([e1, e2]);
+        await Future.delayed(const Duration(milliseconds: 100));
+        await controller.close();
+      },
+      verify: (bloc) {
+        expect(
+          bloc.state.entries.map((e) => e.id),
+          ['e2'],
+          reason: 'stale emits must not resurrect deleted entries (#205)',
+        );
+      },
+    );
   });
 
   group('todayCategoryCounts (#154)', () {

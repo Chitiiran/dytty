@@ -79,13 +79,10 @@ test.describe('State regression: cross-date navigation and undo', () => {
     await page.getByRole('button', { name: 'Previous day' }).click();
     await addEntry(page, 'Positive Things', 'Undo target entry');
 
-    // Delete it, then Undo from the snackbar.
+    // Delete it, then Undo from the snackbar. (No confirm dialog exists —
+    // delete is optimistic with an Undo snackbar; if a dialog ever
+    // appears, the next assertion fails loudly instead of being skipped.)
     await page.getByRole('button', { name: 'Delete entry' }).first().click();
-    // Confirm dialog if present; otherwise the snackbar appears directly.
-    const confirmDelete = page.getByRole('button', { name: 'Delete' });
-    if (await confirmDelete.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await confirmDelete.click();
-    }
     await expect(
       page.getByLabel('Journal entry: Undo target entry'),
     ).not.toBeVisible({ timeout: 10_000 });
