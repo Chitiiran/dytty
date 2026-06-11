@@ -336,6 +336,19 @@ void main() {
         final settings = await repository.getUserSettings();
         expect(settings['hideEntries'], true);
       });
+
+      test('voiceNoteHandling defaults to ask (#32)', () async {
+        final settings = await repository.getUserSettings();
+        expect(settings['voiceNoteHandling'], 'ask');
+      });
+
+      test('persists and retrieves voiceNoteHandling (#32)', () async {
+        await repository.ensureUserProfile('Test', 'test@test.com');
+        await repository.updateUserSettings({'voiceNoteHandling': 'raw'});
+
+        final settings = await repository.getUserSettings();
+        expect(settings['voiceNoteHandling'], 'raw');
+      });
     });
 
     group('getCategoryEntriesForDateRange', () {

@@ -353,10 +353,13 @@ class JournalRepository {
     final snapshot = await profileDoc.get();
 
     if (!snapshot.exists) {
-      return {'hideEntries': false};
+      return {'hideEntries': false, 'voiceNoteHandling': 'ask'};
     }
     final data = snapshot.data() ?? {};
-    return {'hideEntries': data['hideEntries'] ?? false};
+    return {
+      'hideEntries': data['hideEntries'] ?? false,
+      'voiceNoteHandling': data['voiceNoteHandling'] ?? 'ask',
+    };
   }
 
   /// Updates user settings in profile doc.

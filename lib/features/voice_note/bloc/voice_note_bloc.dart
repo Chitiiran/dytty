@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/voice_note_handling.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/speech/speech_service.dart';
+
+export 'package:dytty/core/constants/voice_note_handling.dart'
+    show VoiceNoteHandling;
 
 // --- Events ---
 
@@ -60,6 +64,12 @@ class UpdateText extends VoiceNoteEvent {
 
 class RequestCategorization extends VoiceNoteEvent {
   const RequestCategorization();
+}
+
+/// Save-as-is path (#32): advance to reviewing with the raw transcript
+/// as the entry text, skipping the LLM entirely.
+class SkipCategorization extends VoiceNoteEvent {
+  const SkipCategorization();
 }
 
 class UpdateTranscript extends VoiceNoteEvent {
@@ -160,20 +170,24 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   final SpeechService _speechService;
   final LlmService _llmService;
   final Duration _categorizationTimeout;
+  final VoiceNoteHandling _handling;
 
   VoiceNoteBloc({
     required SpeechService speechService,
     required LlmService llmService,
     Duration categorizationTimeout = const Duration(seconds: 10),
+    VoiceNoteHandling handling = VoiceNoteHandling.ask,
   }) : _speechService = speechService,
        _llmService = llmService,
        _categorizationTimeout = categorizationTimeout,
+       _handling = handling,
        super(const VoiceNoteState()) {
     on<InitializeSpeech>(_onInitializeSpeech);
     on<StartListening>(_onStartListening);
     on<StopListening>(_onStopListening);
     on<_SpeechResultReceived>(_onSpeechResultReceived);
     on<RequestCategorization>(_onRequestCategorization);
+    on<SkipCategorization>(_onSkipCategorization);
     on<CategorizeTranscript>(_onCategorizeTranscript);
     on<UpdateCategory>(_onUpdateCategory);
     on<UpdateText>(_onUpdateText);
@@ -228,7 +242,28 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) {
     emit(state.copyWith(transcript: event.text));
     if (event.isFinal && event.text.isNotEmpty) {
-      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      _advancePastTranscript(emit);
+    }
+  }
+
+  /// Routes a finished transcript per the handling preference (#32):
+  /// ask pauses at transcriptReview; summarize/raw skip it.
+  ///
+  /// Called from both the final speech result and StopListening — on
+  /// Android the plugin flushes a final result while stopListening is in
+  /// flight, so both paths fire back to back. The status guard plus the
+  /// synchronous emits below keep that second call a no-op (one LLM call,
+  /// no late state clobber).
+  void _advancePastTranscript(Emitter<VoiceNoteState> emit) {
+    if (state.status != VoiceNoteStatus.listening) return;
+    switch (_handling) {
+      case VoiceNoteHandling.ask:
+        emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      case VoiceNoteHandling.summarize:
+        emit(state.copyWith(status: VoiceNoteStatus.processing));
+        add(const CategorizeTranscript());
+      case VoiceNoteHandling.raw:
+        emit(_skippedCategorizationState());
     }
   }
 
@@ -238,7 +273,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) async {
     await _speechService.stopListening();
     if (state.transcript.isNotEmpty) {
-      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      _advancePastTranscript(emit);
     } else {
       emit(state.copyWith(status: VoiceNoteStatus.ready));
     }
@@ -249,6 +284,25 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     Emitter<VoiceNoteState> emit,
   ) {
     add(const CategorizeTranscript());
+  }
+
+  /// Save-as-is (#32): reviewing with the raw transcript as the entry
+  /// text and no suggested category — the user picks one manually.
+  void _onSkipCategorization(
+    SkipCategorization event,
+    Emitter<VoiceNoteState> emit,
+  ) {
+    emit(_skippedCategorizationState());
+  }
+
+  /// originalTranscript must be recorded even without an LLM pass —
+  /// Re-summarize in reviewing feeds it to reconcileSummary.
+  VoiceNoteState _skippedCategorizationState() {
+    return state.copyWith(
+      status: VoiceNoteStatus.reviewing,
+      originalTranscript: state.transcript,
+      summary: state.transcript,
+    );
   }
 
   Future<void> _onCategorizeTranscript(
@@ -272,21 +326,16 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
           confidence: result.confidence,
         ),
       );
-    } on TimeoutException {
-      // LLM timed out — let user pick category manually
+    } catch (_) {
+      // Any LLM unavailability — timeout, server overload (Gemini 500),
+      // network — degrades to raw review: the user's words are never
+      // hostage to the model, they just pick the category manually.
       emit(
         VoiceNoteState(
           status: VoiceNoteStatus.reviewing,
           transcript: state.transcript,
           originalTranscript: state.transcript,
           summary: state.transcript,
-        ),
-      );
-    } catch (e) {
-      emit(
-        state.copyWith(
-          status: VoiceNoteStatus.error,
-          error: 'Failed to categorize: $e',
         ),
       );
     }

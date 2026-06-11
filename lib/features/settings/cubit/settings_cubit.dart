@@ -1,11 +1,16 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/voice_note_handling.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/notification/notification_service.dart';
 
+export 'package:dytty/core/constants/voice_note_handling.dart'
+    show VoiceNoteHandling;
+
 class SettingsState extends Equatable {
   final bool hideEntries;
+  final VoiceNoteHandling voiceNoteHandling;
   final bool loaded;
   final bool reminderEnabled;
   final TimeOfDay reminderTime;
@@ -14,6 +19,7 @@ class SettingsState extends Equatable {
 
   const SettingsState({
     this.hideEntries = false,
+    this.voiceNoteHandling = VoiceNoteHandling.ask,
     this.loaded = false,
     this.reminderEnabled = false,
     this.reminderTime = const TimeOfDay(
@@ -29,6 +35,7 @@ class SettingsState extends Equatable {
 
   SettingsState copyWith({
     bool? hideEntries,
+    VoiceNoteHandling? voiceNoteHandling,
     bool? loaded,
     bool? reminderEnabled,
     TimeOfDay? reminderTime,
@@ -37,6 +44,7 @@ class SettingsState extends Equatable {
   }) {
     return SettingsState(
       hideEntries: hideEntries ?? this.hideEntries,
+      voiceNoteHandling: voiceNoteHandling ?? this.voiceNoteHandling,
       loaded: loaded ?? this.loaded,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderTime: reminderTime ?? this.reminderTime,
@@ -48,6 +56,7 @@ class SettingsState extends Equatable {
   @override
   List<Object?> get props => [
     hideEntries,
+    voiceNoteHandling,
     loaded,
     reminderEnabled,
     reminderTime,
@@ -73,6 +82,9 @@ class SettingsCubit extends Cubit<SettingsState> {
       emit(
         SettingsState(
           hideEntries: settings['hideEntries'] as bool? ?? false,
+          voiceNoteHandling: VoiceNoteHandling.fromStorage(
+            settings['voiceNoteHandling'] as String?,
+          ),
           loaded: true,
           reminderEnabled: _notificationService.isReminderEnabled,
           reminderTime: TimeOfDay(
@@ -102,6 +114,21 @@ class SettingsCubit extends Cubit<SettingsState> {
           ),
         ),
       );
+    }
+  }
+
+  /// Persists the voice-note handling preference (#32), reverting on
+  /// repository failure -- same optimistic pattern as toggleHideEntries.
+  Future<void> setVoiceNoteHandling(VoiceNoteHandling handling) async {
+    final previous = state.voiceNoteHandling;
+    if (previous == handling) return;
+    emit(state.copyWith(voiceNoteHandling: handling));
+    try {
+      await _repository.updateUserSettings({
+        'voiceNoteHandling': handling.storageValue,
+      });
+    } catch (_) {
+      emit(state.copyWith(voiceNoteHandling: previous));
     }
   }
 

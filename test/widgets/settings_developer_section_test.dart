@@ -69,11 +69,17 @@ void main() {
     testWidgets('shows minimal prompt toggle off by default', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
-      await scrollToDeveloper(tester);
 
+      // Scroll to the tile itself — the lazy ListView only builds what is
+      // on screen, so stopping at the section label is not enough.
       final switchFinder = find.widgetWithText(
         SwitchListTile,
         'Minimal system prompt',
+      );
+      await tester.scrollUntilVisible(
+        switchFinder,
+        200,
+        scrollable: find.byType(Scrollable).first,
       );
       expect(switchFinder, findsOneWidget);
 
@@ -112,8 +118,12 @@ void main() {
 
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
-      await scrollToDeveloper(tester);
 
+      await tester.scrollUntilVisible(
+        find.textContaining('Active:'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.textContaining('Active:'), findsOneWidget);
     });
 
