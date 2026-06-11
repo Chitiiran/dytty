@@ -1,0 +1,42 @@
+appId: com.dytty.dytty
+name: "State: radial menu stays open for multi-category entry"
+tags:
+  - state
+  - regression
+---
+# #158: saving an entry from the radial menu must keep the menu open
+# with the checkmark updated, so a second category is one tap away.
+# Dismissal is explicit only (backdrop / back).
+
+- runFlow: "../helpers/login.yaml"
+- assertVisible: "Progress 0 of 5.*"
+
+# Open the menu on today's cell (mid-grid tap point)
+- tapOn:
+    point: "50%,40%"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+# Add an entry via the bubble's semantics label (in-house layout)
+- tapOn: "Add Positive Things entry from menu"
+- waitForAnimationToEnd
+- tapOn: "What good things happened today.*"
+- inputText: "Stay open entry one"
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Menu must still be open after the save (#158)
+- assertVisible: "Start voice call"
+- takeScreenshot: ".maestro/screenshots/latest/state/158-menu-still-open"
+
+# Back gesture dismisses the MENU, not the screen
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: "Start voice call"
+
+# Entry registered on the dashboard
+- assertVisible: "Progress 1 of 5.*"
