@@ -7,7 +7,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
-import 'package:dytty/core/utils/menu_position_utils.dart';
+import 'dart:async';
+import 'package:bloc_test/bloc_test.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
 import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
@@ -275,8 +276,10 @@ void main() {
     });
 
     testWidgets(
-      'radial menu does not open when fewer than 2 categories available',
+      'radial menu opens with a single category (in-house layout, #190)',
       (tester) async {
+        // circular_menu needed >= 2 items; the in-house layout places a
+        // lone bubble at the window midpoint.
         final today = DateTime.now();
 
         await tester.pumpApp(
@@ -292,14 +295,38 @@ void main() {
         );
         await tester.pump(const Duration(seconds: 1));
 
-        // Tap today's date
         await tester.tap(find.text('${today.day}').first);
         await tester.pumpAndSettle();
 
-        // Menu should NOT appear (circular_menu requires at least 2 items)
-        expect(find.byType(CategoryRadialMenu), findsNothing);
+        expect(find.byType(CategoryRadialMenu), findsOneWidget);
+        expect(find.byIcon(CategoryConfig.defaults.first.icon), findsWidgets);
       },
     );
+
+    testWidgets('radial menu does not open with no available categories', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      final allArchived = [
+        for (final cat in CategoryConfig.defaults)
+          cat.copyWith(isArchived: true),
+      ];
+
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: today,
+        ),
+        categoryState: CategoryState(categories: allArchived, loaded: true),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.text('${today.day}').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CategoryRadialMenu), findsNothing);
+    });
 
     testWidgets('tapping date dispatches SelectDate to JournalBloc', (
       tester,
@@ -420,14 +447,8 @@ void main() {
     });
   });
 
-  group('Radial menu anchors to date cell center (#188)', () {
-    testWidgets('menu centers on the tapped cell, not the tap position', (
-      tester,
-    ) async {
-      // Fixed mid-month day: the 15th is never in the first calendar row
-      // and exists in every month, so the assertion's discrimination power
-      // does not depend on the date the suite runs (review finding on
-      // DateTime.now()-based cells in clamp-adjacent columns).
+  group('Radial menu geometry (#188, #190)', () {
+    Future<Rect> openMenuOnDay15(WidgetTester tester) async {
       final now = DateTime.now();
       final fixedDay = DateTime(now.year, now.month, 15);
       final dayStr = dateFormat.format(fixedDay);
@@ -448,7 +469,6 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 1));
 
-      // Locate the cell and tap OFF-center, near its top-left corner.
       final cellFinder = find
           .ancestor(
             of: find.text('15').first,
@@ -456,46 +476,145 @@ void main() {
           )
           .first;
       final cellRect = tester.getRect(cellFinder);
-      final tapPoint = cellRect.topLeft + const Offset(4, 4);
-      await tester.tapAt(tapPoint);
+      // Tap OFF-center so a tap-position anchor would diverge.
+      await tester.tapAt(cellRect.topLeft + const Offset(4, 4));
       await tester.pumpAndSettle();
+      return cellRect;
+    }
+
+    testWidgets('menu box centers exactly on the tapped cell (#188/#190)', (
+      tester,
+    ) async {
+      final cellRect = await openMenuOnDay15(tester);
 
       expect(find.byType(CategoryRadialMenu), findsOneWidget);
-
-      // The menu must anchor to the CELL CENTER (clamped to screen), not
-      // the raw tap position near the corner.
-      final screenSize =
-          tester.view.physicalSize / tester.view.devicePixelRatio;
-      final expectedTopLeft = clampMenuPosition(
-        tapPosition: cellRect.center,
-        screenSize: screenSize,
-        menuSize: 250,
-        padding: 16,
-      );
-      final buggyTopLeft = clampMenuPosition(
-        tapPosition: tapPoint,
-        screenSize: screenSize,
-        menuSize: 250,
-        padding: 16,
-      );
-      final positioned = tester.widget<Positioned>(
+      final menuRect = tester.getRect(
         find
             .ancestor(
               of: find.byType(CategoryRadialMenu),
-              matching: find.byType(Positioned),
+              matching: find.byType(SizedBox),
             )
             .first,
       );
+      // No clamping anymore — the box center IS the cell center.
+      expect(menuRect.center.dx, closeTo(cellRect.center.dx, 1.0));
+      expect(menuRect.center.dy, closeTo(cellRect.center.dy, 1.0));
+    });
 
-      expect(positioned.left, closeTo(expectedTopLeft.dx, 1.0));
-      expect(positioned.top, closeTo(expectedTopLeft.dy, 1.0));
-      // Guard the test's own discrimination power: the cell-center anchor
-      // must be distinguishable from the old tap-position anchor here.
-      expect(
-        (buggyTopLeft - expectedTopLeft).distance,
-        greaterThan(2.0),
-        reason: 'corner tap and cell center must clamp to different anchors',
+    testWidgets('first-row cell keeps every bubble on-screen (#190)', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final firstDay = DateTime(now.year, now.month, 1);
+
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: firstDay,
+        ),
+        categoryState: CategoryState(
+          categories: CategoryConfig.defaults,
+          loaded: true,
+        ),
       );
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.text('1', skipOffstage: false).first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CategoryRadialMenu), findsOneWidget);
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      for (final cat in CategoryConfig.defaults) {
+        final rect = tester.getRect(find.byIcon(cat.icon).last);
+        expect(rect.left, greaterThanOrEqualTo(0), reason: cat.id);
+        expect(rect.top, greaterThanOrEqualTo(0), reason: cat.id);
+        expect(rect.right, lessThanOrEqualTo(screen.width), reason: cat.id);
+        expect(rect.bottom, lessThanOrEqualTo(screen.height), reason: cat.id);
+      }
+    });
+
+    testWidgets('menu stays open after saving an entry, badge updates (#158)', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final fixedDay = DateTime(now.year, now.month, 15);
+      final dayStr = dateFormat.format(fixedDay);
+      final journalBloc = MockJournalBloc();
+
+      final states = StreamController<JournalState>.broadcast();
+      whenListen(
+        journalBloc,
+        states.stream,
+        initialState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: fixedDay,
+        ),
+      );
+
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalBloc: journalBloc,
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: fixedDay,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      final cellRect = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('15').first,
+              matching: find.byType(CompletionRingCell),
+            )
+            .first,
+      );
+      await tester.tapAt(cellRect.center);
+      await tester.pumpAndSettle();
+      expect(find.byType(CategoryRadialMenu), findsOneWidget);
+
+      // Open the entry sheet from a bubble, type, save.
+      await tester.tap(
+        find.bySemanticsLabel('Add Positive Things entry from menu'),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Stay open');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      // Menu still mounted (#158)...
+      expect(find.byType(CategoryRadialMenu), findsOneWidget);
+
+      // ...and a marker update from the bloc reaches the badge live.
+      states.add(
+        JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: fixedDay,
+          monthCategoryMarkers: {
+            dayStr: {'positive': 1},
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('✓'), findsOneWidget);
+
+      await states.close();
+    });
+
+    testWidgets('back gesture dismisses the menu, not the screen (#158)', (
+      tester,
+    ) async {
+      await openMenuOnDay15(tester);
+      expect(find.byType(CategoryRadialMenu), findsOneWidget);
+
+      final dynamic widgetsAppState = tester.state(find.byType(WidgetsApp));
+      await widgetsAppState.didPopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CategoryRadialMenu), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
     });
   });
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:dytty/core/utils/menu_position_utils.dart';
+import 'package:dytty/core/utils/radial_arc_utils.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
-  OverlayEntry? _radialMenuOverlay;
+  Route<void>? _radialMenuRoute;
   Offset? _lastTapGlobalPosition;
 
   /// Stable key per visible day cell so the radial menu can anchor to the
@@ -61,7 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _dismissRadialMenu();
+    // The menu is a navigator route; the navigator disposes it with the
+    // screen — popping here would be an unsafe navigator call mid-teardown.
+    _radialMenuRoute = null;
     super.dispose();
   }
 
@@ -449,8 +451,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _dismissRadialMenu() {
-    _radialMenuOverlay?.remove();
-    _radialMenuOverlay = null;
+    final route = _radialMenuRoute;
+    _radialMenuRoute = null;
+    if (route != null && route.isActive) {
+      route.navigator?.removeRoute(route);
+    }
   }
 
   void _showRadialMenu(
@@ -462,105 +467,118 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final categoryState = context.read<CategoryCubit>().state;
     final journalBloc = context.read<JournalBloc>();
-
-    // Read from monthCategoryMarkers — always populated by calendar
     final dateStr = _dateFormat.format(selectedDay);
-    final filledCounts = Map<String, int>.from(
-      journalBloc.state.monthCategoryMarkers[dateStr] ?? {},
-    );
 
     // Categories for this date: active + archived with entries
+    final entryIds = (journalBloc.state.monthCategoryMarkers[dateStr] ?? {})
+        .keys
+        .toSet();
     final categories = <CategoryConfig>[];
-    final entryIds = filledCounts.keys.toSet();
     for (final cat in categoryState.categories) {
       if (!cat.isArchived || entryIds.contains(cat.id)) {
         categories.add(cat);
       }
     }
     categories.sort((a, b) => a.order.compareTo(b.order));
-
-    // Need at least 2 for circular_menu
-    if (categories.length < 2) return;
+    if (categories.isEmpty) return;
 
     final screenSize = MediaQuery.of(context).size;
-    const menuSize = 250.0;
-    const menuPadding = 16.0;
+    const bubbleRadius = 24.0;
 
-    // Fall back to screen center if no anchor is available
+    // Anchor on the cell center, always (#190); screen center fallback
+    // when no cell could be resolved.
     final effectiveAnchor =
         anchor ?? Offset(screenSize.width / 2, screenSize.height / 2);
 
-    final menuOffset = clampMenuPosition(
-      tapPosition: effectiveAnchor,
-      screenSize: screenSize,
-      menuSize: menuSize,
-      padding: menuPadding,
+    final radius = menuRadius(categories.length);
+    final window = visibleArcWindow(
+      center: effectiveAnchor,
+      screen: screenSize,
+      radius: radius,
+      bubbleRadius: bubbleRadius,
     );
+    final boxSize = 2 * (radius + bubbleRadius);
 
-    _radialMenuOverlay = OverlayEntry(
-      builder: (overlayContext) => Material(
-        color: Colors.black54,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _dismissRadialMenu,
-          child: Stack(
-            children: [
-              Positioned(
-                left: menuOffset.dx,
-                top: menuOffset.dy,
-                child: GestureDetector(
-                  onTap: () {}, // Absorb taps on the menu itself
-                  child: SizedBox(
-                    width: menuSize,
-                    height: menuSize,
-                    child: CategoryRadialMenu(
-                      categories: categories,
-                      filledCounts: filledCounts,
-                      onCategoryTap: (category) async {
-                        _dismissRadialMenu();
-                        final selectedDate = selectedDay;
-
-                        if (category.isArchived) {
-                          if (context.mounted) {
-                            Navigator.pushNamed(
-                              context,
-                              '/category-detail',
-                              arguments: category.id,
-                            );
-                          }
-                          return;
-                        }
-
-                        if (!context.mounted) return;
-                        final text = await showEntryBottomSheet(
-                          context,
-                          category: category,
-                        );
-                        if (text != null && context.mounted) {
-                          journalBloc.add(
-                            AddEntry(
-                              categoryId: category.id,
-                              text: text,
-                              date: selectedDate,
-                            ),
-                          );
-                        }
-                      },
-                      onVoiceTap: () {
-                        _dismissRadialMenu();
-                        Navigator.pushNamed(context, '/voice-call');
-                      },
-                    ),
+    // A dialog route instead of a raw OverlayEntry: the barrier handles
+    // backdrop dismissal and the navigator handles the back gesture
+    // natively (#158) — a PopScope inside an OverlayEntry never registers
+    // with any ModalRoute and silently does nothing.
+    final route = RawDialogRoute<void>(
+      barrierColor: Colors.black54,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss category menu',
+      transitionDuration: Duration.zero, // bubbles animate themselves
+      pageBuilder: (routeContext, _, _) => Stack(
+        children: [
+          Positioned(
+            left: effectiveAnchor.dx - boxSize / 2,
+            top: effectiveAnchor.dy - boxSize / 2,
+            // Live checkmarks (#158): rebuild badges when markers change
+            // instead of reading them once at open.
+            child: BlocBuilder<JournalBloc, JournalState>(
+              bloc: journalBloc,
+              buildWhen: (prev, curr) =>
+                  prev.monthCategoryMarkers != curr.monthCategoryMarkers,
+              builder: (_, state) => SizedBox(
+                width: boxSize,
+                height: boxSize,
+                child: CategoryRadialMenu(
+                  categories: categories,
+                  filledCounts: Map<String, int>.from(
+                    state.monthCategoryMarkers[dateStr] ?? {},
                   ),
+                  radius: radius,
+                  window: window,
+                  onCategoryTap: (category) async {
+                    if (category.isArchived) {
+                      _dismissRadialMenu();
+                      if (context.mounted) {
+                        Navigator.pushNamed(
+                          context,
+                          '/category-detail',
+                          arguments: category.id,
+                        );
+                      }
+                      return;
+                    }
+
+                    // Stay open (#158): the entry sheet slides over the
+                    // menu; the badge updates underneath and the user can
+                    // pick another category. Dismissal is explicit only
+                    // (backdrop or back) — users add multiple entries to
+                    // the same category.
+                    if (!context.mounted) return;
+                    final text = await showEntryBottomSheet(
+                      context,
+                      category: category,
+                    );
+                    if (text != null && context.mounted) {
+                      journalBloc.add(
+                        AddEntry(
+                          categoryId: category.id,
+                          text: text,
+                          date: selectedDay,
+                        ),
+                      );
+                    }
+                  },
+                  onVoiceTap: () {
+                    _dismissRadialMenu();
+                    Navigator.pushNamed(context, '/voice-call');
+                  },
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
 
-    Overlay.of(context).insert(_radialMenuOverlay!);
+    _radialMenuRoute = route;
+    Navigator.of(context).push(route).whenComplete(() {
+      // Cleared on any dismissal path (barrier, back, programmatic).
+      if (_radialMenuRoute == route) _radialMenuRoute = null;
+    });
   }
 
   Future<void> _openVoiceNote(BuildContext context) async {
