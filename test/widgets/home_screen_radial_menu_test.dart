@@ -7,8 +7,10 @@ import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_config.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/core/utils/menu_position_utils.dart';
 import 'package:dytty/features/daily_journal/home_screen.dart';
 import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
+import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
 
 import '../helpers/pump_app.dart';
@@ -415,6 +417,66 @@ void main() {
 
       // Mic button in center of radial menu
       expect(find.bySemanticsLabel('Start voice call'), findsOneWidget);
+    });
+  });
+
+  group('Radial menu anchors to date cell center (#188)', () {
+    testWidgets('menu centers on the tapped cell, not the tap position', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      final todayStr = dateFormat.format(today);
+
+      await tester.pumpApp(
+        const HomeScreen(),
+        journalState: JournalState(
+          status: JournalStatus.loaded,
+          selectedDate: today,
+          monthCategoryMarkers: {
+            todayStr: {'positive': 1},
+          },
+        ),
+        categoryState: CategoryState(
+          categories: CategoryConfig.defaults,
+          loaded: true,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      // Locate today's cell and tap OFF-center, near its top-left corner.
+      final cellFinder = find
+          .ancestor(
+            of: find.text('${today.day}').first,
+            matching: find.byType(CompletionRingCell),
+          )
+          .first;
+      final cellRect = tester.getRect(cellFinder);
+      await tester.tapAt(cellRect.topLeft + const Offset(4, 4));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CategoryRadialMenu), findsOneWidget);
+
+      // The menu must anchor to the CELL CENTER (clamped to screen), not
+      // the raw tap position near the corner.
+      final screenSize =
+          tester.view.physicalSize / tester.view.devicePixelRatio;
+      final expectedTopLeft = clampMenuPosition(
+        tapPosition: cellRect.center,
+        screenSize: screenSize,
+        menuSize: 250,
+        padding: 16,
+      );
+      final menuRect = tester.getRect(
+        find
+            .ancestor(
+              of: find.byType(CategoryRadialMenu),
+              matching: find.byType(SizedBox),
+            )
+            .first,
+      );
+
+      expect(menuRect.left, closeTo(expectedTopLeft.dx, 1.0));
+      expect(menuRect.top, closeTo(expectedTopLeft.dy, 1.0));
     });
   });
 }
