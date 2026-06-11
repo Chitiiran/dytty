@@ -478,11 +478,10 @@ void main() {
           true,
         ),
         // Firestore persist fails (no doc seeded), error emitted
-        // Note: second entry error is deduplicated by Equatable (same message)
         isA<CategoryDetailState>().having(
           (s) => s.error,
           'error',
-          contains('Failed to mark entry as reviewed'),
+          contains('Failed to mark entries as reviewed'),
         ),
       ],
     );
@@ -577,6 +576,7 @@ void main() {
     });
 
     setUpAll(() {
+      registerFallbackValue(const <({String date, String entryId})>[]);
       registerFallbackValue(
         ReviewSummary(
           id: '',
@@ -649,11 +649,74 @@ void main() {
     );
 
     blocTest<CategoryDetailBloc, CategoryDetailState>(
+      'MarkEntriesReviewed persists all refs via one batch call (#110)',
+      build: () => CategoryDetailBloc(repository: mockRepo, clock: fixedClock),
+      setUp: () {
+        when(
+          () => mockRepo.markEntriesReviewed(any()),
+        ).thenAnswer((_) async {});
+      },
+      seed: () => CategoryDetailState(
+        status: CategoryDetailStatus.loaded,
+        categoryId: 'positive',
+        recentEntries: [
+          DateGroup(
+            date: '2026-03-18',
+            displayDate: 'Today',
+            entries: [
+              CategoryEntry(
+                id: 'e1',
+                categoryId: 'positive',
+                text: 'Entry 1',
+                createdAt: DateTime(2026, 3, 18),
+                isReviewed: false,
+              ),
+            ],
+          ),
+          DateGroup(
+            date: '2026-03-17',
+            displayDate: 'Yesterday',
+            entries: [
+              CategoryEntry(
+                id: 'e2',
+                categoryId: 'positive',
+                text: 'Entry 2',
+                createdAt: DateTime(2026, 3, 17),
+                isReviewed: false,
+              ),
+            ],
+          ),
+        ],
+        hasRecentEntries: true,
+      ),
+      act: (bloc) => bloc.add(
+        const MarkEntriesReviewed(
+          entries: [
+            EntryReference(date: '2026-03-18', entryId: 'e1'),
+            EntryReference(date: '2026-03-17', entryId: 'e2'),
+          ],
+        ),
+      ),
+      verify: (bloc) {
+        final captured =
+            verify(
+                  () => mockRepo.markEntriesReviewed(captureAny()),
+                ).captured.single
+                as List<({String date, String entryId})>;
+        expect(captured, [
+          (date: '2026-03-18', entryId: 'e1'),
+          (date: '2026-03-17', entryId: 'e2'),
+        ]);
+        verifyNever(() => mockRepo.markEntryReviewed(any(), any()));
+      },
+    );
+
+    blocTest<CategoryDetailBloc, CategoryDetailState>(
       'MarkEntriesReviewed emits error when repo throws',
       build: () => CategoryDetailBloc(repository: mockRepo, clock: fixedClock),
       setUp: () {
         when(
-          () => mockRepo.markEntryReviewed(any(), any()),
+          () => mockRepo.markEntriesReviewed(any()),
         ).thenThrow(Exception('network failure'));
       },
       seed: () => CategoryDetailState(
@@ -700,7 +763,7 @@ void main() {
             .having(
               (s) => s.error,
               'error contains message',
-              contains('Failed to mark entry as reviewed'),
+              contains('Failed to mark entries as reviewed'),
             ),
       ],
     );

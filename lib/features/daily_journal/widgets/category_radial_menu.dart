@@ -1,18 +1,31 @@
 import 'dart:math';
 
-import 'package:circular_menu/circular_menu.dart';
 import 'package:flutter/material.dart';
+import 'package:dytty/core/utils/radial_arc_utils.dart';
 import 'package:dytty/data/models/category_config.dart';
 
-/// A radial menu showing category bubbles around a center mic button.
+/// A radial menu showing category bubbles fanned around a center mic
+/// button.
+///
+/// Bubbles are positioned by [bubbleAngles] across [window] at [radius]
+/// (#190) — laid out in-house because circular_menu normalizes angles
+/// into [0, 2pi) and rejects windows that wrap through zero, which is
+/// exactly what edge and corner cells need. Owning the layout also lets
+/// every bubble carry a proper [Semantics] label.
 ///
 /// Category bubbles show entry-count badges (checkmarks) and support
-/// archived categories (rendered with muted colors and lower icon opacity).
+/// archived categories (rendered with muted colors).
 class CategoryRadialMenu extends StatefulWidget {
   final List<CategoryConfig> categories;
   final Map<String, int> filledCounts;
   final void Function(CategoryConfig category) onCategoryTap;
   final VoidCallback onVoiceTap;
+
+  /// Distance of bubble centers from the menu center.
+  final double radius;
+
+  /// Angular window (radians, clockwise from +x; 12 o'clock = 3*pi/2).
+  final ArcWindow window;
 
   const CategoryRadialMenu({
     super.key,
@@ -20,111 +33,205 @@ class CategoryRadialMenu extends StatefulWidget {
     required this.filledCounts,
     required this.onCategoryTap,
     required this.onVoiceTap,
+    required this.radius,
+    required this.window,
   });
 
   @override
   State<CategoryRadialMenu> createState() => _CategoryRadialMenuState();
 }
 
-class _CategoryRadialMenuState extends State<CategoryRadialMenu> {
-  final GlobalKey<CircularMenuState> _menuKey = GlobalKey<CircularMenuState>();
+class _CategoryRadialMenuState extends State<CategoryRadialMenu>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    // Auto-open the menu after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _menuKey.currentState?.forwardAnimation();
-    });
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    // No reverseCurve: dismissal is instant route removal, the
+    // controller never reverses.
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   String _badgeLabel(int count) {
-    if (count == 0) return '';
-    if (count == 1) return '\u2713';
-    return '\u2713\u2713';
+    if (count <= 0) return '';
+    return count >= 2 ? '✓✓' : '✓';
+  }
+
+  Widget _bubble(CategoryConfig cat) {
+    final count = widget.filledCounts[cat.id] ?? 0;
+    final isArchived = cat.isArchived;
+
+    return Semantics(
+      label: 'Add ${cat.displayName} entry from menu',
+      button: true,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Ink paints the fill on the Material itself, so ripples
+            // render ABOVE the color instead of hiding beneath an opaque
+            // Container (review finding). Shadow lives on an outer
+            // DecoratedBox — Ink decorations may not paint shadows.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: isArchived
+                        ? Colors.grey.shade900
+                        : cat.color.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => widget.onCategoryTap(cat),
+                  child: Ink(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isArchived
+                          ? Colors.grey.shade700
+                          : cat.color.withValues(alpha: 0.85),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        cat.icon,
+                        size: 22,
+                        color: isArchived ? Colors.grey.shade400 : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Inside the 48dp box, clearly overlapping the circle — at
+            // the box corner the badge only grazes it tangentially, and
+            // protruding past the box collides with neighbors/chrome
+            // (owner-verify findings).
+            if (count > 0)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  // Stadium, not circle: '✓✓' is wider than tall and a
+                  // forced circle clips it (review finding).
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    borderRadius: BorderRadius.all(Radius.circular(9)),
+                  ),
+                  child: Text(
+                    _badgeLabel(count),
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.categories.map((cat) {
-      final count = widget.filledCounts[cat.id] ?? 0;
-      final isArchived = cat.isArchived;
+    final angles = bubbleAngles(widget.categories.length, widget.window);
 
-      return CircularMenuItem(
-        icon: cat.icon,
-        color: isArchived
-            ? Colors.grey.shade700
-            : cat.color.withValues(alpha: 0.85),
-        iconColor: isArchived ? Colors.grey.shade400 : Colors.white,
-        iconSize: 22,
-        padding: 12,
-        margin: 6,
-        enableBadge: count > 0,
-        badgeLabel: _badgeLabel(count),
-        badgeColor: const Color(0xFF10B981),
-        badgeTextColor: Colors.white,
-        badgeRadius: 9,
-        badgeTextStyle: const TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isArchived
-                ? Colors.grey.shade900
-                : cat.color.withValues(alpha: 0.3),
-            blurRadius: 6,
-          ),
-        ],
-        onTap: () => widget.onCategoryTap(cat),
-      );
-    }).toList();
-
-    // Use 3*pi/2 (= 12 o'clock in clockwise radians from right).
-    // When start == end, circular_menu treats it as a full 360-degree circle.
-    const startAngle = 3 * pi / 2;
-
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        CircularMenu(
-          key: _menuKey,
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        return Stack(
           alignment: Alignment.center,
-          startingAngleInRadian: startAngle,
-          endingAngleInRadian: startAngle,
-          radius: 80,
-          animationDuration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-          toggleButtonColor: Colors.transparent,
-          toggleButtonSize: 0.01,
-          toggleButtonPadding: 0,
-          toggleButtonMargin: 0,
-          toggleButtonBoxShadow: const [BoxShadow(color: Colors.transparent)],
-          toggleButtonIconColor: Colors.transparent,
-          items: items,
-        ),
-        // Center mic button overlaid on the toggle button
-        Semantics(
-          label: 'Start voice call',
-          button: true,
-          excludeSemantics: true,
-          child: Material(
-            color: Theme.of(context).colorScheme.primary,
-            shape: const CircleBorder(),
-            elevation: 4,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: widget.onVoiceTap,
-              child: const Padding(
-                padding: EdgeInsets.all(14),
-                child: Icon(Icons.mic_rounded, size: 28, color: Colors.white),
+          clipBehavior: Clip.none,
+          children: [
+            for (var i = 0; i < widget.categories.length; i++)
+              Transform.translate(
+                offset: Offset(
+                  widget.radius * _animation.value * cos(angles[i]),
+                  widget.radius * _animation.value * sin(angles[i]),
+                ),
+                child: Opacity(
+                  opacity: _animation.value,
+                  child: _bubble(widget.categories[i]),
+                ),
+              ),
+            // Center mic button: visually cell-sized (~40dp circle) so the
+            // date stays the anchor, with a 48dp tap target (#190).
+            Semantics(
+              label: 'Start voice call',
+              button: true,
+              excludeSemantics: true,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: widget.onVoiceTap,
+                    // Ink keeps the ripple visible over the fill (review
+                    // finding); the visual circle stays ~40dp inside the
+                    // 48dp tap target.
+                    child: Center(
+                      child: Ink(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black38,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.mic_rounded,
+                            size: 20,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

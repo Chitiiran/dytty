@@ -1012,4 +1012,381 @@ void main() {
       ],
     );
   });
+
+  group('JournalBloc SelectDate resilience (#189/#49/#151/#170)', () {
+    late MockJournalRepository mockRepository;
+
+    const streak = StreakData(
+      currentStreak: 2,
+      longestStreak: 4,
+      lastJournalDate: '2026-03-01',
+    );
+    final markers = {
+      '2026-03-01': {'positive': 1},
+    };
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'applies markers and surfaces error when getStreakData throws',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer((_) async => markers);
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenThrow(Exception('FAILED_PRECONDITION: index missing'));
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.monthCategoryMarkers, markers);
+        expect(bloc.state.error, contains('FAILED_PRECONDITION'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'applies streak and surfaces error when getMonthCategoryMarkers throws',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenThrow(Exception('markers failed'));
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenAnswer((_) async => streak);
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(DateTime(2026, 3, 1))),
+      verify: (bloc) {
+        expect(bloc.state.status, JournalStatus.loaded);
+        expect(bloc.state.currentStreak, 2);
+        expect(bloc.state.lastJournalDate, '2026-03-01');
+        expect(bloc.state.error, contains('markers failed'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'entry stream emission does not clear a pending load error',
+      setUp: () {
+        when(() => mockRepository.watchCategoryEntries(any())).thenAnswer(
+          (_) => Stream.value([
+            CategoryEntry(
+              id: 'e1',
+              categoryId: 'positive',
+              text: 'cached entry',
+              createdAt: DateTime(2026, 3, 1),
+            ),
+          ]),
+        );
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenThrow(Exception('markers failed'));
+        when(
+          () => mockRepository.getStreakData(),
+        ).thenAnswer((_) async => streak);
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) async {
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.entries.length, 1);
+        expect(
+          bloc.state.error,
+          contains('markers failed'),
+          reason: 'stream emits must not mask load errors (#170)',
+        );
+      },
+    );
+  });
+
+  group('DeleteEntry optimistic removal (#205)', () {
+    late MockJournalRepository mockRepository;
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'removes the entry from entries without waiting for the stream',
+      setUp: () {
+        when(
+          () => mockRepository.deleteCategoryEntry(any(), any()),
+        ).thenAnswer((_) async {});
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 0,
+            longestStreak: 0,
+            lastJournalDate: null,
+          ),
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        status: JournalStatus.loaded,
+        selectedDate: DateTime(2026, 3, 1),
+        entries: [
+          CategoryEntry(
+            id: 'e1',
+            categoryId: 'positive',
+            text: 'doomed',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+          CategoryEntry(
+            id: 'e2',
+            categoryId: 'gratitude',
+            text: 'survivor',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(const DeleteEntry('e1')),
+      verify: (bloc) {
+        // No stream emit happened (mock never subscribed) — the list must
+        // update optimistically, like adds do (#44 pattern).
+        expect(bloc.state.entries.map((e) => e.id), ['e2']);
+        expect(bloc.state.status, JournalStatus.loaded);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'a stale stream emit cannot resurrect a deleted entry',
+      setUp: () {
+        when(
+          () => mockRepository.deleteCategoryEntry(any(), any()),
+        ).thenAnswer((_) async {});
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 0,
+            longestStreak: 0,
+            lastJournalDate: null,
+          ),
+        );
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer((_) async => {});
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        status: JournalStatus.loaded,
+        selectedDate: DateTime(2026, 3, 1),
+      ),
+      act: (bloc) async {
+        // Subscribe via SelectDate with a controllable stream, then emit a
+        // pre-delete snapshot AFTER the delete — the web SDK can deliver
+        // exactly this ordering (#205).
+        final controller = StreamController<List<CategoryEntry>>();
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => controller.stream);
+
+        final e1 = CategoryEntry(
+          id: 'e1',
+          categoryId: 'positive',
+          text: 'doomed',
+          createdAt: DateTime(2026, 3, 1),
+        );
+        final e2 = CategoryEntry(
+          id: 'e2',
+          categoryId: 'gratitude',
+          text: 'survivor',
+          createdAt: DateTime(2026, 3, 1),
+        );
+
+        bloc.add(SelectDate(DateTime(2026, 3, 1)));
+        await Future.delayed(const Duration(milliseconds: 100));
+        controller.add([e1, e2]);
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        bloc.add(const DeleteEntry('e1'));
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Stale snapshot generated before the delete arrives late.
+        controller.add([e1, e2]);
+        await Future.delayed(const Duration(milliseconds: 100));
+        await controller.close();
+      },
+      verify: (bloc) {
+        expect(
+          bloc.state.entries.map((e) => e.id),
+          ['e2'],
+          reason: 'stale emits must not resurrect deleted entries (#205)',
+        );
+      },
+    );
+  });
+
+  group('todayCategoryCounts (#154)', () {
+    late MockJournalRepository mockRepository;
+
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    test('derived from monthCategoryMarkers when constructed directly', () {
+      final state = JournalState(
+        monthCategoryMarkers: {
+          todayStr: {'positive': 2, 'gratitude': 1},
+        },
+      );
+      expect(state.todayCategoryCounts, {'positive': 2, 'gratitude': 1});
+      expect(state.journaledToday, true);
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'refreshed when SelectDate loads the month containing today',
+      setUp: () {
+        when(
+          () => mockRepository.watchCategoryEntries(any()),
+        ).thenAnswer((_) => const Stream.empty());
+        when(
+          () => mockRepository.getMonthCategoryMarkers(any(), any()),
+        ).thenAnswer(
+          (_) async => {
+            todayStr: {'positive': 1},
+          },
+        );
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 1,
+            longestStreak: 1,
+            lastJournalDate: null,
+          ),
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      act: (bloc) => bloc.add(SelectDate(today)),
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts, {'positive': 1});
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'preserved when LoadMonthMarkers swaps to a different month',
+      setUp: () {
+        when(() => mockRepository.getMonthCategoryMarkers(2025, 1)).thenAnswer(
+          (_) async => {
+            '2025-01-05': {'beauty': 1},
+          },
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        monthCategoryMarkers: {
+          todayStr: {'positive': 1},
+        },
+      ),
+      act: (bloc) => bloc.add(const LoadMonthMarkers(year: 2025, month: 1)),
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers, {
+          '2025-01-05': {'beauty': 1},
+        });
+        expect(
+          bloc.state.todayCategoryCounts,
+          {'positive': 1},
+          reason: 'today counts must survive month navigation (#154)',
+        );
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    test('counts dated before today read as empty (midnight rollover)', () {
+      final state = JournalState(
+        todayCategoryCounts: const {'positive': 2},
+        todayCountsDate: '2020-01-01',
+      );
+      expect(state.todayCategoryCounts, isEmpty);
+      expect(state.journaledToday, false);
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'optimistic AddEntry preserves today counts when markers hold '
+      'another month',
+      build: () => JournalBloc(repository: repository),
+      // Calendar was swiped to another month: marker map is NOT today's
+      // month, but today already has a gratitude entry.
+      seed: () => JournalState(
+        selectedDate: today,
+        monthCategoryMarkers: {
+          '2020-01-05': {'beauty': 1},
+        },
+        todayCategoryCounts: const {'gratitude': 1},
+      ),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'new today'));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts['positive'], 1);
+        expect(
+          bloc.state.todayCategoryCounts['gratitude'],
+          1,
+          reason: 'must not re-derive from the stale other-month map',
+        );
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'optimistic DeleteEntry decrements today counts without the '
+      'current-month marker map',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        await repository.addCategoryEntry(todayStr, 'positive', 'kill me');
+      },
+      seed: () => JournalState(
+        selectedDate: today,
+        monthCategoryMarkers: {
+          '2020-01-05': {'beauty': 1},
+        },
+        todayCategoryCounts: const {'positive': 1, 'gratitude': 1},
+      ),
+      act: (bloc) async {
+        // Load entries so the bloc knows the entry id, then delete it.
+        bloc.add(const LoadEntries());
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(DeleteEntry(bloc.state.entries.first.id));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts.containsKey('positive'), false);
+        expect(
+          bloc.state.todayCategoryCounts['gratitude'],
+          1,
+          reason: 'unrelated category must survive the delete',
+        );
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'updated by optimistic AddEntry for today',
+      build: () => JournalBloc(repository: repository),
+      seed: () => JournalState(selectedDate: today),
+      act: (bloc) async {
+        bloc.add(SelectDate(today));
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'today entry'));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts['positive'], 1);
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+  });
 }

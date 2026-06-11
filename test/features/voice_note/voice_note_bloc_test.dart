@@ -441,7 +441,8 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
-      'CategorizeTranscript emits error when LLM throws non-timeout exception',
+      'CategorizeTranscript falls back to raw review when the LLM throws '
+      '(owner-verify: Gemini 500 must not block the note)',
       build: () {
         final errorLlm = _ErrorLlmService();
         return VoiceNoteBloc(
@@ -461,9 +462,36 @@ void main() {
           VoiceNoteStatus.processing,
         ),
         isA<VoiceNoteState>()
-            .having((s) => s.status, 'status', VoiceNoteStatus.error)
-            .having((s) => s.error, 'error', contains('Failed to categorize')),
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', 'Some journal text')
+            .having((s) => s.suggestedCategory, 'suggestedCategory', isNull),
       ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=summarize with failing LLM still lands in reviewing with '
+      'the raw transcript',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: _ErrorLlmService(),
+        handling: VoiceNoteHandling.summarize,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        speechService.lastOnResult!(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('overloaded model words', null, 0.95),
+          ], true),
+        );
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(bloc.state.summary, 'overloaded model words');
+      },
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
@@ -677,6 +705,141 @@ void main() {
       await bloc.close();
       // FakeSpeechService.dispose() is called - no throw expected
     });
+  });
+
+  group('save-as-is and handling preference (#32)', () {
+    SpeechRecognitionResult finalResult(String words) =>
+        SpeechRecognitionResult([
+          SpeechRecognitionWords(words, null, 0.95),
+        ], true);
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'SkipCategorization moves to reviewing with raw transcript, no LLM',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.transcriptReview,
+        transcript: 'today I fixed the radial menu',
+      ),
+      act: (bloc) => bloc.add(const SkipCategorization()),
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(bloc.state.summary, 'today I fixed the radial menu');
+        expect(bloc.state.suggestedCategory, isNull);
+        expect(llmService.callCount, 0, reason: 'save-as-is skips the LLM');
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=summarize: final result goes straight to processing',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+        handling: VoiceNoteHandling.summarize,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        speechService.lastOnResult!(finalResult('skip the review step'));
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        // LLM ran (FakeLlmService resolves) — landed in reviewing with a
+        // suggestion, never pausing at transcriptReview.
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(bloc.state.suggestedCategory, isNotNull);
+        expect(llmService.callCount, greaterThan(0));
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=raw: final result lands in reviewing with raw summary',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+        handling: VoiceNoteHandling.raw,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        speechService.lastOnResult!(finalResult('keep me verbatim'));
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(bloc.state.summary, 'keep me verbatim');
+        expect(bloc.state.suggestedCategory, isNull);
+        expect(llmService.callCount, 0);
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=summarize: Done-tap racing the final result fires one LLM '
+      'call',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+        handling: VoiceNoteHandling.summarize,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        // Android commonly flushes the final result while stopListening is
+        // in flight: both advance paths run back to back.
+        speechService.lastOnResult!(finalResult('said once'));
+        bloc.add(const StopListening());
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(
+          llmService.callCount,
+          1,
+          reason: 'duplicate advance must not double-call the LLM',
+        );
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'SkipCategorization records originalTranscript for re-summarize',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.transcriptReview,
+        transcript: 'edited before saving',
+        transcriptEdited: true,
+      ),
+      act: (bloc) => bloc.add(const SkipCategorization()),
+      verify: (bloc) {
+        // Re-summarize in reviewing calls reconcileSummary(originalTranscript,
+        // transcript) — save-as-is must not leave the original empty.
+        expect(bloc.state.originalTranscript, 'edited before saving');
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'default handling=ask keeps the transcriptReview pause',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        speechService.lastOnResult!(finalResult('ask me first'));
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.transcriptReview);
+        expect(llmService.callCount, 0);
+      },
+    );
   });
 
   group('VoiceNoteState', () {

@@ -127,6 +127,10 @@ TDD is mandatory. Full strategy: `kb/workflow/TESTING.md`
 - `bash scripts/device-test.sh` — Android E2E on physical phone against real Firebase (use `--tags smoke`, `--skip-build`, `--skip-cleanup`)
 - `bash scripts/patrol-test.sh` — Patrol integration tests
 
+### Project Board
+- `bash scripts/add-workstream.sh <name> --color <COLOR>` — add workstream option safely (never use raw GraphQL)
+- `gh project item-list 1 --owner Chitiiran --limit 100 --format json` — fetch all project items (always use `--limit 100`)
+
 ### Release & Distribution
 - `bash scripts/release.sh <version>` — create release branch with version bump
 - `bash scripts/distribute.sh "Release notes"` — build, upload to Firebase App Distribution, tag
