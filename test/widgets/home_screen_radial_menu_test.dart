@@ -581,6 +581,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'Stay open');
+      // Rebuild so the Save button enables (_hasText gate).
+      await tester.pump();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
