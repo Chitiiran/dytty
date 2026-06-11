@@ -400,7 +400,10 @@ void main() {
     testWidgets('tapping a different category chip selects it', (tester) async {
       await openSheetToReviewing(tester, category: 'positive');
 
-      // Tap the "Gratitude" chip
+      // Scroll the chip into view (sheet content sits lower since the
+      // cancel header was added) and tap it.
+      await tester.ensureVisible(find.text('Gratitude'));
+      await tester.pump();
       await tester.tap(find.text('Gratitude'));
       await tester.pump();
 
@@ -545,6 +548,71 @@ void main() {
 
       expect(find.text('Something went wrong'), findsOneWidget);
       expect(find.textContaining('Failed to categorize'), findsOneWidget);
+    });
+  });
+
+  group('cancel button (#187)', () {
+    testWidgets('visible in unavailable state', (tester) async {
+      await openSheet(tester);
+
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in error state', (tester) async {
+      when(() => mockStt.initialize()).thenThrow(Exception('STT failed'));
+
+      await openSheet(tester);
+
+      expect(find.text('Something went wrong'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('visible in listening state', (tester) async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+      when(
+        () => mockStt.listen(
+          onResult: any(named: 'onResult'),
+          pauseFor: any(named: 'pauseFor'),
+          listenFor: any(named: 'listenFor'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await openSheet(tester);
+
+      expect(find.text('Listening...'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+
+      // Flush flutter_animate timers before teardown.
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('visible in transcriptReview state', (tester) async {
+      await openSheetToTranscriptReview(tester, 'today was a good day');
+
+      expect(find.text('Review transcript'), findsOneWidget);
+      expect(find.byTooltip('Cancel voice note'), findsOneWidget);
+    });
+
+    testWidgets('tapping cancel dismisses sheet without a result', (
+      tester,
+    ) async {
+      when(() => mockStt.initialize()).thenAnswer((_) async => true);
+      when(
+        () => mockStt.listen(
+          onResult: any(named: 'onResult'),
+          pauseFor: any(named: 'pauseFor'),
+          listenFor: any(named: 'listenFor'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await openSheet(tester);
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Cancel voice note'));
+      await tester.pumpAndSettle();
+
+      // Sheet dismissed mid-recording — user is never trapped (#187).
+      expect(find.text('Listening...'), findsNothing);
     });
   });
 }
