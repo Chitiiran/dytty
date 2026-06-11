@@ -117,7 +117,13 @@ class JournalState extends Equatable {
   /// Today's per-category entry counts, independent of which month
   /// [monthCategoryMarkers] currently holds. Survives month navigation so
   /// the dashboard (nudge + progress card) always reflects today (#154).
-  final Map<String, int> todayCategoryCounts;
+  /// Stored with the date it was computed for; read through
+  /// [todayCategoryCounts] which returns empty once that date has passed
+  /// (midnight rollover must not show yesterday as "today").
+  final Map<String, int> _todayCategoryCounts;
+
+  /// 'yyyy-MM-dd' the stored counts belong to.
+  final String todayCountsDate;
   final int currentStreak;
   final String? lastJournalDate;
   final String? error;
@@ -130,23 +136,32 @@ class JournalState extends Equatable {
     this.entries = const [],
     this.monthCategoryMarkers = const {},
     Map<String, int>? todayCategoryCounts,
+    String? todayCountsDate,
     this.currentStreak = 0,
     this.lastJournalDate,
     this.error,
   }) : selectedDate = selectedDate ?? DateTime.now(),
        // Derive from markers when not explicitly provided, so directly
        // constructed states (tests, initial load) stay consistent.
-       todayCategoryCounts =
+       _todayCategoryCounts =
            todayCategoryCounts ??
            Map<String, int>.from(
              monthCategoryMarkers[_dateFormat.format(DateTime.now())] ??
                  const {},
-           );
+           ),
+       todayCountsDate = todayCountsDate ?? _dateFormat.format(DateTime.now());
 
   String get selectedDateString => _dateFormat.format(selectedDate);
 
   /// Backward-compatible derived getter — dates that have any entries.
   Set<String> get daysWithEntries => monthCategoryMarkers.keys.toSet();
+
+  /// Today's counts, empty when the stored counts are for a past date
+  /// (midnight rollover).
+  Map<String, int> get todayCategoryCounts =>
+      todayCountsDate == _dateFormat.format(DateTime.now())
+      ? _todayCategoryCounts
+      : const {};
 
   /// Whether the user has journaled today.
   bool get journaledToday => todayCategoryCounts.isNotEmpty;
@@ -170,7 +185,13 @@ class JournalState extends Equatable {
       selectedDate: selectedDate ?? this.selectedDate,
       entries: entries ?? this.entries,
       monthCategoryMarkers: monthCategoryMarkers ?? this.monthCategoryMarkers,
-      todayCategoryCounts: todayCategoryCounts ?? this.todayCategoryCounts,
+      todayCategoryCounts: todayCategoryCounts ?? _todayCategoryCounts,
+      // Fresh counts are always computed "for now" — restamp their date.
+      // Preserved counts keep their original date so the rollover gate
+      // in the getter stays correct.
+      todayCountsDate: todayCategoryCounts != null
+          ? JournalState._dateFormat.format(DateTime.now())
+          : todayCountsDate,
       currentStreak: currentStreak ?? this.currentStreak,
       lastJournalDate: lastJournalDate ?? this.lastJournalDate,
       error: error,
@@ -183,7 +204,8 @@ class JournalState extends Equatable {
     selectedDate,
     entries,
     monthCategoryMarkers,
-    todayCategoryCounts,
+    _todayCategoryCounts,
+    todayCountsDate,
     currentStreak,
     lastJournalDate,
     error,
@@ -364,16 +386,21 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       optimisticStreak = state.currentStreak + 1;
     }
 
+    // Increment today's counts from their current value — the marker map
+    // may hold a different month after calendar navigation, so deriving
+    // from it would wipe today's other categories (review finding, #154).
+    Map<String, int>? todayCounts;
+    if (dateString == JournalState._dateFormat.format(DateTime.now())) {
+      todayCounts = Map<String, int>.from(state.todayCategoryCounts);
+      todayCounts[categoryId] = (todayCounts[categoryId] ?? 0) + 1;
+    }
+
     emit(
       state.copyWith(
         status: JournalStatus.loaded,
         entries: [...state.entries.where((e) => e.id != created.id), created],
         monthCategoryMarkers: currentMarkers,
-        todayCategoryCounts: _todayCountsIfCurrentMonth(
-          currentMarkers,
-          targetDate.year,
-          targetDate.month,
-        ),
+        todayCategoryCounts: todayCounts,
         currentStreak: optimisticStreak,
         lastJournalDate: dateString,
       ),
@@ -502,15 +529,25 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       );
       _markerCache[focusKey] = currentMarkers;
 
+      // Decrement today's counts from their current value, not from the
+      // marker map (which may hold another month — review finding, #154).
+      Map<String, int>? todayCounts;
+      if (dateStr == JournalState._dateFormat.format(DateTime.now()) &&
+          deletedEntry != null) {
+        todayCounts = Map<String, int>.from(state.todayCategoryCounts);
+        final count = (todayCounts[deletedEntry.categoryId] ?? 1) - 1;
+        if (count <= 0) {
+          todayCounts.remove(deletedEntry.categoryId);
+        } else {
+          todayCounts[deletedEntry.categoryId] = count;
+        }
+      }
+
       emit(
         state.copyWith(
           status: JournalStatus.loaded,
           monthCategoryMarkers: currentMarkers,
-          todayCategoryCounts: _todayCountsIfCurrentMonth(
-            currentMarkers,
-            state.selectedDate.year,
-            state.selectedDate.month,
-          ),
+          todayCategoryCounts: todayCounts,
         ),
       );
       // Refresh streak in background (non-blocking for UI)

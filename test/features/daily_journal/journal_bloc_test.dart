@@ -1189,6 +1189,74 @@ void main() {
       },
     );
 
+    test('counts dated before today read as empty (midnight rollover)', () {
+      final state = JournalState(
+        todayCategoryCounts: const {'positive': 2},
+        todayCountsDate: '2020-01-01',
+      );
+      expect(state.todayCategoryCounts, isEmpty);
+      expect(state.journaledToday, false);
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'optimistic AddEntry preserves today counts when markers hold '
+      'another month',
+      build: () => JournalBloc(repository: repository),
+      // Calendar was swiped to another month: marker map is NOT today's
+      // month, but today already has a gratitude entry.
+      seed: () => JournalState(
+        selectedDate: today,
+        monthCategoryMarkers: {
+          '2020-01-05': {'beauty': 1},
+        },
+        todayCategoryCounts: const {'gratitude': 1},
+      ),
+      act: (bloc) async {
+        bloc.add(const AddEntry(categoryId: 'positive', text: 'new today'));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts['positive'], 1);
+        expect(
+          bloc.state.todayCategoryCounts['gratitude'],
+          1,
+          reason: 'must not re-derive from the stale other-month map',
+        );
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'optimistic DeleteEntry decrements today counts without the '
+      'current-month marker map',
+      build: () => JournalBloc(repository: repository),
+      setUp: () async {
+        await repository.addCategoryEntry(todayStr, 'positive', 'kill me');
+      },
+      seed: () => JournalState(
+        selectedDate: today,
+        monthCategoryMarkers: {
+          '2020-01-05': {'beauty': 1},
+        },
+        todayCategoryCounts: const {'positive': 1, 'gratitude': 1},
+      ),
+      act: (bloc) async {
+        // Load entries so the bloc knows the entry id, then delete it.
+        bloc.add(const LoadEntries());
+        await Future.delayed(const Duration(milliseconds: 200));
+        bloc.add(DeleteEntry(bloc.state.entries.first.id));
+        await Future.delayed(const Duration(milliseconds: 200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts.containsKey('positive'), false);
+        expect(
+          bloc.state.todayCategoryCounts['gratitude'],
+          1,
+          reason: 'unrelated category must survive the delete',
+        );
+        expect(bloc.state.journaledToday, true);
+      },
+    );
+
     blocTest<JournalBloc, JournalState>(
       'updated by optimistic AddEntry for today',
       build: () => JournalBloc(repository: repository),
