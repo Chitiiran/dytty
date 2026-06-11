@@ -62,6 +62,12 @@ class RequestCategorization extends VoiceNoteEvent {
   const RequestCategorization();
 }
 
+/// Save-as-is path (#32): advance to reviewing with the raw transcript
+/// as the entry text, skipping the LLM entirely.
+class SkipCategorization extends VoiceNoteEvent {
+  const SkipCategorization();
+}
+
 class UpdateTranscript extends VoiceNoteEvent {
   final String text;
 
@@ -156,24 +162,32 @@ class VoiceNoteState extends Equatable {
 
 // --- Bloc ---
 
+/// How a finished recording proceeds (#32): pause for transcript review,
+/// summarize immediately, or keep the raw transcript immediately.
+enum VoiceNoteHandling { ask, summarize, raw }
+
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   final SpeechService _speechService;
   final LlmService _llmService;
   final Duration _categorizationTimeout;
+  final VoiceNoteHandling _handling;
 
   VoiceNoteBloc({
     required SpeechService speechService,
     required LlmService llmService,
     Duration categorizationTimeout = const Duration(seconds: 10),
+    VoiceNoteHandling handling = VoiceNoteHandling.ask,
   }) : _speechService = speechService,
        _llmService = llmService,
        _categorizationTimeout = categorizationTimeout,
+       _handling = handling,
        super(const VoiceNoteState()) {
     on<InitializeSpeech>(_onInitializeSpeech);
     on<StartListening>(_onStartListening);
     on<StopListening>(_onStopListening);
     on<_SpeechResultReceived>(_onSpeechResultReceived);
     on<RequestCategorization>(_onRequestCategorization);
+    on<SkipCategorization>(_onSkipCategorization);
     on<CategorizeTranscript>(_onCategorizeTranscript);
     on<UpdateCategory>(_onUpdateCategory);
     on<UpdateText>(_onUpdateText);
@@ -228,7 +242,20 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) {
     emit(state.copyWith(transcript: event.text));
     if (event.isFinal && event.text.isNotEmpty) {
-      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      _advancePastTranscript(emit);
+    }
+  }
+
+  /// Routes a finished transcript per the handling preference (#32):
+  /// ask pauses at transcriptReview; summarize/raw skip it.
+  void _advancePastTranscript(Emitter<VoiceNoteState> emit) {
+    switch (_handling) {
+      case VoiceNoteHandling.ask:
+        emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      case VoiceNoteHandling.summarize:
+        add(const CategorizeTranscript());
+      case VoiceNoteHandling.raw:
+        add(const SkipCategorization());
     }
   }
 
@@ -238,7 +265,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   ) async {
     await _speechService.stopListening();
     if (state.transcript.isNotEmpty) {
-      emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
+      _advancePastTranscript(emit);
     } else {
       emit(state.copyWith(status: VoiceNoteStatus.ready));
     }
@@ -249,6 +276,20 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     Emitter<VoiceNoteState> emit,
   ) {
     add(const CategorizeTranscript());
+  }
+
+  /// Save-as-is (#32): reviewing with the raw transcript as the entry
+  /// text and no suggested category — the user picks one manually.
+  void _onSkipCategorization(
+    SkipCategorization event,
+    Emitter<VoiceNoteState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        status: VoiceNoteStatus.reviewing,
+        summary: state.transcript,
+      ),
+    );
   }
 
   Future<void> _onCategorizeTranscript(
