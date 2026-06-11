@@ -37,11 +37,12 @@ tags:
     timeout: 5000
 
 # Back home: ring unfilled, nudge back (#162 checklist: date key
-# removed from markers)
+# removed from markers). ".*" suffixes: streak text may follow the
+# progress label, and the nudge apostrophe is typographic.
 - back
 - waitForAnimationToEnd:
     timeout: 5000
-- assertVisible: "Progress 0 of 5"
-- assertVisible: "You haven't journaled today"
+- assertVisible: "Progress 0 of 5.*"
+- assertVisible: "You haven.*journaled today.*"
 
 - takeScreenshot: ".maestro/screenshots/latest/state/162-delete-ring-unfills"
