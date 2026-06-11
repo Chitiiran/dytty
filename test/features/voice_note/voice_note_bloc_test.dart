@@ -441,7 +441,8 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
-      'CategorizeTranscript emits error when LLM throws non-timeout exception',
+      'CategorizeTranscript falls back to raw review when the LLM throws '
+      '(owner-verify: Gemini 500 must not block the note)',
       build: () {
         final errorLlm = _ErrorLlmService();
         return VoiceNoteBloc(
@@ -461,9 +462,36 @@ void main() {
           VoiceNoteStatus.processing,
         ),
         isA<VoiceNoteState>()
-            .having((s) => s.status, 'status', VoiceNoteStatus.error)
-            .having((s) => s.error, 'error', contains('Failed to categorize')),
+            .having((s) => s.status, 'status', VoiceNoteStatus.reviewing)
+            .having((s) => s.summary, 'summary', 'Some journal text')
+            .having((s) => s.suggestedCategory, 'suggestedCategory', isNull),
       ],
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=summarize with failing LLM still lands in reviewing with '
+      'the raw transcript',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: _ErrorLlmService(),
+        handling: VoiceNoteHandling.summarize,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        speechService.lastOnResult!(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('overloaded model words', null, 0.95),
+          ], true),
+        );
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(bloc.state.summary, 'overloaded model words');
+      },
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(

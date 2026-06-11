@@ -326,21 +326,16 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
           confidence: result.confidence,
         ),
       );
-    } on TimeoutException {
-      // LLM timed out — let user pick category manually
+    } catch (_) {
+      // Any LLM unavailability — timeout, server overload (Gemini 500),
+      // network — degrades to raw review: the user's words are never
+      // hostage to the model, they just pick the category manually.
       emit(
         VoiceNoteState(
           status: VoiceNoteStatus.reviewing,
           transcript: state.transcript,
           originalTranscript: state.transcript,
           summary: state.transcript,
-        ),
-      );
-    } catch (e) {
-      emit(
-        state.copyWith(
-          status: VoiceNoteStatus.error,
-          error: 'Failed to categorize: $e',
         ),
       );
     }

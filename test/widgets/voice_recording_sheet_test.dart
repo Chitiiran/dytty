@@ -544,7 +544,8 @@ void main() {
   });
 
   group('LLM error during categorization', () {
-    testWidgets('shows error state when LLM throws', (tester) async {
+    testWidgets('falls back to raw review when LLM throws '
+        '(owner-verify: Gemini 500)', (tester) async {
       await openSheetToTranscriptReview(tester, 'Some text');
 
       when(
@@ -558,8 +559,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text('Something went wrong'), findsOneWidget);
-      expect(find.textContaining('Failed to categorize'), findsOneWidget);
+      // The user's words survive the LLM outage: straight to review with
+      // the raw transcript, category picked manually — never a dead end.
+      expect(find.text('Review your note'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Some text'), findsWidgets);
+      expect(find.text('Something went wrong'), findsNothing);
     });
   });
 
