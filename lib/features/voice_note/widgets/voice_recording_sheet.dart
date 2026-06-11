@@ -297,13 +297,13 @@ class _TranscriptReviewViewState extends State<_TranscriptReviewView> {
             ),
             const SizedBox(width: 12),
             // Save-as-is (#32): keep the raw transcript, skip the LLM.
+            // Outlined per SPEC-32 — Summarize stays the filled primary.
             Expanded(
-              child: FilledButton.tonalIcon(
+              child: OutlinedButton(
                 onPressed: () {
                   context.read<VoiceNoteBloc>().add(const SkipCategorization());
                 },
-                icon: const Icon(Icons.save_alt_rounded),
-                label: const Text('Save as-is'),
+                child: const Text('Save as-is'),
               ),
             ),
             const SizedBox(width: 12),

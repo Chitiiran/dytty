@@ -672,6 +672,52 @@ void main() {
     );
 
     blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'handling=summarize: Done-tap racing the final result fires one LLM '
+      'call',
+      build: () => VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+        handling: VoiceNoteHandling.summarize,
+      ),
+      act: (bloc) async {
+        bloc.add(const InitializeSpeech());
+        await Future.delayed(const Duration(milliseconds: 50));
+        bloc.add(const StartListening());
+        await Future.delayed(const Duration(milliseconds: 50));
+        // Android commonly flushes the final result while stopListening is
+        // in flight: both advance paths run back to back.
+        speechService.lastOnResult!(finalResult('said once'));
+        bloc.add(const StopListening());
+        await Future.delayed(const Duration(milliseconds: 100));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceNoteStatus.reviewing);
+        expect(
+          llmService.callCount,
+          1,
+          reason: 'duplicate advance must not double-call the LLM',
+        );
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
+      'SkipCategorization records originalTranscript for re-summarize',
+      build: () =>
+          VoiceNoteBloc(speechService: speechService, llmService: llmService),
+      seed: () => const VoiceNoteState(
+        status: VoiceNoteStatus.transcriptReview,
+        transcript: 'edited before saving',
+        transcriptEdited: true,
+      ),
+      act: (bloc) => bloc.add(const SkipCategorization()),
+      verify: (bloc) {
+        // Re-summarize in reviewing calls reconcileSummary(originalTranscript,
+        // transcript) — save-as-is must not leave the original empty.
+        expect(bloc.state.originalTranscript, 'edited before saving');
+      },
+    );
+
+    blocTest<VoiceNoteBloc, VoiceNoteState>(
       'default handling=ask keeps the transcriptReview pause',
       build: () =>
           VoiceNoteBloc(speechService: speechService, llmService: llmService),

@@ -595,6 +595,18 @@ void main() {
       );
     });
 
+    testWidgets('transcriptReview action row fits a 360dp-wide screen', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      // Overflow throws a RenderFlex exception in debug, failing the test.
+      await openSheetToTranscriptReview(tester, 'narrow screen check');
+      expect(find.text('Save as-is'), findsOneWidget);
+    });
+
     testWidgets('handling=raw skips transcriptReview entirely', (tester) async {
       setupSttWithImmediateFinalResult('straight to review');
       await openSheet(tester, handling: VoiceNoteHandling.raw);

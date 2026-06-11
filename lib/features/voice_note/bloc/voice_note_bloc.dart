@@ -248,14 +248,22 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
 
   /// Routes a finished transcript per the handling preference (#32):
   /// ask pauses at transcriptReview; summarize/raw skip it.
+  ///
+  /// Called from both the final speech result and StopListening — on
+  /// Android the plugin flushes a final result while stopListening is in
+  /// flight, so both paths fire back to back. The status guard plus the
+  /// synchronous emits below keep that second call a no-op (one LLM call,
+  /// no late state clobber).
   void _advancePastTranscript(Emitter<VoiceNoteState> emit) {
+    if (state.status != VoiceNoteStatus.listening) return;
     switch (_handling) {
       case VoiceNoteHandling.ask:
         emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
       case VoiceNoteHandling.summarize:
+        emit(state.copyWith(status: VoiceNoteStatus.processing));
         add(const CategorizeTranscript());
       case VoiceNoteHandling.raw:
-        add(const SkipCategorization());
+        emit(_skippedCategorizationState());
     }
   }
 
@@ -284,11 +292,16 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     SkipCategorization event,
     Emitter<VoiceNoteState> emit,
   ) {
-    emit(
-      state.copyWith(
-        status: VoiceNoteStatus.reviewing,
-        summary: state.transcript,
-      ),
+    emit(_skippedCategorizationState());
+  }
+
+  /// originalTranscript must be recorded even without an LLM pass —
+  /// Re-summarize in reviewing feeds it to reconcileSummary.
+  VoiceNoteState _skippedCategorizationState() {
+    return state.copyWith(
+      status: VoiceNoteStatus.reviewing,
+      originalTranscript: state.transcript,
+      summary: state.transcript,
     );
   }
 
