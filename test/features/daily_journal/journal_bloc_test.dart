@@ -1110,6 +1110,56 @@ void main() {
     );
   });
 
+  group('DeleteEntry optimistic removal (#205)', () {
+    late MockJournalRepository mockRepository;
+
+    setUp(() {
+      mockRepository = MockJournalRepository();
+    });
+
+    blocTest<JournalBloc, JournalState>(
+      'removes the entry from entries without waiting for the stream',
+      setUp: () {
+        when(
+          () => mockRepository.deleteCategoryEntry(any(), any()),
+        ).thenAnswer((_) async {});
+        when(() => mockRepository.getStreakData()).thenAnswer(
+          (_) async => const StreakData(
+            currentStreak: 0,
+            longestStreak: 0,
+            lastJournalDate: null,
+          ),
+        );
+      },
+      build: () => JournalBloc(repository: mockRepository),
+      seed: () => JournalState(
+        status: JournalStatus.loaded,
+        selectedDate: DateTime(2026, 3, 1),
+        entries: [
+          CategoryEntry(
+            id: 'e1',
+            categoryId: 'positive',
+            text: 'doomed',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+          CategoryEntry(
+            id: 'e2',
+            categoryId: 'gratitude',
+            text: 'survivor',
+            createdAt: DateTime(2026, 3, 1),
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(const DeleteEntry('e1')),
+      verify: (bloc) {
+        // No stream emit happened (mock never subscribed) — the list must
+        // update optimistically, like adds do (#44 pattern).
+        expect(bloc.state.entries.map((e) => e.id), ['e2']);
+        expect(bloc.state.status, JournalStatus.loaded);
+      },
+    );
+  });
+
   group('todayCategoryCounts (#154)', () {
     late MockJournalRepository mockRepository;
 

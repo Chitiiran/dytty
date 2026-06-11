@@ -546,6 +546,10 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       emit(
         state.copyWith(
           status: JournalStatus.loaded,
+          // Optimistic removal — the web SDK's snapshots emit after a
+          // local delete is unreliable (#205), same reason adds are
+          // optimistic (#44). The stream reconciles later if needed.
+          entries: state.entries.where((e) => e.id != event.entryId).toList(),
           monthCategoryMarkers: currentMarkers,
           todayCategoryCounts: todayCounts,
         ),
