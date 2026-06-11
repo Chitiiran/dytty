@@ -86,33 +86,42 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Material(
-              color: isArchived
-                  ? Colors.grey.shade700
-                  : cat.color.withValues(alpha: 0.85),
-              shape: const CircleBorder(),
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: isArchived
-                          ? Colors.grey.shade900
-                          : cat.color.withValues(alpha: 0.3),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
+            // Ink paints the fill on the Material itself, so ripples
+            // render ABOVE the color instead of hiding beneath an opaque
+            // Container (review finding). Shadow lives on an outer
+            // DecoratedBox — Ink decorations may not paint shadows.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: isArchived
+                        ? Colors.grey.shade900
+                        : cat.color.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: () => widget.onCategoryTap(cat),
-                  child: Center(
-                    child: Icon(
-                      cat.icon,
-                      size: 22,
-                      color: isArchived ? Colors.grey.shade400 : Colors.white,
+                  child: Ink(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isArchived
+                          ? Colors.grey.shade700
+                          : cat.color.withValues(alpha: 0.85),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        cat.icon,
+                        size: 22,
+                        color: isArchived ? Colors.grey.shade400 : Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -127,9 +136,11 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
                     horizontal: 4,
                     vertical: 2,
                   ),
+                  // Stadium, not circle: '✓✓' is wider than tall and a
+                  // forced circle clips it (review finding).
                   decoration: const BoxDecoration(
                     color: Color(0xFF10B981),
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.all(Radius.circular(9)),
                   ),
                   child: Text(
                     _badgeLabel(count),
@@ -183,13 +194,25 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: widget.onVoiceTap,
+                    // Ink keeps the ripple visible over the fill (review
+                    // finding); the visual circle stays ~40dp inside the
+                    // 48dp tap target.
                     child: Center(
-                      child: Material(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: const CircleBorder(),
-                        elevation: 4,
-                        child: const Padding(
-                          padding: EdgeInsets.all(10),
+                      child: Ink(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Theme.of(context).colorScheme.primary,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black38,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
                           child: Icon(
                             Icons.mic_rounded,
                             size: 20,
