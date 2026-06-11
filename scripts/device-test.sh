@@ -58,8 +58,16 @@ if [[ -d "$LOCALAPPDATA/Android/Sdk/platform-tools" ]]; then
 fi
 
 # ── Load test email from .env if not set ──────────────
+# Anchored grep + -f2-: skip commented lines, keep values containing '='.
 if [[ -z "${DEVICE_TEST_EMAIL:-}" && -f "$PROJECT_DIR/.env" ]]; then
-  DEVICE_TEST_EMAIL=$(grep DEVICE_TEST_EMAIL "$PROJECT_DIR/.env" | cut -d= -f2 || true)
+  DEVICE_TEST_EMAIL=$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" | cut -d= -f2- || true)
+fi
+# UID powers device-cleanup.sh's direct path — the auth:export email
+# lookup fallback does not work (#206), so cleanup silently no-ops
+# between flows and every flow after the first inherits stale data.
+if [[ -z "${DEVICE_TEST_UID:-}" && -f "$PROJECT_DIR/.env" ]]; then
+  DEVICE_TEST_UID=$(grep '^DEVICE_TEST_UID=' "$PROJECT_DIR/.env" | cut -d= -f2- || true)
+  export DEVICE_TEST_UID
 fi
 if [[ -z "${DEVICE_TEST_EMAIL:-}" ]]; then
   echo "ERROR: DEVICE_TEST_EMAIL not set. Add to .env or export it."
@@ -167,12 +175,18 @@ echo "=== Running Maestro flows on device ==="
 echo "  Screenshots: $SCREENSHOT_DIR"
 echo ""
 
-MAESTRO_BASE="maestro test"
-MAESTRO_BASE="$MAESTRO_BASE --debug-output $SCREENSHOT_DIR"
-MAESTRO_BASE="$MAESTRO_BASE --format junit"
+# Array form: values stay single words under expansion (quoting review
+# finding — the email is the first variable-bearing argument here).
+# Maestro flows cannot read plain shell exports: ${DEVICE_TEST_EMAIL} in
+# login-device.yaml only resolves from -e params. Without this the account
+# tap never matches and login hangs (#206, regression from fa97007).
+MAESTRO_ARGS=(maestro test
+  --debug-output "$SCREENSHOT_DIR"
+  --format junit
+  -e "DEVICE_TEST_EMAIL=$DEVICE_TEST_EMAIL")
 
 if [[ -n "$TAGS" ]]; then
-  MAESTRO_BASE="$MAESTRO_BASE --include-tags=$TAGS"
+  MAESTRO_ARGS+=("--include-tags=$TAGS")
 fi
 
 FLOW_RESULTS_DIR="$SCREENSHOT_DIR/flow-results"
@@ -197,7 +211,7 @@ for dir in "$MAESTRO_DIR"/*/; do
     if [[ "$SKIP_CLEANUP" == false ]] && command -v firebase &>/dev/null; then
       bash "$SCRIPT_DIR/device-cleanup.sh" 2>/dev/null || true
     fi
-    if ! $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1; then
+    if ! "${MAESTRO_ARGS[@]}" --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1; then
       TEST_FAILED=true
     fi
     FLOW_INDEX=$((FLOW_INDEX + 1))

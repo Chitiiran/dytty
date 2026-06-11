@@ -11,6 +11,7 @@ tags:
 # Test 1: Tap mid-calendar date — menu should open near it
 - tapOn:
     point: "7%,35%"
+    retryTapIfNoChange: false
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
@@ -26,7 +27,8 @@ tags:
 
 # Test 2: Tap top-row date — menu should clamp within bounds
 - tapOn:
-    point: "37%,26%"
+    point: "37%,30%"
+    retryTapIfNoChange: false
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
@@ -43,6 +45,7 @@ tags:
 # Test 3: Tap bottom-row date
 - tapOn:
     point: "7%,44%"
+    retryTapIfNoChange: false
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
