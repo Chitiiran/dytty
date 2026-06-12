@@ -1,0 +1,69 @@
+{
+  "scenarios": [
+    {
+      "name": "basic-call-liveness",
+      "description": "Verify call connects and AI responds to a simple greeting",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "Hey, I had a really good day today.",
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi-turn-daily-call",
+      "description": "Two-turn conversation to verify turn-taking works",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "I had a productive day at work today. I finished the new feature.",
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 10
+          }
+        },
+        {
+          "text": "Yeah, it was the voice recording feature. Took about three days.",
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "tool-call-save-entry",
+      "description": "Verify AI invokes save_entry during conversation",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "I want to save a note. Today I went for a long run in the park and it felt amazing.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "voice-note-basic",
+      "description": "Verify voice note captures transcript via speech_to_text",
+      "path": "voice-note",
+      "utterances": [
+        {
+          "text": "Today I went grocery shopping and cooked a nice dinner.",
+          "expect": {
+            "transcript_match": true,
+            "min_accuracy": 0.8,
+            "timeout_sec": 10
+          }
+        }
+      ]
+    }
+  ]
+}

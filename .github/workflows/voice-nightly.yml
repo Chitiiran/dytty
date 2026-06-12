@@ -1,0 +1,94 @@
+name: "Voice Nightly: Acoustic E2E"
+
+# Real audio through real hardware: TTS WAVs -> speakers -> phone mic ->
+# STT/Gemini -> logcat. Runs nightly and on demand on the self-hosted
+# runner with the physical phone. Calibration gates the run so
+# environment drift (speaker moved/changed) fails loudly up front.
+#
+# Provisioning mirrors ci.yml's Gate 1.5 device job: checkout wipes
+# gitignored files (.env, google-services.json), so everything comes
+# from secrets/actions — never from files assumed on the runner.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC = 03:00 EDT / 02:00 EST
+  workflow_dispatch:
+
+concurrency:
+  group: physical-device
+  cancel-in-progress: false
+
+jobs:
+  acoustic-e2e:
+    name: "Acoustic E2E (physical phone)"
+    runs-on: [self-hosted, device-test]
+    timeout-minutes: 75 # 8 flows x 2 attempts x 180s watchdog + build + TTS
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check device connected
+        shell: bash
+        run: |
+          export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+          DEVICE_COUNT=$(adb devices | grep -v 'emulator' | grep -c 'device$' || true)
+          if [[ "$DEVICE_COUNT" -eq 0 ]]; then
+            echo "::error::No physical device connected — nightly cannot run."
+            exit 1
+          fi
+          echo "Device: $(adb devices | grep 'device$' | head -1)"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Restore google-services.json
+        shell: bash
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+
+      - name: Cache harness Python deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: harness-pip-${{ hashFiles('tools/acoustic-harness/requirements.txt') }}
+
+      - name: Install harness deps + preflight
+        shell: bash
+        run: |
+          python -m pip install -r tools/acoustic-harness/requirements.txt
+          python -c "import sounddevice, soundfile; print('audio deps ok')"
+          export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+          command -v adb && command -v maestro
+
+      - name: Build debug APK
+        shell: bash
+        env:
+          FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+          flutter build apk --debug \
+            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
+            --dart-define=GEMINI_API_KEY="$GEMINI_API_KEY"
+          adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Calibrate + sweep
+        shell: bash
+        env:
+          DEVICE_TEST_EMAIL: ${{ secrets.DEVICE_TEST_EMAIL }}
+          DEVICE_TEST_UID: ${{ secrets.DEVICE_TEST_UID }}
+        run: |
+          export PATH="$PATH:$LOCALAPPDATA/Android/Sdk/platform-tools"
+          bash scripts/voice-sweep.sh
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-nightly-failures
+          path: test/fixtures/audio/session*.log
+          if-no-files-found: ignore

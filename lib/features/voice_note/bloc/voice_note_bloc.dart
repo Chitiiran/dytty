@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/core/constants/voice_note_handling.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -167,6 +168,10 @@ class VoiceNoteState extends Equatable {
 // --- Bloc ---
 
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
+  /// Tag for structured log lines, filterable via `adb logcat`.
+  static const _logTag = '[DYTTY]';
+  static void _log(String message) => debugPrint('$_logTag $message');
+
   final SpeechService _speechService;
   final LlmService _llmService;
   final Duration _categorizationTimeout;
@@ -223,6 +228,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     StartListening event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: listening');
     emit(state.copyWith(status: VoiceNoteStatus.listening, transcript: ''));
     await _speechService.startListening(
       onResult: (result) {
@@ -240,8 +246,16 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     _SpeechResultReceived event,
     Emitter<VoiceNoteState> emit,
   ) {
-    emit(state.copyWith(transcript: event.text));
-    if (event.isFinal && event.text.isNotEmpty) {
+    _log('User said: ${event.text} (final: ${event.isFinal})');
+
+    // Don't overwrite a valid transcript with empty partials.
+    // STT can send empty strings after valid speech when the audio
+    // stream ends or silence is detected (#199).
+    final text = event.text.isNotEmpty ? event.text : state.transcript;
+    emit(state.copyWith(transcript: text));
+
+    // If both event.text and state.transcript are empty, stay listening.
+    if (event.isFinal && text.isNotEmpty) {
       _advancePastTranscript(emit);
     }
   }
@@ -254,15 +268,21 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   /// flight, so both paths fire back to back. The status guard plus the
   /// synchronous emits below keep that second call a no-op (one LLM call,
   /// no late state clobber).
+  ///
+  /// [DYTTY] state logs are load-bearing: the acoustic-harness
+  /// orchestrator watches them to time audio playback (#98).
   void _advancePastTranscript(Emitter<VoiceNoteState> emit) {
     if (state.status != VoiceNoteStatus.listening) return;
     switch (_handling) {
       case VoiceNoteHandling.ask:
+        _log('Voice note state: transcriptReview');
         emit(state.copyWith(status: VoiceNoteStatus.transcriptReview));
       case VoiceNoteHandling.summarize:
+        _log('Voice note state: processing');
         emit(state.copyWith(status: VoiceNoteStatus.processing));
         add(const CategorizeTranscript());
       case VoiceNoteHandling.raw:
+        _log('Voice note state: reviewing');
         emit(_skippedCategorizationState());
     }
   }
@@ -271,6 +291,7 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     StopListening event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: stopped');
     await _speechService.stopListening();
     if (state.transcript.isNotEmpty) {
       _advancePastTranscript(emit);
@@ -309,11 +330,13 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     CategorizeTranscript event,
     Emitter<VoiceNoteState> emit,
   ) async {
+    _log('Voice note state: processing');
     emit(state.copyWith(status: VoiceNoteStatus.processing));
     try {
       final result = await _llmService
           .categorizeEntry(state.transcript)
           .timeout(_categorizationTimeout);
+      _log('Voice note state: reviewing');
       emit(
         state.copyWith(
           status: VoiceNoteStatus.reviewing,
@@ -330,6 +353,9 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
       // Any LLM unavailability — timeout, server overload (Gemini 500),
       // network — degrades to raw review: the user's words are never
       // hostage to the model, they just pick the category manually.
+      // Logged like every routed state: the harness orchestrator and
+      // verify.py key off [DYTTY] state lines.
+      _log('Voice note state: reviewing');
       emit(
         VoiceNoteState(
           status: VoiceNoteStatus.reviewing,
