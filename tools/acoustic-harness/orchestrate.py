@@ -317,8 +317,10 @@ def _kill_tree(pid: int) -> None:
             pgid = os.getpgid(pid)
             # Never kill our own group — if the child somehow shares it
             # (start_new_session missed), killpg here would be suicide.
+            # getattr: SIGKILL is absent on Windows and this branch must
+            # stay importable/testable there (value 9 on every POSIX).
             if pgid != os.getpgrp():
-                os.killpg(pgid, signal.SIGKILL)
+                os.killpg(pgid, getattr(signal, "SIGKILL", 9))
         except (ProcessLookupError, PermissionError):
             pass
 
