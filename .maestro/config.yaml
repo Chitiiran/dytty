@@ -2,3 +2,4 @@ flows:
   - "auth/*"
   - "journal/*"
   - "state/*"
+  - "voice/*"

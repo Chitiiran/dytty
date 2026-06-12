@@ -1,0 +1,43 @@
+appId: com.dytty.dytty
+name: "Voice: Re-summarize after transcript edit"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Expand transcript and edit
+- tapOn: "Transcript"
+- tapOn: ".*grocery.*"
+- inputText: " edited text"
+
+# Hide keyboard
+- hideKeyboard
+
+# Tap Re-summarize
+- tapOn: "Re-summarize"
+
+# Wait for reconciling to complete. Do NOT assert the transient
+# "Re-summarizing..." label — a fast LLM response makes it vanish
+# before Maestro polls (intermittent failure). Assert the outcome:
+# the button returns and the review screen is still intact.
+- extendedWaitUntil:
+    visible: "Re-summarize"
+    timeout: 20000
+- assertVisible: "Review your note"

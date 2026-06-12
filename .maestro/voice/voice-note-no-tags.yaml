@@ -1,0 +1,31 @@
+appId: com.dytty.dytty
+name: "Voice: Tags section not visible to user"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Assert tags section is NOT visible
+- assertNotVisible: "Tags"
+
+# Positive controls — key sections ARE visible
+- assertVisible: "Summary"
+- assertVisible: "Category"
+- assertVisible: "Transcript"

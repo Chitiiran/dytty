@@ -1,0 +1,45 @@
+name: "Voice Nightly: Acoustic E2E"
+
+# Real audio through real hardware: TTS WAVs -> speakers -> phone mic ->
+# STT/Gemini -> logcat. Runs nightly and on demand on the self-hosted
+# runner with the physical phone. Calibration gates the run so
+# environment drift (speaker moved/changed) fails loudly up front.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 03:00 America/Toronto
+  workflow_dispatch:
+
+concurrency:
+  group: physical-device
+  cancel-in-progress: false
+
+jobs:
+  acoustic-e2e:
+    name: "Acoustic E2E (physical phone)"
+    runs-on: [self-hosted, device-test]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          FIREBASE_KEY=$(grep FIREBASE_ANDROID_API_KEY .env | cut -d= -f2)
+          GEMINI_KEY=$(grep GEMINI_API_KEY .env | cut -d= -f2)
+          flutter build apk --debug \
+            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_KEY" \
+            --dart-define=GEMINI_API_KEY="$GEMINI_KEY"
+          adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Calibrate + sweep
+        shell: bash
+        run: bash scripts/voice-sweep.sh
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-nightly-failures
+          path: test/fixtures/audio/session*.log
+          if-no-files-found: ignore

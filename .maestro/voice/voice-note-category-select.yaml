@@ -1,0 +1,37 @@
+appId: com.dytty.dytty
+name: "Voice: Select and change category via ChoiceChips"
+tags:
+  - voice
+  - voice-note
+---
+- runFlow: "../helpers/login-device.yaml"
+
+- tapOn: "Record voice note"
+
+- extendedWaitUntil:
+    visible: ".*Listening.*"
+    timeout: 5000
+
+- extendedWaitUntil:
+    visible: "Review transcript"
+    timeout: 20000
+
+- tapOn: "Summarize"
+
+- extendedWaitUntil:
+    visible: "Review your note"
+    timeout: 15000
+
+# Assert Category label visible
+- assertVisible: "Category"
+
+# Tap a category
+- tapOn: "Gratitude"
+
+# Save should be enabled — tap it
+- tapOn: "Save"
+
+# Assert entry saved under Gratitude
+- extendedWaitUntil:
+    visible: ".*Gratitude.*"
+    timeout: 5000
