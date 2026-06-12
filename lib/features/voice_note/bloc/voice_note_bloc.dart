@@ -353,6 +353,9 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
       // Any LLM unavailability — timeout, server overload (Gemini 500),
       // network — degrades to raw review: the user's words are never
       // hostage to the model, they just pick the category manually.
+      // Logged like every routed state: the harness orchestrator and
+      // verify.py key off [DYTTY] state lines.
+      _log('Voice note state: reviewing');
       emit(
         VoiceNoteState(
           status: VoiceNoteStatus.reviewing,

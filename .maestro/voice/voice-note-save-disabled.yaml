@@ -10,11 +10,11 @@ tags:
 
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 # Save-as-is (#32) guarantees NO category is pre-selected — the old
 # Summarize path gambled on the LLM not suggesting one (it usually
@@ -23,7 +23,7 @@ tags:
 
 - extendedWaitUntil:
     visible: "Review your note"
-    timeout: 15000
+    timeout: 12000
 
 # Tap Save — disabled with no category, we stay on review screen
 - tapOn: "Save"
@@ -37,7 +37,9 @@ tags:
 # Tap Save again — should work now
 - tapOn: "Save"
 
-# Assert we left the review screen
+# Prove we LEFT the review screen: the category chip alone is vacuous
+# (it is visible on the review screen we might be stuck on).
+- assertNotVisible: "Review your note"
 - extendedWaitUntil:
-    visible: ".*Positive Things.*"
-    timeout: 5000
+    visible: 'Progress \d of 5.*'
+    timeout: 3000

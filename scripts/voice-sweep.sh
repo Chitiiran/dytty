@@ -12,26 +12,40 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HARNESS="${ACOUSTIC_HARNESS_HOME:-$PROJECT_DIR/tools/acoustic-harness}"
 SCRIPTS_JSON="$PROJECT_DIR/test/fixtures/audio/test-scripts.json"
 WAVS="$PROJECT_DIR/test/fixtures/audio/generated"
-LOCK="$PROJECT_DIR/.device.lock"
+LOCK_DIR="$PROJECT_DIR/.device.lock.d"
 export ACOUSTIC_TAG="${ACOUSTIC_TAG:-DYTTY}"
 
-EMAIL="${DEVICE_TEST_EMAIL:-$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" | cut -d= -f2)}"
+# -f2- (not -f2): values may contain '='. || true: missing file/key must
+# reach the friendly error below, not die on set -e at the assignment.
+EMAIL="${DEVICE_TEST_EMAIL:-$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- || true)}"
 if [[ -z "$EMAIL" ]]; then
   echo "ERROR: DEVICE_TEST_EMAIL not set and not in .env" >&2
   exit 2
 fi
 
-# Minimal device lock (#191): refuse to start if another run holds the
-# phone; stale locks (>30 min) are reclaimed.
-if [[ -f "$LOCK" ]]; then
-  if [[ -n "$(find "$LOCK" -mmin -30 2>/dev/null)" ]]; then
-    echo "ERROR: device locked by another run ($(cat "$LOCK")). Remove $LOCK if stale." >&2
+# Device lock (#191): mkdir is atomic — no check-then-write race.
+# Staleness from the epoch timestamp inside the lock (find -mmin is
+# unreliable when PATH resolves Windows' find.exe).
+acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$(date +%s) pid=$$" > "$LOCK_DIR/owner"
+    return 0
+  fi
+  local held_at now
+  held_at=$(cut -d' ' -f1 "$LOCK_DIR/owner" 2>/dev/null || echo 0)
+  # Empty owner file (interrupted write) yields "" — arithmetic on an
+  # empty string aborts under set -e. Sanitize to 0 (= stale, reclaim).
+  [[ "$held_at" =~ ^[0-9]+$ ]] || held_at=0
+  now=$(date +%s)
+  if (( now - held_at < 1800 )); then
+    echo "ERROR: device locked ($(cat "$LOCK_DIR/owner" 2>/dev/null)). Remove $LOCK_DIR if stale." >&2
     exit 3
   fi
-  echo "WARN: reclaiming stale lock ($(cat "$LOCK"))"
-fi
-echo "voice-sweep pid=$$ started=$(date -Iseconds)" > "$LOCK"
-trap 'rm -f "$LOCK"' EXIT
+  echo "WARN: reclaiming stale lock ($(cat "$LOCK_DIR/owner" 2>/dev/null))"
+  echo "$(date +%s) pid=$$" > "$LOCK_DIR/owner"
+}
+acquire_lock
+trap 'rm -rf "$LOCK_DIR"' EXIT
 
 if [[ "${1:-}" != "--skip-calibration" ]]; then
   python "$HARNESS/calibrate.py" \
@@ -56,6 +70,8 @@ overall=0
 SECONDS=0
 for f in "${FLOWS[@]}"; do
   t0=$SECONDS
+  # All flows share one spoken input (voice-note-basic scenario) by
+  # design — they diverge AFTER the transcript arrives.
   if out=$(python "$HARNESS/orchestrate.py" \
       --scenario voice-note-basic \
       --scripts "$SCRIPTS_JSON" --wavs "$WAVS" \
@@ -70,7 +86,7 @@ for f in "${FLOWS[@]}"; do
   retries=$(grep -c RETRY <<< "$out" || true)
   echo "$f: $status $((SECONDS - t0))s retries=$retries"
   if [[ "$status" == FAIL ]]; then
-    grep -E "FAILED|WATCHDOG|NOT played" <<< "$out" | head -3 || true
+    grep -iE "fail|watchdog|not played" <<< "$out" | head -4 || true
   fi
 done
 echo "TOTAL: ${SECONDS}s"

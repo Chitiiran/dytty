@@ -261,17 +261,135 @@ class TestRunMaestroWatchdog(unittest.TestCase):
 
         from orchestrate import run_maestro
 
-        with mock.patch("orchestrate.subprocess.run") as m:
-            m.side_effect = sp.TimeoutExpired(cmd="maestro", timeout=5)
+        fake_proc = mock.Mock()
+        fake_proc.pid = 1
+        fake_proc.communicate.side_effect = [
+            sp.TimeoutExpired(cmd="maestro", timeout=5),
+            ("", ""),
+        ]
+        with mock.patch("orchestrate.subprocess.Popen",
+                        return_value=fake_proc), \
+                mock.patch("orchestrate._kill_tree"):
             rc = run_maestro("flow.yaml", timeout_seconds=5)
         self.assertEqual(rc, 124)
 
-    def test_passes_timeout_to_subprocess(self):
+    def test_passes_timeout_to_communicate(self):
         from unittest import mock
 
         from orchestrate import run_maestro
 
-        with mock.patch("orchestrate.subprocess.run") as m:
-            m.return_value = mock.Mock(stdout="", returncode=0)
+        fake_proc = mock.Mock()
+        fake_proc.pid = 1
+        fake_proc.communicate.return_value = ("", "")
+        fake_proc.returncode = 0
+        with mock.patch("orchestrate.subprocess.Popen",
+                        return_value=fake_proc):
             run_maestro("flow.yaml", timeout_seconds=77)
-        self.assertEqual(m.call_args.kwargs.get("timeout"), 77)
+        self.assertEqual(
+            fake_proc.communicate.call_args.kwargs.get("timeout"), 77
+        )
+
+
+class TestMonitorProcHolder(unittest.TestCase):
+    """A retry must be able to kill the previous attempt's adb logcat —
+    a thread blocked in readline() survives stop_event + join(5) and
+    poisons the next attempt (double audio fire, two session.log
+    writers)."""
+
+    def test_holder_receives_popen_for_external_kill(self):
+        import tempfile
+        import threading
+        from unittest import mock
+
+        from orchestrate import run_logcat_monitor
+
+        fake_proc = mock.Mock()
+        fake_proc.stdout = None  # loop exits immediately on None stdout
+        fake_proc.poll.return_value = 0
+        with mock.patch("orchestrate.subprocess.Popen", return_value=fake_proc):
+            holder = {}
+            run_logcat_monitor(
+                "DYTTY", [], os.path.join(tempfile.mkdtemp(), "l.log"),
+                threading.Event(), proc_holder=holder,
+            )
+        self.assertIs(holder.get("proc"), fake_proc)
+
+
+class TestKillTree(unittest.TestCase):
+    """Watchdog must kill the Maestro JVM grandchild, not just the
+    launcher — otherwise the wedged daemon it guards against is
+    recreated for every following flow."""
+
+    def test_windows_uses_taskkill_tree(self):
+        from unittest import mock
+
+        from orchestrate import _kill_tree
+
+        with mock.patch("orchestrate.subprocess.run") as m,                 mock.patch("orchestrate.sys.platform", "win32"):
+            _kill_tree(4242)
+        cmd = m.call_args.args[0]
+        self.assertIn("taskkill", cmd[0])
+        self.assertIn("/T", cmd)
+        self.assertIn("4242", cmd)
+
+    def test_run_maestro_timeout_kills_tree_returns_124(self):
+        from unittest import mock
+        import subprocess as sp
+
+        from orchestrate import run_maestro
+
+        fake_proc = mock.Mock()
+        fake_proc.pid = 777
+        fake_proc.communicate.side_effect = [
+            sp.TimeoutExpired(cmd="maestro", timeout=1),
+            ("", ""),
+        ]
+        with mock.patch("orchestrate.subprocess.Popen",
+                        return_value=fake_proc),                 mock.patch("orchestrate._kill_tree") as kt:
+            rc = run_maestro("flow.yaml", timeout_seconds=1)
+        self.assertEqual(rc, 124)
+        kt.assert_called_once_with(777)
+
+
+class TestKillTreePosixSafety(unittest.TestCase):
+    """killpg on the orchestrator's own process group is suicide; the
+    child must be started in a new session and the guard must refuse
+    same-group kills."""
+
+    def test_posix_guard_refuses_own_process_group(self):
+        from unittest import mock
+
+        import orchestrate
+
+        with mock.patch.object(orchestrate.sys, "platform", "linux"),                 mock.patch.object(orchestrate.os, "getpgid",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "getpgrp",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "killpg",
+                                  create=True) as kp:
+            orchestrate._kill_tree(123)
+        kp.assert_not_called()
+
+    def test_posix_kills_foreign_process_group(self):
+        from unittest import mock
+
+        import orchestrate
+
+        with mock.patch.object(orchestrate.sys, "platform", "linux"),                 mock.patch.object(orchestrate.os, "getpgid",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "getpgrp",
+                                  return_value=999, create=True),                 mock.patch.object(orchestrate.os, "killpg",
+                                  create=True) as kp:
+            orchestrate._kill_tree(123)
+        kp.assert_called_once()
+
+    def test_maestro_child_starts_new_session(self):
+        from unittest import mock
+
+        from orchestrate import run_maestro
+
+        fake_proc = mock.Mock()
+        fake_proc.pid = 1
+        fake_proc.communicate.return_value = ("", "")
+        fake_proc.returncode = 0
+        with mock.patch("orchestrate.subprocess.Popen",
+                        return_value=fake_proc) as popen:
+            run_maestro("flow.yaml", timeout_seconds=5)
+        self.assertTrue(popen.call_args.kwargs.get("start_new_session"))

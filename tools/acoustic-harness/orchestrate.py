@@ -101,8 +101,16 @@ def run_logcat_monitor(
     triggers: list[LogcatTrigger],
     log_path: str,
     stop_event: threading.Event,
+    proc_holder: dict | None = None,
 ) -> None:
-    """Background thread: stream logcat, feed lines to triggers, write to log."""
+    """Background thread: stream logcat, feed lines to triggers, write to log.
+
+    proc_holder (if given) receives the adb Popen under key "proc" so
+    the owner can kill it from outside: a thread blocked in readline()
+    never re-checks stop_event, survives join(timeout), and poisons the
+    next retry attempt (stale trigger double-fires audio; two writers
+    corrupt session.log).
+    """
     try:
         proc = subprocess.Popen(
             ["adb", "logcat", "-v", "time", "flutter:V", "*:S"],
@@ -114,6 +122,8 @@ def run_logcat_monitor(
     except FileNotFoundError:
         print("ERROR: ADB not found in PATH")
         return
+    if proc_holder is not None:
+        proc_holder["proc"] = proc
 
     tag_marker = f"[{tag}]"
 
@@ -266,21 +276,51 @@ def run_maestro(
     cmd.append(flow_path)
 
     print(f"  Maestro: {os.path.basename(flow_path)}")
+    # start_new_session: on POSIX the child gets its own process group —
+    # without it, _kill_tree's killpg would target OUR group (suicide).
+    # Ignored on Windows (taskkill /T path).
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
+        stdout, _ = proc.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
+        # Kill the TREE: a plain child-kill leaves the Maestro JVM
+        # grandchild alive on Windows, re-wedging the device for every
+        # following flow.
+        _kill_tree(proc.pid)
+        proc.communicate()  # drain pipes, reap
         print(f"    WATCHDOG: Maestro exceeded {timeout_seconds:.0f}s — "
-              "killed (wedged daemon?)")
+              "process tree killed (wedged daemon?)")
         return 124
-    if result.stdout:
-        for line in result.stdout.strip().split("\n"):
+    if stdout:
+        for line in stdout.strip().split("\n"):
             print(f"    {line}")
-    return result.returncode
+    return proc.returncode
+
+
+def _kill_tree(pid: int) -> None:
+    """Kill a process and all descendants (platform-aware)."""
+    if sys.platform.startswith("win"):
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            capture_output=True,
+        )
+    else:
+        import signal
+
+        try:
+            pgid = os.getpgid(pid)
+            # Never kill our own group — if the child somehow shares it
+            # (start_new_session missed), killpg here would be suicide.
+            if pgid != os.getpgrp():
+                os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 def run_verify(
@@ -426,9 +466,10 @@ def _run_attempt(args, config, scenario, tag, log_path, preloaded_wavs,
 
     # Step 3: Start logcat monitor
     stop_monitor = threading.Event()
+    monitor_proc: dict = {}
     monitor_thread = threading.Thread(
         target=run_logcat_monitor,
-        args=(tag, [trigger], log_path, stop_monitor),
+        args=(tag, [trigger], log_path, stop_monitor, monitor_proc),
         daemon=True,
     )
     monitor_thread.start()
@@ -453,6 +494,14 @@ def _run_attempt(args, config, scenario, tag, log_path, preloaded_wavs,
 
     # Step 5: Stop logcat monitor
     stop_monitor.set()
+    # Kill the adb pipe FIRST: a quiet logcat leaves the thread blocked
+    # in readline() past any join timeout, and a survivor poisons the
+    # retry attempt.
+    if monitor_proc.get("proc") is not None:
+        try:
+            monitor_proc["proc"].kill()
+        except OSError:
+            pass
     monitor_thread.join(timeout=5)
 
     # Step 6: Verify (daily call only)
@@ -478,7 +527,12 @@ def _run_attempt(args, config, scenario, tag, log_path, preloaded_wavs,
 
     if not overall:
         # Preserve evidence before a retry overwrites session.log.
-        fail_log = log_path.replace(".log", f".fail-{attempt_no}.log")
+        # Flow-prefixed: attempt numbering restarts per invocation; a
+        # sweep would otherwise keep only the last failing flow's logs.
+        flow_name = os.path.splitext(os.path.basename(args.flow))[0]
+        fail_log = log_path.replace(
+            ".log", f".{flow_name}.fail-{attempt_no}.log"
+        )
         try:
             import shutil
 
