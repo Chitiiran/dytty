@@ -88,3 +88,7 @@ Error Screenshots/
 
 # Generated voice test audio (regenerate with: python scripts/voice-test/generate.py)
 test/fixtures/audio/generated/
+
+# Knowledge base - private IP, never committed (CLAUDE.md contract)
+kb/
+__pycache__/

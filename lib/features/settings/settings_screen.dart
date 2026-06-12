@@ -180,6 +180,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 20),
 
+          // Voice notes section (#32) — what happens after a recording
+          // finishes: pause for transcript review, or skip straight ahead.
+          _SectionLabel(label: 'Voice notes'),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                children: [
+                  _ThemeTile(
+                    icon: Icons.help_outline_rounded,
+                    label: 'Ask each time',
+                    selected:
+                        settingsState.voiceNoteHandling ==
+                        VoiceNoteHandling.ask,
+                    onTap: () => context
+                        .read<SettingsCubit>()
+                        .setVoiceNoteHandling(VoiceNoteHandling.ask),
+                  ),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                  _ThemeTile(
+                    icon: Icons.auto_awesome_rounded,
+                    label: 'Summarize automatically',
+                    selected:
+                        settingsState.voiceNoteHandling ==
+                        VoiceNoteHandling.summarize,
+                    onTap: () => context
+                        .read<SettingsCubit>()
+                        .setVoiceNoteHandling(VoiceNoteHandling.summarize),
+                  ),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
+                    ),
+                  ),
+                  _ThemeTile(
+                    icon: Icons.notes_rounded,
+                    label: 'Keep raw transcript',
+                    selected:
+                        settingsState.voiceNoteHandling ==
+                        VoiceNoteHandling.raw,
+                    onTap: () => context
+                        .read<SettingsCubit>()
+                        .setVoiceNoteHandling(VoiceNoteHandling.raw),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
           // Reminders section
           _SectionLabel(label: 'Reminders'),
           const SizedBox(height: 8),
