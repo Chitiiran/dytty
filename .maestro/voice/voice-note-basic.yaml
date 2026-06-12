@@ -13,17 +13,17 @@ tags:
 # Wait for listening (orchestrator plays audio here)
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 # Wait for transcript review screen
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 # Assert transcript has content
 - extendedWaitUntil:
     visible: ".*grocery.*"
-    timeout: 5000
+    timeout: 3000
 
 # Tap Summarize
 - tapOn: "Summarize"
@@ -31,7 +31,7 @@ tags:
 # Wait for reviewing state
 - extendedWaitUntil:
     visible: "Review your note"
-    timeout: 15000
+    timeout: 12000
 
 # Assert key review elements visible
 - assertVisible: "Summary"
@@ -46,4 +46,4 @@ tags:
 # Assert entry was saved — journal detail or home screen visible
 - extendedWaitUntil:
     visible: ".*Positive Things.*"
-    timeout: 5000
+    timeout: 3000

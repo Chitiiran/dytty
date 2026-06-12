@@ -10,12 +10,12 @@ tags:
 
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 # Wait for transcript review
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 # Tap transcript text to focus the field, then append edited text
 - tapOn: ".*grocery.*"
@@ -30,7 +30,7 @@ tags:
 # Wait for review
 - extendedWaitUntil:
     visible: "Review your note"
-    timeout: 15000
+    timeout: 12000
 
 # Assert we reached the review screen
 - assertVisible: "Summary"
