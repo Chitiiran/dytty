@@ -349,3 +349,47 @@ class TestKillTree(unittest.TestCase):
             rc = run_maestro("flow.yaml", timeout_seconds=1)
         self.assertEqual(rc, 124)
         kt.assert_called_once_with(777)
+
+
+class TestKillTreePosixSafety(unittest.TestCase):
+    """killpg on the orchestrator's own process group is suicide; the
+    child must be started in a new session and the guard must refuse
+    same-group kills."""
+
+    def test_posix_guard_refuses_own_process_group(self):
+        from unittest import mock
+
+        import orchestrate
+
+        with mock.patch.object(orchestrate.sys, "platform", "linux"),                 mock.patch.object(orchestrate.os, "getpgid",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "getpgrp",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "killpg",
+                                  create=True) as kp:
+            orchestrate._kill_tree(123)
+        kp.assert_not_called()
+
+    def test_posix_kills_foreign_process_group(self):
+        from unittest import mock
+
+        import orchestrate
+
+        with mock.patch.object(orchestrate.sys, "platform", "linux"),                 mock.patch.object(orchestrate.os, "getpgid",
+                                  return_value=555, create=True),                 mock.patch.object(orchestrate.os, "getpgrp",
+                                  return_value=999, create=True),                 mock.patch.object(orchestrate.os, "killpg",
+                                  create=True) as kp:
+            orchestrate._kill_tree(123)
+        kp.assert_called_once()
+
+    def test_maestro_child_starts_new_session(self):
+        from unittest import mock
+
+        from orchestrate import run_maestro
+
+        fake_proc = mock.Mock()
+        fake_proc.pid = 1
+        fake_proc.communicate.return_value = ("", "")
+        fake_proc.returncode = 0
+        with mock.patch("orchestrate.subprocess.Popen",
+                        return_value=fake_proc) as popen:
+            run_maestro("flow.yaml", timeout_seconds=5)
+        self.assertTrue(popen.call_args.kwargs.get("start_new_session"))

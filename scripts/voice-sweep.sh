@@ -33,6 +33,9 @@ acquire_lock() {
   fi
   local held_at now
   held_at=$(cut -d' ' -f1 "$LOCK_DIR/owner" 2>/dev/null || echo 0)
+  # Empty owner file (interrupted write) yields "" — arithmetic on an
+  # empty string aborts under set -e. Sanitize to 0 (= stale, reclaim).
+  [[ "$held_at" =~ ^[0-9]+$ ]] || held_at=0
   now=$(date +%s)
   if (( now - held_at < 1800 )); then
     echo "ERROR: device locked ($(cat "$LOCK_DIR/owner" 2>/dev/null)). Remove $LOCK_DIR if stale." >&2

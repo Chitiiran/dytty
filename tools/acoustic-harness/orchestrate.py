@@ -276,8 +276,15 @@ def run_maestro(
     cmd.append(flow_path)
 
     print(f"  Maestro: {os.path.basename(flow_path)}")
+    # start_new_session: on POSIX the child gets its own process group —
+    # without it, _kill_tree's killpg would target OUR group (suicide).
+    # Ignored on Windows (taskkill /T path).
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
     )
     try:
         stdout, _ = proc.communicate(timeout=timeout_seconds)
@@ -307,7 +314,11 @@ def _kill_tree(pid: int) -> None:
         import signal
 
         try:
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
+            pgid = os.getpgid(pid)
+            # Never kill our own group — if the child somehow shares it
+            # (start_new_session missed), killpg here would be suicide.
+            if pgid != os.getpgrp():
+                os.killpg(pgid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
 
