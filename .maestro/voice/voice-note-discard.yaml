@@ -10,16 +10,16 @@ tags:
 
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 # Assert transcript has content
 - extendedWaitUntil:
     visible: ".*grocery.*"
-    timeout: 5000
+    timeout: 3000
 
 # Tap Discard
 - tapOn: "Discard"
@@ -31,6 +31,6 @@ tags:
 # "haven't journaled" banner does not).
 - extendedWaitUntil:
     visible: 'Progress \d of 5.*'
-    timeout: 5000
+    timeout: 3000
 - assertNotVisible: "Review transcript"
 

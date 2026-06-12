@@ -10,17 +10,17 @@ tags:
 
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 - tapOn: "Summarize"
 
 - extendedWaitUntil:
     visible: "Review your note"
-    timeout: 15000
+    timeout: 12000
 
 # Assert tags section is NOT visible
 - assertNotVisible: "Tags"

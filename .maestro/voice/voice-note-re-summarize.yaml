@@ -10,17 +10,17 @@ tags:
 
 - extendedWaitUntil:
     visible: ".*Listening.*"
-    timeout: 5000
+    timeout: 3000
 
 - extendedWaitUntil:
     visible: "Review transcript"
-    timeout: 20000
+    timeout: 16000
 
 - tapOn: "Summarize"
 
 - extendedWaitUntil:
     visible: "Review your note"
-    timeout: 15000
+    timeout: 12000
 
 # Expand transcript and edit
 - tapOn: "Transcript"
@@ -39,5 +39,5 @@ tags:
 # the button returns and the review screen is still intact.
 - extendedWaitUntil:
     visible: "Re-summarize"
-    timeout: 20000
+    timeout: 12000
 - assertVisible: "Review your note"
