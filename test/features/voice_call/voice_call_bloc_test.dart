@@ -745,6 +745,24 @@ void main() {
       ],
     );
 
+    // #227 regression: after an error, the per-second elapsed timer must not
+    // revert the status back to `active` (which would mask the dropped call and
+    // strand the user in a fake-active session against a dead socket).
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'session tick after error keeps the call in error (not active)',
+      build: () => buildBloc(),
+      act: (bloc) async {
+        bloc.add(const StartCall()); // starts the elapsed timer
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const ServiceStateChanged(GeminiLiveState.error));
+        // Wait past one timer tick (1s) to let any stray tick fire.
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceCallStatus.error);
+      },
+    );
+
     blocTest<VoiceCallBloc, VoiceCallState>(
       'idle state during active call triggers EndCall',
       build: () => buildBloc(),

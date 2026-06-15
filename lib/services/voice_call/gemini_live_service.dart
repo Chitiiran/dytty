@@ -348,6 +348,11 @@ class GeminiLiveService {
     _suppressTimer = Timer(postInterruptSuppression, () {
       _micSuppressed = false;
     });
+    // The interrupted turn ends here (no clean `turnComplete` will arrive), so
+    // re-arm measurement for the next turn — otherwise interrupted (contested)
+    // turns would be silently dropped from latency stats (#223).
+    _modelTurnComplete = true;
+    _measuring = false;
     _interruptController.add(null);
   }
 

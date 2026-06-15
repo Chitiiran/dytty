@@ -184,6 +184,32 @@ void main() {
 
       expect(service.latencyP50, 1600);
     });
+
+    // #223 + #12: a barge-in ends the turn without a clean `turnComplete`, so
+    // the interrupt must re-arm measurement — else the NEXT turn (and every
+    // turn after an interrupt) is silently dropped from latency stats.
+    test('re-arms measurement after an interrupt so the next turn counts', () {
+      var now = 0;
+      final service = GeminiLiveService(nowMs: () => now);
+      addTearDown(service.dispose);
+
+      // Turn 1 completes via interrupt (no turnComplete).
+      now = 100;
+      service.noteUserAudioForTest();
+      now = 700;
+      service.noteAiAudioForTest(); // 600ms
+      service.handleInterruptForTest(); // re-arms
+
+      // Turn 2 must be measured.
+      now = 2000;
+      service.noteUserAudioForTest();
+      now = 3500;
+      service.noteAiAudioForTest(); // 1500ms
+
+      // Both turns recorded (p95 picks the larger).
+      expect(service.latencyP95, 1500);
+      expect(service.lastLatencyMs, 1500);
+    });
   });
 
   // #227: when the Gemini WebSocket closes (e.g. 1008 mid-session), the receive

@@ -411,6 +411,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
 
   void _onSessionTick(_SessionTick event, Emitter<VoiceCallState> emit) {
     if (_callStartTime == null) return;
+    // Never resurrect a terminal call from a stray in-flight tick (#227).
+    if (state.status == VoiceCallStatus.error ||
+        state.status == VoiceCallStatus.ended) {
+      return;
+    }
     final elapsed = DateTime.now().difference(_callStartTime!);
 
     // Auto-end at session limit
@@ -554,6 +559,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           emit(state.copyWith(status: VoiceCallStatus.active));
         }
       case GeminiLiveState.error:
+        // #227: tear down the call clock so the periodic tick can't revert the
+        // status back to active (which would strand the user in a fake-active
+        // call against a dead socket).
+        _elapsedTimer?.cancel();
+        _callStartTime = null;
         emit(
           state.copyWith(
             status: VoiceCallStatus.error,
