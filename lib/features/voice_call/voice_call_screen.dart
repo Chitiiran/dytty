@@ -109,8 +109,17 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       value: _bloc,
       child: BlocListener<VoiceCallBloc, VoiceCallState>(
         listenWhen: (prev, curr) =>
-            curr.savedEntries.length > prev.savedEntries.length,
+            curr.savedEntries.length > prev.savedEntries.length ||
+            (curr.status == VoiceCallStatus.error &&
+                prev.status != VoiceCallStatus.error),
         listener: (context, state) {
+          // #227: the session dropped (e.g. WebSocket 1008) — stop the recorder
+          // so the mic isn't streaming into a dead socket.
+          if (state.status == VoiceCallStatus.error) {
+            _session?.stop();
+            return;
+          }
+
           final entry = state.savedEntries.last;
           final cat = CategoryConfig.defaults.firstWhere(
             (c) => c.id == entry.categoryId,

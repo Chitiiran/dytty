@@ -234,6 +234,9 @@ class GeminiLiveService {
       }
     } catch (e) {
       debugPrint('Gemini Live stream error: $e');
+      // #227: the socket is dead (e.g. WebSocket 1008). Null the session so
+      // sendAudio no-ops instead of throwing into the closed socket every tick.
+      _session = null;
       _emitState(GeminiLiveState.error);
       return;
     }
@@ -303,6 +306,11 @@ class GeminiLiveService {
   /// live session (the server interrupt arrives inside [_handleContent]).
   @visibleForTesting
   void handleInterruptForTest() => _emitInterrupt();
+
+  /// Test seam: simulate the receive loop nulling the session on a socket
+  /// close (#227), so [sendAudio] becomes a no-op.
+  @visibleForTesting
+  void markClosedForTest() => _session = null;
 
   void _handleToolCall(LiveServerToolCall toolCall) {
     if (toolCall.functionCalls == null) return;

@@ -107,4 +107,20 @@ void main() {
       );
     });
   });
+
+  // #227: when the Gemini WebSocket closes (e.g. 1008 mid-session), the receive
+  // loop must null the session so sendAudio stops firing into the dead socket
+  // (which previously threw an unhandled exception every mic tick — the "lock").
+  group('session close recovery (#227)', () {
+    test('sendAudio is a no-op once the session is marked closed', () {
+      final service = GeminiLiveService();
+      addTearDown(service.dispose);
+
+      service.markClosedForTest();
+
+      // Must not throw, and the session is no longer connected.
+      service.sendAudio(Uint8List(4));
+      expect(service.isConnected, isFalse);
+    });
+  });
 }
