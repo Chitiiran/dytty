@@ -1,3 +1,4 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -105,6 +106,43 @@ void main() {
         logs.any((l) => l.contains('[DYTTY] Interrupted by user')),
         isTrue,
       );
+    });
+
+    // #12 Tier 1 (ghost-input fix): after a barge-in we've yielded the floor to
+    // the user, so the AI's decaying speaker tail must NOT be streamed back as
+    // input (Gemini transcribes it as phantom user speech). Suppress mic-send
+    // for a short window after the interrupt — the "ASR gating during cancel
+    // window" layer validated across LiveKit / Pipecat / Reflection.app.
+    test('suppresses mic-send for a window after an interrupt', () {
+      fakeAsync((async) {
+        final service = GeminiLiveService();
+        addTearDown(service.dispose);
+
+        expect(
+          service.isMicSuppressed,
+          isFalse,
+          reason: 'not suppressed before any interrupt',
+        );
+
+        service.handleInterruptForTest();
+        expect(
+          service.isMicSuppressed,
+          isTrue,
+          reason: 'the echo tail window opens on interrupt',
+        );
+
+        // Still within the window.
+        async.elapse(GeminiLiveService.postInterruptSuppression * 0.5);
+        expect(service.isMicSuppressed, isTrue);
+
+        // Window elapsed — mic reopens.
+        async.elapse(GeminiLiveService.postInterruptSuppression);
+        expect(
+          service.isMicSuppressed,
+          isFalse,
+          reason: 'the user keeps the floor once the tail has decayed',
+        );
+      });
     });
   });
 

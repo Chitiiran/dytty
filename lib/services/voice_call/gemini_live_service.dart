@@ -66,6 +66,22 @@ class GeminiLiveService {
   /// faster than it plays, so there is always more queued than the user heard.
   Stream<void> get interruptStream => _interruptController.stream;
 
+  /// How long to suppress mic-send after a barge-in (#12 Tier 1).
+  ///
+  /// On interrupt we've yielded the floor to the user, but the AI's speaker
+  /// audio keeps decaying for a few hundred ms (hardware + OS pipeline) and the
+  /// open mic captures it — Gemini then transcribes that echo as phantom user
+  /// input. Suppressing sends for this window absorbs the tail. Kept short so
+  /// the user's actual speech (which Gemini captured *before* the interrupt)
+  /// isn't lost. Deterministic suppression needs the raw API (#228).
+  static const postInterruptSuppression = Duration(milliseconds: 400);
+
+  Timer? _suppressTimer;
+  bool _micSuppressed = false;
+
+  /// Whether mic-send is currently suppressed by the post-interrupt window.
+  bool get isMicSuppressed => _micSuppressed;
+
   /// Transcription updates (input and output).
   Stream<Transcript> get transcriptStream => _transcriptController.stream;
 
@@ -119,6 +135,8 @@ class GeminiLiveService {
     _modelTurnComplete = true;
     _measuring = false;
     lastLatencyMs = null;
+    _suppressTimer?.cancel();
+    _micSuppressed = false;
 
     final effectivePrompt = systemPrompt ?? dailyCallSystemPrompt;
     final effectiveTools = tools ?? [call_tools.saveEntryDeclaration];
@@ -158,6 +176,8 @@ class GeminiLiveService {
   /// Audio format: 16-bit PCM, 16kHz, mono, little-endian.
   void sendAudio(Uint8List pcmData) {
     if (_session == null) return;
+    // Drop mic audio during the post-interrupt echo-tail window (#12 Tier 1).
+    if (_micSuppressed) return;
     if (_modelTurnComplete && !_measuring) {
       _latencyStopwatch.reset();
       _latencyStopwatch.start();
@@ -195,6 +215,7 @@ class GeminiLiveService {
   }
 
   void dispose() {
+    _suppressTimer?.cancel();
     _audioController.close();
     _transcriptController.close();
     _toolCallController.close();
@@ -299,6 +320,13 @@ class GeminiLiveService {
 
   void _emitInterrupt() {
     _log('Interrupted by user (server-side barge-in)');
+    // Yield the floor: suppress mic-send so the AI's decaying speaker tail
+    // isn't streamed back and transcribed as phantom user input (#12 Tier 1).
+    _micSuppressed = true;
+    _suppressTimer?.cancel();
+    _suppressTimer = Timer(postInterruptSuppression, () {
+      _micSuppressed = false;
+    });
     _interruptController.add(null);
   }
 
