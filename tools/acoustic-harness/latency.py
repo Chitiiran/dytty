@@ -62,23 +62,50 @@ def analyze_turns(log_path: str) -> list[dict]:
     """
     turns = []
     last_user_ms = None
+    ai_first_token_ms = None  # first "AI said" after end-of-speech, before audio
     measuring = False  # have we seen user speech since the last AI audio?
 
     for ts, msg in _events(log_path):
         if msg.startswith("User said"):
             last_user_ms = ts
             measuring = True
-        elif msg.startswith("Audio chunk received") and measuring and last_user_ms is not None:
+            ai_first_token_ms = None  # reset for this turn
+        elif msg.startswith("AI said") and measuring and ai_first_token_ms is None:
+            # First AI transcript token = the model has started responding,
+            # before audio is encoded/sent. Splits the latency into "Gemini
+            # processing" vs "first-token -> first-audio".
+            ai_first_token_ms = ts
+        elif (
+            msg.startswith("Audio chunk received")
+            and measuring
+            and last_user_ms is not None
+        ):
             turns.append(
                 {
                     "user_last_ms": last_user_ms,
+                    "ai_first_token_ms": ai_first_token_ms,
                     "ai_first_audio_ms": ts,
                     "latency_ms": ts - last_user_ms,
+                    "processing_ms": (
+                        ai_first_token_ms - last_user_ms
+                        if ai_first_token_ms is not None
+                        else None
+                    ),
+                    "token_to_audio_ms": (
+                        ts - ai_first_token_ms
+                        if ai_first_token_ms is not None
+                        else None
+                    ),
                 }
             )
             measuring = False  # wait for the next user turn before measuring again
 
     return turns
+
+
+def _mean(values) -> int | None:
+    vals = [v for v in values if v is not None]
+    return round(sum(vals) / len(vals)) if vals else None
 
 
 def summarize(turns: list[dict]) -> dict:
@@ -93,6 +120,9 @@ def summarize(turns: list[dict]) -> dict:
         "max_ms": lat[-1],
         "median_ms": lat[n // 2],
         "mean_ms": round(sum(lat) / n),
+        # Breakdown means (None when no AI-token was logged before audio).
+        "mean_processing_ms": _mean(t["processing_ms"] for t in turns),
+        "mean_token_to_audio_ms": _mean(t["token_to_audio_ms"] for t in turns),
     }
 
 
@@ -111,15 +141,29 @@ def main() -> None:
 
     print("=== Daily-call latency (end-of-speech -> first-AI-audio) ===\n")
     for i, t in enumerate(turns, 1):
-        print(f"  turn {i}: {t['latency_ms']} ms")
+        proc = t["processing_ms"]
+        t2a = t["token_to_audio_ms"]
+        if proc is not None:
+            print(
+                f"  turn {i}: {t['latency_ms']} ms total = "
+                f"{proc} ms Gemini-processing (end-speech -> first token) + "
+                f"{t2a} ms first-token -> first-audio"
+            )
+        else:
+            print(f"  turn {i}: {t['latency_ms']} ms total")
     print()
     if stats["turns"]:
         print(
             f"  {stats['turns']} turns | "
-            f"median {stats['median_ms']} ms | "
-            f"mean {stats['mean_ms']} ms | "
+            f"median {stats['median_ms']} ms | mean {stats['mean_ms']} ms | "
             f"min {stats['min_ms']} | max {stats['max_ms']}"
         )
+        if stats["mean_processing_ms"] is not None:
+            print(
+                f"  breakdown (mean): "
+                f"{stats['mean_processing_ms']} ms processing + "
+                f"{stats['mean_token_to_audio_ms']} ms token->audio"
+            )
     else:
         print("  no complete turns found in log")
     sys.exit(0)

@@ -81,6 +81,31 @@ class TestAnalyzeTurns(unittest.TestCase):
         )
         self.assertEqual(analyze_turns(self._write(log)), [])
 
+    def test_breaks_down_into_processing_and_first_token_to_audio(self):
+        # end-of-speech 27.891 -> AI first token 29.000 = 1109ms processing;
+        # AI first token 29.000 -> first audio 29.925 = 925ms token->audio.
+        log = SAMPLE_LOG.replace(
+            "06-15 15:21:30.100 I/flutter ( 7245): [DYTTY] AI said: Hi! (final: false)\n",
+            "",
+        )
+        # Insert an AI-said BEFORE the audio chunk to mark first-token time.
+        log = log.replace(
+            "06-15 15:21:29.925 I/flutter ( 7245): [DYTTY] Audio chunk received: 46080 bytes",
+            "06-15 15:21:29.000 I/flutter ( 7245): [DYTTY] AI said: Hi (final: false)\n"
+            "06-15 15:21:29.925 I/flutter ( 7245): [DYTTY] Audio chunk received: 46080 bytes",
+        )
+        turns = analyze_turns(self._write(log))
+        self.assertEqual(turns[0]["latency_ms"], 2034)  # total unchanged
+        self.assertEqual(turns[0]["ai_first_token_ms"], parse_timestamp("06-15 15:21:29.000"))
+        self.assertEqual(turns[0]["processing_ms"], 1109)  # end-speech -> first token
+        self.assertEqual(turns[0]["token_to_audio_ms"], 925)  # first token -> audio
+
+    def test_breakdown_none_when_no_ai_token_before_audio(self):
+        # SAMPLE_LOG has no AI-said before the audio chunk.
+        turns = analyze_turns(self._write(SAMPLE_LOG))
+        self.assertIsNone(turns[0]["ai_first_token_ms"])
+        self.assertIsNone(turns[0]["processing_ms"])
+
 
 if __name__ == "__main__":
     unittest.main()
