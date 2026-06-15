@@ -102,11 +102,29 @@ class GeminiLiveService {
     _stateController.add(state);
   }
 
-  /// High-resolution monotonic timer for latency measurement.
-  final Stopwatch _latencyStopwatch = Stopwatch();
+  /// Monotonic clock for latency measurement (injectable for tests).
+  ///
+  /// Returns elapsed milliseconds from an arbitrary fixed origin.
+  final int Function() _nowMs;
+
   final LatencyTracker _latencyTracker = LatencyTracker();
   bool _modelTurnComplete = true;
   bool _measuring = false;
+
+  /// Timestamp of the user's most recent mic chunk this turn (#223).
+  ///
+  /// Latency is measured end-of-user-speech -> first-AI-audio, so we anchor to
+  /// the LATEST user chunk (updated on every send), not the first. Measuring
+  /// from the first chunk inflates latency by the whole utterance + Gemini's
+  /// VAD silence wait.
+  int? _userLastChunkMs;
+
+  /// [nowMs] is an injectable monotonic clock (ms) for deterministic latency
+  /// tests; defaults to a process-wide stopwatch.
+  GeminiLiveService({int Function()? nowMs})
+    : _nowMs = nowMs ?? (() => _defaultClock.elapsedMilliseconds);
+
+  static final Stopwatch _defaultClock = Stopwatch()..start();
 
   final _latencyController = StreamController<int>.broadcast();
 
@@ -134,6 +152,7 @@ class GeminiLiveService {
     _latencyTracker.reset();
     _modelTurnComplete = true;
     _measuring = false;
+    _userLastChunkMs = null;
     lastLatencyMs = null;
     _suppressTimer?.cancel();
     _micSuppressed = false;
@@ -178,12 +197,14 @@ class GeminiLiveService {
     if (_session == null) return;
     // Drop mic audio during the post-interrupt echo-tail window (#12 Tier 1).
     if (_micSuppressed) return;
-    if (_modelTurnComplete && !_measuring) {
-      _latencyStopwatch.reset();
-      _latencyStopwatch.start();
+    if (_modelTurnComplete) {
       _modelTurnComplete = false;
       _measuring = true;
     }
+    // Anchor to the user's LATEST chunk so latency = end-of-speech -> AI audio
+    // (#223). Updating every chunk (not just the first) excludes the utterance
+    // duration from the measurement.
+    if (_measuring) _userLastChunkMs = _nowMs();
     _session!.sendAudioRealtime(InlineDataPart('audio/pcm', pcmData));
   }
 
@@ -276,9 +297,8 @@ class GeminiLiveService {
     if (content.modelTurn != null) {
       for (final part in content.modelTurn!.parts) {
         if (part is InlineDataPart && part.mimeType.startsWith('audio/')) {
-          if (_measuring) {
-            _latencyStopwatch.stop();
-            lastLatencyMs = _latencyStopwatch.elapsedMilliseconds;
+          if (_measuring && _userLastChunkMs != null) {
+            lastLatencyMs = _nowMs() - _userLastChunkMs!;
             _latencyTracker.add(lastLatencyMs!);
             _latencyController.add(lastLatencyMs!);
             _measuring = false;
@@ -339,6 +359,28 @@ class GeminiLiveService {
   /// close (#227), so [sendAudio] becomes a no-op.
   @visibleForTesting
   void markClosedForTest() => _session = null;
+
+  /// Test seam: record a user mic chunk for latency (#223), without a live
+  /// session. Mirrors the measurement path in [sendAudio].
+  @visibleForTesting
+  void noteUserAudioForTest() {
+    if (_modelTurnComplete) {
+      _modelTurnComplete = false;
+      _measuring = true;
+    }
+    if (_measuring) _userLastChunkMs = _nowMs();
+  }
+
+  /// Test seam: record the AI's first audio chunk for latency (#223). Mirrors
+  /// the measurement path in [_handleContent].
+  @visibleForTesting
+  void noteAiAudioForTest() {
+    if (_measuring && _userLastChunkMs != null) {
+      lastLatencyMs = _nowMs() - _userLastChunkMs!;
+      _latencyTracker.add(lastLatencyMs!);
+      _measuring = false;
+    }
+  }
 
   void _handleToolCall(LiveServerToolCall toolCall) {
     if (toolCall.functionCalls == null) return;

@@ -146,6 +146,46 @@ void main() {
     });
   });
 
+  // #223: latency must be measured end-of-user-speech -> first-AI-audio, NOT
+  // from the user's first chunk (which inflates it by the whole utterance +
+  // Gemini's VAD wait). The clock anchors to the LATEST user chunk.
+  group('latency measurement (#223)', () {
+    test('measures from the user last chunk, not the first', () {
+      var now = 0;
+      final service = GeminiLiveService(nowMs: () => now);
+      addTearDown(service.dispose);
+
+      now = 1000; // user starts speaking
+      service.noteUserAudioForTest();
+      now = 1700; // ...still speaking (700ms of utterance)
+      service.noteUserAudioForTest();
+      now = 2000; // last user chunk (end of speech)
+      service.noteUserAudioForTest();
+
+      now = 3635; // AI's first audio arrives
+      service.noteAiAudioForTest();
+
+      // 3635 - 2000 = 1635 (end-of-speech -> AI audio), NOT 3635 - 1000 = 2635.
+      expect(service.lastLatencyMs, 1635);
+    });
+
+    test('p50 reflects the corrected per-turn latency', () {
+      var now = 0;
+      final service = GeminiLiveService(nowMs: () => now);
+      addTearDown(service.dispose);
+
+      // One full turn: speak at 500, last chunk 1000, AI audio at 2600 -> 1600.
+      now = 500;
+      service.noteUserAudioForTest();
+      now = 1000;
+      service.noteUserAudioForTest();
+      now = 2600;
+      service.noteAiAudioForTest();
+
+      expect(service.latencyP50, 1600);
+    });
+  });
+
   // #227: when the Gemini WebSocket closes (e.g. 1008 mid-session), the receive
   // loop must null the session so sendAudio stops firing into the dead socket
   // (which previously threw an unhandled exception every mic tick — the "lock").
