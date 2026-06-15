@@ -49,6 +49,14 @@ class CallSession {
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
+        // #222: hardware acoustic echo cancellation. The VOICE_COMMUNICATION
+        // source engages the platform AEC (the mode phone calls use) so the
+        // mic doesn't pick up the AI's speaker output and loop it back.
+        echoCancel: true,
+        noiseSuppress: true,
+        androidConfig: AndroidRecordConfig(
+          audioSource: AndroidAudioSource.voiceCommunication,
+        ),
       ),
     );
     _recordingStreamSub = stream.listen((data) {

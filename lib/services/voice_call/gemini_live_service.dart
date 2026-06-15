@@ -43,9 +43,16 @@ class GeminiLiveService {
   final _transcriptController = StreamController<Transcript>.broadcast();
   final _toolCallController = StreamController<FunctionCall>.broadcast();
   final _stateController = StreamController<GeminiLiveState>.broadcast();
+  final _interruptController = StreamController<void>.broadcast();
 
   /// Audio chunks received from the model (PCM 24kHz 16-bit LE mono).
   Stream<Uint8List> get audioStream => _audioController.stream;
+
+  /// Fires when Gemini reports it cancelled its own generation because the
+  /// user spoke over the AI (server-side barge-in, #12). The UI must stop and
+  /// flush any buffered AI audio on this signal — the model generates audio
+  /// faster than it plays, so there is always more queued than the user heard.
+  Stream<void> get interruptStream => _interruptController.stream;
 
   /// Transcription updates (input and output).
   Stream<Transcript> get transcriptStream => _transcriptController.stream;
@@ -181,6 +188,7 @@ class GeminiLiveService {
     _toolCallController.close();
     _stateController.close();
     _latencyController.close();
+    _interruptController.close();
   }
 
   /// Start the receive loop for multi-turn conversations.
@@ -222,6 +230,12 @@ class GeminiLiveService {
   }
 
   void _handleContent(LiveServerContent content) {
+    // Server-side barge-in (#12): Gemini cancelled its generation because the
+    // user spoke over the AI. Surface it so the UI flushes buffered audio.
+    if (content.interrupted == true) {
+      _emitInterrupt();
+    }
+
     // Extract audio from model turn
     if (content.modelTurn != null) {
       for (final part in content.modelTurn!.parts) {
@@ -234,7 +248,7 @@ class GeminiLiveService {
             _measuring = false;
             debugPrint('Response latency: ${lastLatencyMs}ms');
           }
-          _audioController.add(part.bytes);
+          emitAudioChunk(part.bytes);
         }
       }
     }
@@ -257,6 +271,26 @@ class GeminiLiveService {
       );
     }
   }
+
+  /// Emit a received audio chunk to [audioStream], logging its size.
+  ///
+  /// The `[DYTTY] Audio chunk received: N bytes` line lets device logcat
+  /// confirm the model is actually sending audio (diagnostic from #222).
+  @visibleForTesting
+  void emitAudioChunk(Uint8List bytes) {
+    _log('Audio chunk received: ${bytes.length} bytes');
+    _audioController.add(bytes);
+  }
+
+  void _emitInterrupt() {
+    _log('Interrupted by user (server-side barge-in)');
+    _interruptController.add(null);
+  }
+
+  /// Test seam mirroring [emitAudioChunk] — drives [interruptStream] without a
+  /// live session (the server interrupt arrives inside [_handleContent]).
+  @visibleForTesting
+  void handleInterruptForTest() => _emitInterrupt();
 
   void _handleToolCall(LiveServerToolCall toolCall) {
     if (toolCall.functionCalls == null) return;

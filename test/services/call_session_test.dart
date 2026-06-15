@@ -119,6 +119,36 @@ void main() {
 
         await controller.close();
       });
+
+      // #222: AI talks to itself in a loop because the mic picks up the
+      // speaker output (the AI's voice) with no echo cancellation. Enabling
+      // hardware AEC via the VOICE_COMMUNICATION audio source + echoCancel /
+      // noiseSuppress flags is the proper fix.
+      test('requests echo cancellation to prevent AI self-feedback', () async {
+        final controller = StreamController<Uint8List>();
+        when(
+          () => mockRecorder.startStream(any()),
+        ).thenAnswer((_) async => controller.stream);
+
+        await session.startRecording();
+
+        verify(
+          () => mockRecorder.startStream(
+            any(
+              that: isA<RecordConfig>()
+                  .having((c) => c.echoCancel, 'echoCancel', isTrue)
+                  .having((c) => c.noiseSuppress, 'noiseSuppress', isTrue)
+                  .having(
+                    (c) => c.androidConfig.audioSource,
+                    'androidConfig.audioSource',
+                    AndroidAudioSource.voiceCommunication,
+                  ),
+            ),
+          ),
+        ).called(1);
+
+        await controller.close();
+      });
     });
 
     group('stop', () {

@@ -936,6 +936,23 @@ void main() {
       bloc.close();
     });
 
+    // #12 open-mic: the mic streams continuously, INCLUDING while the AI is
+    // speaking — Gemini's server-side VAD needs that audio to detect barge-in.
+    // The echo loop is prevented by platform AEC + flushing playback on the
+    // interrupt signal, not by gating the mic (device-validated 2026-06-15).
+    test('forwards mic audio continuously, including during AI speech', () {
+      final bloc = buildBloc();
+      final data = Uint8List.fromList([10, 20, 30]);
+
+      bloc.sendAudio(data);
+      bloc.sendAudio(data);
+
+      verify(() => mockService.sendAudio(data)).called(2);
+      expect(bloc.recordedAudio, isNotNull);
+      expect(bloc.recordedAudio!.length, 6);
+      bloc.close();
+    });
+
     test('does not forward to service when muted', () {
       final bloc = buildBloc();
       // Manually set muted state by adding ToggleMute
