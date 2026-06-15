@@ -408,29 +408,49 @@ void main() {
   });
 
   group('TranscriptReceived with aggregation', () {
+    // #123: Gemini streams transcript as incremental DELTAS, not cumulative
+    // snapshots (device-confirmed: "Hey" -> "," -> " I" -> " had"). Deltas from
+    // the same speaker must be APPENDED, not replaced — replacing left the
+    // bubble showing only the last fragment (truncated speech).
     blocTest<VoiceCallBloc, VoiceCallState>(
-      'partial from same speaker replaces last bubble (length stays 1)',
+      'partials from same speaker append into one bubble (#123)',
       build: () => buildBloc(),
       seed: () => const VoiceCallState(status: VoiceCallStatus.active),
       act: (bloc) {
         bloc.add(
           const TranscriptReceived(
-            Transcript(speaker: Speaker.user, text: 'Hel', isFinal: false),
+            Transcript(speaker: Speaker.user, text: 'Hey', isFinal: false),
           ),
         );
         bloc.add(
           const TranscriptReceived(
-            Transcript(speaker: Speaker.user, text: 'Hello', isFinal: false),
+            Transcript(speaker: Speaker.user, text: ', I had', isFinal: false),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: ' a good day.',
+              isFinal: false,
+            ),
           ),
         );
       },
       expect: () => [
         isA<VoiceCallState>()
             .having((s) => s.transcripts.length, 'length', 1)
-            .having((s) => s.transcripts.last.text, 'text', 'Hel'),
+            .having((s) => s.transcripts.last.text, 'text', 'Hey'),
         isA<VoiceCallState>()
             .having((s) => s.transcripts.length, 'length', 1)
-            .having((s) => s.transcripts.last.text, 'text', 'Hello'),
+            .having((s) => s.transcripts.last.text, 'text', 'Hey, I had'),
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having(
+              (s) => s.transcripts.last.text,
+              'text',
+              'Hey, I had a good day.',
+            ),
       ],
     );
 

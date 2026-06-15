@@ -448,15 +448,21 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final current = state.transcripts;
     final incoming = event.transcript;
 
-    // Append new bubble when: list is empty, speaker changed, or last was final
+    // New bubble when: list is empty, speaker changed, or last bubble is final.
     if (current.isEmpty ||
         current.last.speaker != incoming.speaker ||
         current.last.isFinal) {
       emit(state.copyWith(transcripts: [...current, incoming]));
     } else {
-      // Replace last partial with updated partial/final from same speaker
+      // #123: Gemini streams transcript as incremental DELTAS, so APPEND the
+      // delta to the running bubble rather than replacing it (replacing left
+      // only the last fragment visible — truncated speech).
       final updated = List<Transcript>.of(current);
-      updated[updated.length - 1] = incoming;
+      updated[updated.length - 1] = Transcript(
+        speaker: incoming.speaker,
+        text: current.last.text + incoming.text,
+        isFinal: incoming.isFinal,
+      );
       emit(state.copyWith(transcripts: updated));
     }
   }
