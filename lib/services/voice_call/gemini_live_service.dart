@@ -15,11 +15,23 @@ class Transcript {
   final String text;
   final bool isFinal;
 
+  /// True when this AI turn was cut short by the user speaking over it (#12).
+  /// The displayed text may be more than the user actually heard.
+  final bool interrupted;
+
   const Transcript({
     required this.speaker,
     required this.text,
     this.isFinal = true,
+    this.interrupted = false,
   });
+
+  Transcript copyWith({bool? isFinal, bool? interrupted}) => Transcript(
+    speaker: speaker,
+    text: text,
+    isFinal: isFinal ?? this.isFinal,
+    interrupted: interrupted ?? this.interrupted,
+  );
 }
 
 /// Wraps the Firebase AI Live API for bidirectional voice streaming.

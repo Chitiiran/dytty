@@ -35,6 +35,7 @@ void main() {
   late StreamController<GeminiLiveState> stateController;
   late StreamController<Uint8List> audioController;
   late StreamController<int> latencyController;
+  late StreamController<void> interruptController;
 
   setUpAll(() {
     registerFallbackValue(
@@ -55,6 +56,7 @@ void main() {
     stateController = StreamController<GeminiLiveState>.broadcast();
     audioController = StreamController<Uint8List>.broadcast();
     latencyController = StreamController<int>.broadcast();
+    interruptController = StreamController<void>.broadcast();
 
     when(
       () => mockService.transcriptStream,
@@ -71,6 +73,9 @@ void main() {
     when(
       () => mockService.latencyStream,
     ).thenAnswer((_) => latencyController.stream);
+    when(
+      () => mockService.interruptStream,
+    ).thenAnswer((_) => interruptController.stream);
     when(() => mockService.latencyP50).thenReturn(null);
     when(() => mockService.latencyP95).thenReturn(null);
     when(() => mockService.connect()).thenAnswer((_) async {});
@@ -88,6 +93,7 @@ void main() {
     stateController.close();
     audioController.close();
     latencyController.close();
+    interruptController.close();
   });
 
   VoiceCallBloc buildBloc({
@@ -934,6 +940,32 @@ void main() {
       final bloc = buildBloc();
       expect(bloc.recordedAudio, isNull);
       bloc.close();
+    });
+
+    // #12: on barge-in, the in-flight AI transcript holds text the user never
+    // heard (audio is generated ahead of playback). Mark it interrupted so the
+    // call history / summary reflect what was actually said.
+    test('marks the in-flight AI transcript interrupted on barge-in', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(Duration.zero);
+
+      transcriptController.add(
+        const Transcript(
+          speaker: Speaker.ai,
+          text: 'I think you should',
+          isFinal: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      interruptController.add(null);
+      await Future<void>.delayed(Duration.zero);
+
+      final last = bloc.state.transcripts.last;
+      expect(last.interrupted, isTrue);
+      expect(last.isFinal, isTrue);
+      await bloc.close();
     });
 
     // #12 open-mic: the mic streams continuously, INCLUDING while the AI is

@@ -23,6 +23,9 @@ void main() {
       () => mockService.latencyStream,
     ).thenAnswer((_) => const Stream.empty());
     when(
+      () => mockService.interruptStream,
+    ).thenAnswer((_) => const Stream.empty());
+    when(
       () => mockService.connect(
         systemPrompt: any(named: 'systemPrompt'),
         tools: any(named: 'tools'),

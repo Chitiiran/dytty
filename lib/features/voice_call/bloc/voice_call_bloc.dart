@@ -75,6 +75,11 @@ class GenerateSessionSummary extends VoiceCallEvent {
   List<Object?> get props => [transcripts];
 }
 
+/// User spoke over the AI; Gemini cancelled its turn (#12).
+class InterruptReceived extends VoiceCallEvent {
+  const InterruptReceived();
+}
+
 class ToggleMute extends VoiceCallEvent {
   const ToggleMute();
 }
@@ -226,6 +231,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   final String? _uid;
 
   StreamSubscription<Transcript>? _transcriptSub;
+  StreamSubscription<void>? _interruptSub;
   StreamSubscription<FunctionCall>? _toolCallSub;
   StreamSubscription<GeminiLiveState>? _stateSub;
   StreamSubscription<int>? _latencySub;
@@ -268,6 +274,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<LatencyUpdated>(_onLatencyUpdated);
     on<_SessionTick>(_onSessionTick);
     on<GenerateSessionSummary>(_onGenerateSessionSummary);
+    on<InterruptReceived>(_onInterruptReceived);
     on<ToggleMute>(_onToggleMute);
     on<ToggleSpeaker>(_onToggleSpeaker);
   }
@@ -302,6 +309,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     });
     _latencySub = _service.latencyStream.listen((ms) {
       add(LatencyUpdated(ms));
+    });
+    _interruptSub = _service.interruptStream.listen((_) {
+      add(const InterruptReceived());
     });
 
     try {
@@ -451,6 +461,25 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     }
   }
 
+  void _onInterruptReceived(
+    InterruptReceived event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    final current = state.transcripts;
+    // If the AI was mid-turn, mark its bubble interrupted + finalize it so the
+    // history records that the rest of that response was never heard (#12).
+    if (current.isNotEmpty &&
+        current.last.speaker == Speaker.ai &&
+        !current.last.isFinal) {
+      final updated = List<Transcript>.of(current);
+      updated[updated.length - 1] = current.last.copyWith(
+        interrupted: true,
+        isFinal: true,
+      );
+      emit(state.copyWith(transcripts: updated));
+    }
+  }
+
   Future<void> _onToolCallReceived(
     ToolCallReceived event,
     Emitter<VoiceCallState> emit,
@@ -560,10 +589,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     await _toolCallSub?.cancel();
     await _stateSub?.cancel();
     await _latencySub?.cancel();
+    await _interruptSub?.cancel();
     _transcriptSub = null;
     _toolCallSub = null;
     _stateSub = null;
     _latencySub = null;
+    _interruptSub = null;
   }
 
   @override
