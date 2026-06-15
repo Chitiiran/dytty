@@ -41,6 +41,11 @@ void main() {
     mockPlayback = MockAudioPlaybackService();
     mockBloc = MockVoiceCallBloc();
 
+    // Default: no interrupts. Individual tests override with their own stream.
+    when(
+      () => mockBloc.interruptStream,
+    ).thenAnswer((_) => const Stream<void>.empty());
+
     session = CallSession(
       recorder: mockRecorder,
       playback: mockPlayback,
@@ -87,6 +92,32 @@ void main() {
         verify(() => mockPlayback.feed(audioData)).called(1);
 
         await controller.close();
+      });
+    });
+
+    group('interrupt', () {
+      // #12: on Gemini's barge-in signal, the buffered AI audio (which runs
+      // ahead of playback) must be flushed so the AI goes silent immediately.
+      test('flushes playback when the bloc interruptStream fires', () async {
+        final interrupts = StreamController<void>();
+        addTearDown(interrupts.close);
+
+        when(
+          () => mockPlayback.init(sampleRate: 24000, channels: 1),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockBloc.audioOutputStream,
+        ).thenAnswer((_) => const Stream<Uint8List>.empty());
+        when(
+          () => mockBloc.interruptStream,
+        ).thenAnswer((_) => interrupts.stream);
+        when(() => mockPlayback.flush()).thenAnswer((_) async {});
+
+        await session.initPlayback();
+        interrupts.add(null);
+        await Future<void>.delayed(Duration.zero);
+
+        verify(() => mockPlayback.flush()).called(1);
       });
     });
 

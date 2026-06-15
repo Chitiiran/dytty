@@ -31,6 +31,11 @@ class FakeAudioPlaybackService implements AudioPlaybackService {
   }
 
   @override
+  Future<void> flush() async {
+    calls.add('flush');
+  }
+
+  @override
   Future<void> stop() async {
     calls.add('stop');
   }

@@ -22,6 +22,7 @@ class CallSession {
 
   StreamSubscription<Uint8List>? _audioOutputSub;
   StreamSubscription<Uint8List>? _recordingStreamSub;
+  StreamSubscription<void>? _interruptSub;
 
   CallSession({
     required this.recorder,
@@ -39,6 +40,12 @@ class CallSession {
       } catch (e) {
         debugPrint('Audio playback feed error: $e');
       }
+    });
+
+    // #12 barge-in: flush queued AI audio the moment Gemini reports the user
+    // spoke over it, so the AI goes silent immediately.
+    _interruptSub = bloc.interruptStream.listen((_) {
+      playback.flush();
     });
   }
 
@@ -71,6 +78,8 @@ class CallSession {
     await recorder.stop();
     _audioOutputSub?.cancel();
     _audioOutputSub = null;
+    _interruptSub?.cancel();
+    _interruptSub = null;
     await playback.stop();
   }
 
@@ -80,6 +89,8 @@ class CallSession {
     _recordingStreamSub = null;
     _audioOutputSub?.cancel();
     _audioOutputSub = null;
+    _interruptSub?.cancel();
+    _interruptSub = null;
     recorder.dispose();
     playback.dispose();
   }

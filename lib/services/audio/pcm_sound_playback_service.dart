@@ -17,6 +17,14 @@ class PcmSoundPlaybackService implements AudioPlaybackService {
   }
 
   @override
+  Future<void> flush() async {
+    // Drop the queued PCM and re-arm the player so the next AI turn starts
+    // clean. release() clears the native buffer; setup() re-initializes it.
+    await FlutterPcmSound.release();
+    await FlutterPcmSound.setup(sampleRate: 24000, channelCount: 1);
+  }
+
+  @override
   Future<void> stop() async {
     await FlutterPcmSound.release();
   }

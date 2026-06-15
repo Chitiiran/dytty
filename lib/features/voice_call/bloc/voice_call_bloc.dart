@@ -244,6 +244,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   /// Audio output stream for the UI to play back.
   Stream<Uint8List> get audioOutputStream => _service.audioStream;
 
+  /// Barge-in signal (#12): fires when Gemini cancels its turn because the
+  /// user spoke over the AI. The audio session flushes playback on this.
+  Stream<void> get interruptStream => _service.interruptStream;
+
   VoiceCallBloc({
     required GeminiLiveService service,
     JournalBloc? journalBloc,
