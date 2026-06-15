@@ -26,10 +26,14 @@ tags:
     visible: "In call.*"
     timeout: 20000
 
-# Wait for AI response (orchestrator plays audio, AI processes)
+# Hold the call open for the AI's full audio response. A bare `visible: ".*"`
+# matches instantly and ends the call before the AI emits audio (no audio /
+# latency captured). waitForAnimationToEnd lets the response land first.
 - extendedWaitUntil:
-    visible: ".*"
-    timeout: 30000
+    visible: "End call"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 15000
 
 # End call
 - tapOn: "End call"

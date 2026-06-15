@@ -201,10 +201,6 @@ class GeminiLiveService {
       _modelTurnComplete = false;
       _measuring = true;
     }
-    // Anchor to the user's LATEST chunk so latency = end-of-speech -> AI audio
-    // (#223). Updating every chunk (not just the first) excludes the utterance
-    // duration from the measurement.
-    if (_measuring) _userLastChunkMs = _nowMs();
     _session!.sendAudioRealtime(InlineDataPart('audio/pcm', pcmData));
   }
 
@@ -314,6 +310,11 @@ class GeminiLiveService {
       final text = content.inputTranscription!.text!;
       final isFinal = content.inputTranscription!.finished == true;
       _log('User said: $text (final: $isFinal)');
+      // Anchor latency to the user's latest RECOGNIZED speech, not raw mic
+      // chunks — with the mic always open (#12), the last chunk sent is just
+      // "now", but input transcription only fires on actual speech, so it
+      // marks true end-of-speech (#223).
+      if (_measuring) _userLastChunkMs = _nowMs();
       _transcriptController.add(
         Transcript(speaker: Speaker.user, text: text, isFinal: isFinal),
       );
@@ -360,10 +361,12 @@ class GeminiLiveService {
   @visibleForTesting
   void markClosedForTest() => _session = null;
 
-  /// Test seam: record a user mic chunk for latency (#223), without a live
-  /// session. Mirrors the measurement path in [sendAudio].
+  /// Test seam: record recognized user speech for latency (#223), without a
+  /// live session. Mirrors the input-transcription path in [_handleContent].
   @visibleForTesting
   void noteUserAudioForTest() {
+    // sendAudio arms measuring on the first mic chunk; recognized speech then
+    // anchors the end-of-speech timestamp.
     if (_modelTurnComplete) {
       _modelTurnComplete = false;
       _measuring = true;
