@@ -64,6 +64,140 @@
           }
         }
       ]
+    },
+    {
+      "name": "multi-item-fifa-mixed-sentiment",
+      "description": "S1 (FIFA regression): one breath mixing a disliked subscription with gratitude for participating. Expect 2 save_entry calls: 1 negative (the unwanted subscription) + 1 gratitude-or-positive (happy to participate in FIFA). Regression for multi-item utterances collapsing into a single entry.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "I paid for a subscription which I don't like, but I had to for the FIFA, and I'm happy I'm participating in FIFA.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi-item-incomplete-trailing-thought",
+      "description": "S2 (incomplete utterance): speaker trails off mid-sentence. Expect at least 1 save_entry: the mom call (positive/gratitude). The dangling clause must not block extraction of the completed item.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "Work was, yeah. And then my mom called and that was actually really nice but I—",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi-item-straying-three-topics",
+      "description": "S3 (straying across topics): three distinct items in one breath. Expect 3 save_entry calls: beauty (the sunset) + negative-or-identity (forgot to email Sarah) + positive (proud finishing the run).",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "The sunset was unreal. Oh and I forgot to email Sarah. Anyway I felt proud finishing the run.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "single-item-good-day",
+      "description": "S4 (single item control): a single positive statement must produce exactly 1 save_entry (positive), never split into multiple. Guards against over-segmentation.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "Today was just a good day.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi-item-two-framings-promotion",
+      "description": "S5 (two framings of one event): the same event carries opposing sentiment. Expect 2 save_entry calls: positive/identity (the promotion worked hard for) + negative (terrified of the responsibility).",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "My promotion, I worked so hard for it but now I'm terrified of the responsibility.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "no-item-liveness-check",
+      "description": "S9 (no journalable content): a connectivity check with no reflective content. Expect 0 save_entry calls — the AI should respond conversationally but save nothing. Guards against hallucinated entries.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "Um, can you hear me? Is this thing working?",
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "negation-not-grateful-traffic",
+      "description": "S10 (negation handling): negated gratitude must be categorized by actual sentiment, not surface keyword. Expect 1 save_entry: negative (the traffic). Must NOT classify as gratitude despite the word 'grateful'.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "I was not grateful for the traffic, let me tell you.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi-item-run-on-five-plus",
+      "description": "S11 (run-on, many items): a single breath packing 5+ distinct items across categories. Expect at least 5 save_entry calls: positive (raise), gratitude (mentor lunch), beauty (cherry blossoms), negative (missed train), identity (felt like a real engineer).",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "So today I got a raise, and my mentor took me to lunch which I'm really thankful for, and on the walk back the cherry blossoms were absolutely stunning, but then I missed my train home, and honestly for the first time I felt like a real engineer.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 20
+          }
+        }
+      ]
+    },
+    {
+      "name": "self-correction-final-state",
+      "description": "S12 (self-correction): speaker corrects their own framing mid-sentence. Expect 1 save_entry: positive (the corrected final state — it ended well), not negative. Guards against capturing the retracted framing.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "It was a bad day, no actually, it ended well.",
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 15
+          }
+        }
+      ]
     }
   ]
 }
