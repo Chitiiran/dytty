@@ -65,6 +65,9 @@ void main() {
       () => mockService.interruptStream,
     ).thenAnswer((_) => interruptController.stream);
     when(() => mockService.dispose()).thenReturn(null);
+    when(() => mockService.disconnect()).thenAnswer((_) async {});
+    when(() => mockService.latencyP50).thenReturn(null);
+    when(() => mockService.latencyP95).thenReturn(null);
 
     // Repository add returns a CategoryEntry with a fresh id.
     when(
@@ -269,6 +272,58 @@ void main() {
       },
       verify: (b) {
         expect(b.state.savedEntries.where((e) => e.addedByAi), hasLength(1));
+      },
+    );
+  });
+
+  group('EndCall triggers reconciliation', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'reconciles using the full transcript when the call ends',
+      build: () {
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'beauty',
+            text: 'The sunset was unreal',
+            sourceTranscript: 'the sunset was unreal',
+          ),
+        ];
+        return buildBloc();
+      },
+      seed: () => const VoiceCallState().copyWith(
+        transcripts: const [
+          Transcript(
+            speaker: Speaker.user,
+            text: 'the sunset was unreal',
+            isFinal: true,
+          ),
+        ],
+      ),
+      act: (b) => b.add(const EndCall()),
+      wait: const Duration(milliseconds: 50),
+      verify: (b) {
+        expect(b.state.status, VoiceCallStatus.ended);
+        expect(b.state.savedEntries.where((e) => e.addedByAi), hasLength(1));
+      },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'does not reconcile when transcript is empty',
+      build: () {
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'beauty',
+            text: 'never added',
+          ),
+        ];
+        return buildBloc();
+      },
+      seed: () => const VoiceCallState(),
+      act: (b) => b.add(const EndCall()),
+      wait: const Duration(milliseconds: 50),
+      verify: (b) {
+        expect(b.state.savedEntries, isEmpty);
       },
     );
   });

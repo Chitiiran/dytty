@@ -423,6 +423,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         ),
       );
     }
+
+    // #224: kick off holistic reconciliation now that the call is over and the
+    // in-call save_entry writes have settled (each is awaited in
+    // _onToolCallReceived, so by here they hold real ids). Runs once.
+    final fullTranscript = state.transcripts
+        .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
+        .join('\n');
+    if (fullTranscript.trim().isNotEmpty) {
+      add(ReconcileSession(transcript: fullTranscript));
+    }
   }
 
   Future<void> _onGenerateSessionSummary(
