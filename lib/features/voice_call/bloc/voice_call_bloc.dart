@@ -81,6 +81,21 @@ class InterruptReceived extends VoiceCallEvent {
   const InterruptReceived();
 }
 
+/// Post-call holistic reconciliation (#224): re-reads the full transcript and
+/// adds items the live model dropped / rewords ones it captured incompletely.
+class ReconcileSession extends VoiceCallEvent {
+  final String transcript;
+  const ReconcileSession({required this.transcript});
+
+  @override
+  List<Object?> get props => [transcript];
+}
+
+/// User accepted all reconciled entries — clears the post-call AI markers.
+class AcceptAllReconciled extends VoiceCallEvent {
+  const AcceptAllReconciled();
+}
+
 class ToggleMute extends VoiceCallEvent {
   const ToggleMute();
 }
@@ -227,6 +242,15 @@ class VoiceCallState extends Equatable {
 
 // --- Bloc ---
 
+/// Normalizes text for the mechanical dedup backstop (#224): lowercase, strip
+/// punctuation, collapse whitespace. Two entries with the same category and the
+/// same normalized text are treated as duplicates.
+String normalizeForDedup(String s) => s
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
 /// Tool call argument keys for the save_entry function.
 class _SaveEntryArgs {
   static const category = 'category';
@@ -298,6 +322,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<InterruptReceived>(_onInterruptReceived);
     on<ToggleMute>(_onToggleMute);
     on<ToggleSpeaker>(_onToggleSpeaker);
+    on<ReconcileSession>(_onReconcileSession);
+    on<AcceptAllReconciled>(_onAcceptAllReconciled);
   }
 
   Future<void> _onStartCall(
@@ -428,6 +454,102 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       debugPrint('Failed to generate session summary: $e');
       emit(state.copyWith(generatingSummary: false));
     }
+  }
+
+  /// #224: holistic post-call reconciliation. Feeds the full transcript +
+  /// already-saved entries to the LLM, applies the returned add/reword tool
+  /// calls (with an LLM-aware prompt + a mechanical dedup backstop), and marks
+  /// the changes so the post-call screen can surface them.
+  Future<void> _onReconcileSession(
+    ReconcileSession event,
+    Emitter<VoiceCallState> emit,
+  ) async {
+    if (_reconciled ||
+        _llmService == null ||
+        _journalRepository == null ||
+        event.transcript.trim().isEmpty) {
+      return;
+    }
+    _reconciled = true;
+
+    final List<ReconciledItem> items;
+    try {
+      final snapshots = state.savedEntries
+          .map(
+            (e) => SavedEntrySnapshot(
+              entryId: e.entryId,
+              category: e.categoryId,
+              text: e.text,
+            ),
+          )
+          .toList();
+      items = await _llmService.reconcileSession(event.transcript, snapshots);
+    } catch (e) {
+      debugPrint('reconcileSession failed: $e'); // silent no-op
+      return;
+    }
+
+    final updated = List<SavedEntry>.of(state.savedEntries);
+    for (final item in items) {
+      if (item.action == ReconcileAction.add) {
+        // Mechanical dedup backstop (category + normalized text).
+        final dup = updated.any(
+          (e) =>
+              e.categoryId == item.category &&
+              normalizeForDedup(e.text) == normalizeForDedup(item.text),
+        );
+        if (dup) continue;
+        try {
+          final created = await _journalRepository.addCategoryEntry(
+            DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            item.category,
+            item.text,
+            source: 'voice',
+            transcript: item.sourceTranscript,
+            tags: const ['voice-call', 'post-call'],
+          );
+          updated.add(
+            SavedEntry(
+              entryId: created.id,
+              categoryId: item.category,
+              text: item.text,
+              transcript: item.sourceTranscript,
+              addedByAi: true,
+            ),
+          );
+        } catch (e) {
+          debugPrint('reconcile add failed: $e');
+        }
+      } else {
+        // reword — complete an entry captured incompletely in-call.
+        final idx = updated.indexWhere((e) => e.entryId == item.entryId);
+        if (idx == -1) continue; // unknown/deleted id — skip
+        _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
+        updated[idx] = updated[idx].copyWith(
+          text: item.text,
+          rewordedByAi: true,
+        );
+      }
+    }
+    emit(state.copyWith(savedEntries: updated));
+  }
+
+  void _onAcceptAllReconciled(
+    AcceptAllReconciled event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    // Entries are already persisted; "Accept all" just clears the AI markers.
+    final cleared = state.savedEntries
+        .map(
+          (e) => SavedEntry(
+            entryId: e.entryId,
+            categoryId: e.categoryId,
+            text: e.text,
+            transcript: e.transcript,
+          ),
+        )
+        .toList();
+    emit(state.copyWith(savedEntries: cleared));
   }
 
   void _onSessionTick(_SessionTick event, Emitter<VoiceCallState> emit) {
