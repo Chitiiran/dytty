@@ -356,4 +356,38 @@ void main() {
       },
     );
   });
+
+  group('RejectReconciledEntry', () {
+    setUp(() {
+      when(
+        () => mockRepo.deleteCategoryEntry(any(), any()),
+      ).thenAnswer((_) async {});
+    });
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'removes the entry from the post-call list',
+      build: buildBloc,
+      seed: () => seedState(const [
+        SavedEntry(
+          entryId: 'e1',
+          categoryId: 'beauty',
+          text: 'sunset',
+          transcript: '',
+          addedByAi: true,
+        ),
+        SavedEntry(
+          entryId: 'e2',
+          categoryId: 'positive',
+          text: 'keep me',
+          transcript: '',
+        ),
+      ]),
+      act: (b) => b.add(const RejectReconciledEntry('e1')),
+      verify: (b) {
+        expect(b.state.savedEntries, hasLength(1));
+        expect(b.state.savedEntries.first.entryId, 'e2');
+        verify(() => mockRepo.deleteCategoryEntry(any(), 'e1')).called(1);
+      },
+    );
+  });
 }

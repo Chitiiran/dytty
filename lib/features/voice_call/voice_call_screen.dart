@@ -518,15 +518,33 @@ class _PostCallSummary extends StatelessWidget {
               ),
             )
           else ...[
-            Text(
-              'Captured entries',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Captured entries',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                // #224: Accept all clears the AI markers (entries already saved).
+                if (savedEntries.any((e) => e.addedByAi || e.rewordedByAi))
+                  TextButton(
+                    onPressed: () => bloc.add(const AcceptAllReconciled()),
+                    child: const Text('Accept all'),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
-            ...savedEntries.map((entry) => _SavedEntryTile(entry: entry)),
+            ...savedEntries.map(
+              (entry) => SavedEntryTile(
+                entry: entry,
+                onReject: entry.entryId == null
+                    ? null
+                    : () => bloc.add(RejectReconciledEntry(entry.entryId!)),
+              ),
+            ),
           ],
 
           const SizedBox(height: 32),
@@ -583,10 +601,12 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _SavedEntryTile extends StatelessWidget {
+@visibleForTesting
+class SavedEntryTile extends StatelessWidget {
   final SavedEntry entry;
+  final VoidCallback? onReject;
 
-  const _SavedEntryTile({required this.entry});
+  const SavedEntryTile({super.key, required this.entry, this.onReject});
 
   @override
   Widget build(BuildContext context) {
@@ -627,9 +647,39 @@ class _SavedEntryTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(entry.text, style: theme.textTheme.bodyMedium),
+                  // #224: reconciliation markers — the post-call holistic pass
+                  // added or reworded this entry. Always visible + editable.
+                  if (entry.addedByAi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'added by AI',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  if (entry.rewordedByAi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'reworded by AI',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
+            if (onReject != null)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Reject entry',
+                onPressed: onReject,
+              ),
           ],
         ),
       ),

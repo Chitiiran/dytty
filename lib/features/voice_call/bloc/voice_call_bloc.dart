@@ -96,6 +96,15 @@ class AcceptAllReconciled extends VoiceCallEvent {
   const AcceptAllReconciled();
 }
 
+/// User rejected a (usually AI-added) entry from the post-call screen.
+class RejectReconciledEntry extends VoiceCallEvent {
+  final String entryId;
+  const RejectReconciledEntry(this.entryId);
+
+  @override
+  List<Object?> get props => [entryId];
+}
+
 class ToggleMute extends VoiceCallEvent {
   const ToggleMute();
 }
@@ -324,6 +333,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<ToggleSpeaker>(_onToggleSpeaker);
     on<ReconcileSession>(_onReconcileSession);
     on<AcceptAllReconciled>(_onAcceptAllReconciled);
+    on<RejectReconciledEntry>(_onRejectReconciledEntry);
   }
 
   Future<void> _onStartCall(
@@ -560,6 +570,28 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         )
         .toList();
     emit(state.copyWith(savedEntries: cleared));
+  }
+
+  Future<void> _onRejectReconciledEntry(
+    RejectReconciledEntry event,
+    Emitter<VoiceCallState> emit,
+  ) async {
+    // Remove from the post-call list and tombstone-delete from Firestore.
+    final remaining = state.savedEntries
+        .where((e) => e.entryId != event.entryId)
+        .toList();
+    emit(state.copyWith(savedEntries: remaining));
+    _journalBloc?.add(DeleteEntry(event.entryId));
+    if (_journalRepository != null && _uid != null) {
+      try {
+        await _journalRepository.deleteCategoryEntry(
+          DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          event.entryId,
+        );
+      } catch (e) {
+        debugPrint('reject entry delete failed: $e');
+      }
+    }
   }
 
   void _onSessionTick(_SessionTick event, Emitter<VoiceCallState> emit) {
