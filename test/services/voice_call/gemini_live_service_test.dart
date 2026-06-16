@@ -420,8 +420,15 @@ void main() {
       final cfg = buildLiveGenerationConfig();
       expect(cfg.temperature, 0.7);
       expect(cfg.maxOutputTokens, 300);
-      expect(cfg.presencePenalty, 0.3);
-      expect(cfg.frequencyPenalty, 0.3);
+    });
+
+    test('omits presence/frequency penalties (Live backend rejects, 1007)', () {
+      // The Gemini Live backend closes the socket with code 1007 if these
+      // are set, even though the firebase_ai class accepts them.
+      // Device-verified 2026-06-16. See buildLiveGenerationConfig doc.
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.presencePenalty, isNull);
+      expect(cfg.frequencyPenalty, isNull);
     });
 
     test('keeps audio modality + transcription + a configured voice', () {

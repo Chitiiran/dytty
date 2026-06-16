@@ -38,10 +38,16 @@ class Transcript {
 /// for test visibility.
 ///
 /// Tunes for a calmer, shorter "best friend" delivery using the generation
-/// params firebase_ai exposes on LiveGenerationConfig: lower [temperature],
-/// a [maxOutputTokens] cap to force short turns, and small repetition
-/// penalties. (Proactive audio / VAD silence tuning are NOT in firebase_ai —
-/// they need the raw-WebSocket path, #228.)
+/// params the Gemini Live BACKEND accepts: lower [temperature] and a
+/// [maxOutputTokens] cap to force short turns.
+///
+/// NOTE: `presencePenalty` / `frequencyPenalty` exist on the firebase_ai
+/// `LiveGenerationConfig` class but the Live API backend REJECTS them — it
+/// closes the socket with code 1007 ("presence_penalty not supported in
+/// generation config"). Device-verified 2026-06-16. Do not re-add them here;
+/// they are not reachable on the live path (same class of SDK-vs-backend gap
+/// as `candidateCount`). Proactive audio / VAD silence tuning also need the
+/// raw-WebSocket path (#228).
 LiveGenerationConfig buildLiveGenerationConfig() => LiveGenerationConfig(
   responseModalities: [ResponseModalities.audio],
   inputAudioTranscription: AudioTranscriptionConfig(),
@@ -49,8 +55,6 @@ LiveGenerationConfig buildLiveGenerationConfig() => LiveGenerationConfig(
   speechConfig: SpeechConfig(voiceName: 'Aoede'),
   temperature: 0.7,
   maxOutputTokens: 300,
-  presencePenalty: 0.3,
-  frequencyPenalty: 0.3,
 );
 
 /// Wraps the Firebase AI Live API for bidirectional voice streaming.
