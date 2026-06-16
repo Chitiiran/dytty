@@ -75,7 +75,12 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 2,
+            "expected_categories": [
+              "negative",
+              "gratitude"
+            ]
           }
         }
       ]
@@ -90,7 +95,8 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 1
           }
         }
       ]
@@ -105,7 +111,12 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 3,
+            "expected_categories": [
+              "beauty",
+              "positive"
+            ]
           }
         }
       ]
@@ -120,7 +131,8 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 1
           }
         }
       ]
@@ -135,7 +147,8 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 2
           }
         }
       ]
@@ -164,7 +177,11 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 1,
+            "expected_categories": [
+              "negative"
+            ]
           }
         }
       ]
@@ -179,7 +196,8 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 20
+            "timeout_sec": 20,
+            "min_entries": 5
           }
         }
       ]
@@ -194,7 +212,11 @@
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "min_entries": 1,
+            "expected_categories": [
+              "positive"
+            ]
           }
         }
       ]

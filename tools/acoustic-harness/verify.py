@@ -90,6 +90,34 @@ def parse_logcat(log_path: str, tag: str) -> tuple[list[dict], list[str]]:
                     })
             elif msg == "Turn complete":
                 events.append({"type": "turn_complete"})
+            elif msg.startswith("Entry saved: "):
+                # #224: "Entry saved: <category> (origin: <origin>)"
+                m = re.match(r"Entry saved: (\w+) \(origin: ([\w-]+)\)", msg)
+                if m:
+                    events.append({
+                        "type": "entry_saved",
+                        "category": m.group(1),
+                        "origin": m.group(2),
+                    })
+            elif msg.startswith("Entry reworded: "):
+                # #224: "Entry reworded: <category>"
+                m = re.match(r"Entry reworded: (\w+)", msg)
+                if m:
+                    events.append({
+                        "type": "entry_reworded",
+                        "category": m.group(1),
+                    })
+            elif msg.startswith("Reconciliation complete: "):
+                # #224: "Reconciliation complete: <n> added, <m> reworded"
+                m = re.match(
+                    r"Reconciliation complete: (\d+) added, (\d+) reworded", msg
+                )
+                if m:
+                    events.append({
+                        "type": "reconciliation_complete",
+                        "added": int(m.group(1)),
+                        "reworded": int(m.group(2)),
+                    })
 
     return events, raw_lines
 
@@ -199,6 +227,37 @@ def verify_scenario(
                 "check": f"{prefix}: Tool call '{tool_name}'",
                 "passed": found,
                 "detail": "OK" if found else f"'{tool_name}' not found in logcat",
+            })
+
+        # #224: entry count + category checks. entry_saved covers both in-call
+        # and reconciled-add origins, so this validates the full hybrid pipeline.
+        saved_events = [e for e in events if e["type"] == "entry_saved"]
+        saved_categories = [e["category"] for e in saved_events]
+
+        if "min_entries" in expect:
+            want = expect["min_entries"]
+            got = len(saved_events)
+            results.append({
+                "check": f"{prefix}: entries captured (>= {want})",
+                "passed": got >= want,
+                "detail": (
+                    "OK"
+                    if got >= want
+                    else f"Expected >= {want}, saw {got}: {saved_categories}"
+                ),
+            })
+
+        if "expected_categories" in expect:
+            want_cats = expect["expected_categories"]
+            missing = [c for c in want_cats if c not in saved_categories]
+            results.append({
+                "check": f"{prefix}: expected categories present",
+                "passed": not missing,
+                "detail": (
+                    "OK"
+                    if not missing
+                    else f"Missing {missing}; saw {saved_categories}"
+                ),
             })
 
     # Check call ended cleanly

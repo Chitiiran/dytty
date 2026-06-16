@@ -225,6 +225,112 @@ class TestParseLogcat(unittest.TestCase):
         os.unlink(path)
 
 
+class TestParseEntryEvents(unittest.TestCase):
+    """#224: parse structured entry-saved / reconciliation log lines."""
+
+    def _write_log(self, lines: list[str]) -> str:
+        fd, path = tempfile.mkstemp(suffix=".log")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(line + "\n")
+        return path
+
+    def test_parses_in_call_entry_saved(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry saved: negative (origin: in-call)",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        saved = [e for e in events if e["type"] == "entry_saved"]
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["category"], "negative")
+        self.assertEqual(saved[0]["origin"], "in-call")
+        os.unlink(path)
+
+    def test_parses_reconciled_add(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry saved: gratitude (origin: reconciled-add)",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        saved = [e for e in events if e["type"] == "entry_saved"]
+        self.assertEqual(saved[0]["origin"], "reconciled-add")
+        os.unlink(path)
+
+    def test_parses_entry_reworded(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry reworded: negative",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        rew = [e for e in events if e["type"] == "entry_reworded"]
+        self.assertEqual(len(rew), 1)
+        self.assertEqual(rew[0]["category"], "negative")
+        os.unlink(path)
+
+    def test_parses_reconciliation_complete(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Reconciliation complete: 2 added, 1 reworded",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        rc = [e for e in events if e["type"] == "reconciliation_complete"]
+        self.assertEqual(len(rc), 1)
+        self.assertEqual(rc[0]["added"], 2)
+        self.assertEqual(rc[0]["reworded"], 1)
+        os.unlink(path)
+
+
+class TestVerifyEntryExpectations(unittest.TestCase):
+    """#224: verify_scenario asserts entry count + categories."""
+
+    def _events(self, *categories):
+        return [
+            {"type": "state", "value": "active"},
+            *[
+                {"type": "entry_saved", "category": c, "origin": "in-call"}
+                for c in categories
+            ],
+        ]
+
+    def _scenario(self, expect):
+        return {
+            "name": "s",
+            "utterances": [{"text": "x", "expect": expect}],
+        }
+
+    def test_min_entries_pass(self):
+        events = self._events("negative", "gratitude")
+        results = verify_scenario(events, [], self._scenario({"min_entries": 2}))
+        check = next(r for r in results if "entries captured" in r["check"].lower())
+        self.assertTrue(check["passed"], check["detail"])
+
+    def test_min_entries_fail(self):
+        events = self._events("negative")
+        results = verify_scenario(events, [], self._scenario({"min_entries": 2}))
+        check = next(r for r in results if "entries captured" in r["check"].lower())
+        self.assertFalse(check["passed"])
+
+    def test_expected_categories_pass(self):
+        events = self._events("negative", "gratitude")
+        results = verify_scenario(
+            events, [], self._scenario({"expected_categories": ["negative", "gratitude"]})
+        )
+        check = next(r for r in results if "categor" in r["check"].lower())
+        self.assertTrue(check["passed"], check["detail"])
+
+    def test_expected_categories_missing_one_fails(self):
+        events = self._events("negative")
+        results = verify_scenario(
+            events, [], self._scenario({"expected_categories": ["negative", "gratitude"]})
+        )
+        check = next(r for r in results if "categor" in r["check"].lower())
+        self.assertFalse(check["passed"])
+
+    def test_no_entry_expectations_adds_no_checks(self):
+        events = self._events("negative")
+        results = verify_scenario(events, [], self._scenario({"ai_responds": True}))
+        self.assertFalse(
+            any("entries captured" in r["check"].lower() for r in results)
+        )
+
+
 class TestCheckToolCalls(unittest.TestCase):
     """Test _check_tool_calls() — raw logcat search for tool invocations."""
 

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -353,6 +354,72 @@ void main() {
         expect(b.state.savedEntries, hasLength(2));
         expect(b.state.savedEntries.any((e) => e.addedByAi), isFalse);
         expect(b.state.savedEntries.any((e) => e.rewordedByAi), isFalse);
+      },
+    );
+  });
+
+  group('harness logging', () {
+    test(
+      'logs structured entry + reconciliation lines for verify.py',
+      () async {
+        final logs = <String>[];
+        final original = debugPrint;
+        debugPrint = (String? message, {int? wrapWidth}) {
+          if (message != null) logs.add(message);
+        };
+        addTearDown(() => debugPrint = original);
+
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'negative',
+            text: 'Paid for a subscription I dislike',
+            sourceTranscript: 'subscription i dislike',
+          ),
+          ReconciledItem(
+            action: ReconcileAction.reword,
+            entryId: 'e1',
+            text: 'Happy participating in FIFA',
+          ),
+        ];
+        final bloc = buildBloc();
+        bloc.emit(
+          const VoiceCallState().copyWith(
+            savedEntries: const [
+              SavedEntry(
+                entryId: 'e1',
+                categoryId: 'gratitude',
+                text: 'FIFA',
+                transcript: '',
+              ),
+            ],
+          ),
+        );
+        bloc.add(const ReconcileSession(transcript: 'the FIFA sentence'));
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(
+          logs.any(
+            (l) => l.contains(
+              '[DYTTY] Entry saved: negative (origin: reconciled-add)',
+            ),
+          ),
+          isTrue,
+          reason: 'should log reconciled-add with category',
+        );
+        expect(
+          logs.any((l) => l.contains('[DYTTY] Entry reworded: gratitude')),
+          isTrue,
+        );
+        expect(
+          logs.any(
+            (l) => l.contains(
+              '[DYTTY] Reconciliation complete: 1 added, 1 reworded',
+            ),
+          ),
+          isTrue,
+        );
+        await bloc.close();
       },
     );
   });

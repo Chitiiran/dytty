@@ -260,6 +260,10 @@ String normalizeForDedup(String s) => s
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
+/// Tagged structured logging for the acoustic test harness (verify.py parses
+/// these). Mirrors the `[DYTTY]` tag used by GeminiLiveService.
+void _harnessLog(String msg) => debugPrint('[DYTTY] $msg');
+
 /// Tool call argument keys for the save_entry function.
 class _SaveEntryArgs {
   static const category = 'category';
@@ -510,6 +514,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     }
 
     final updated = List<SavedEntry>.of(state.savedEntries);
+    var addedCount = 0;
+    var rewordedCount = 0;
     for (final item in items) {
       if (item.action == ReconcileAction.add) {
         // Mechanical dedup backstop (category + normalized text).
@@ -537,6 +543,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
               addedByAi: true,
             ),
           );
+          addedCount++;
+          _harnessLog('Entry saved: ${item.category} (origin: reconciled-add)');
         } catch (e) {
           debugPrint('reconcile add failed: $e');
         }
@@ -549,9 +557,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           text: item.text,
           rewordedByAi: true,
         );
+        rewordedCount++;
+        _harnessLog('Entry reworded: ${updated[idx].categoryId}');
       }
     }
     emit(state.copyWith(savedEntries: updated));
+    _harnessLog(
+      'Reconciliation complete: $addedCount added, $rewordedCount reworded',
+    );
   }
 
   void _onAcceptAllReconciled(
@@ -738,6 +751,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       });
 
       debugPrint('Tool call: save_entry → $categoryName: $text');
+      _harnessLog('Entry saved: $categoryName (origin: in-call)');
     } else if (call.name == 'edit_entry') {
       final args = call.args;
       final entryId = args[_EditEntryArgs.entryId] as String? ?? '';
