@@ -20,9 +20,17 @@ void main() {
       expect(prompt, contains('e1'));
       expect(prompt, contains('Felt proud'));
     });
-    test('states the no-duplicate rule', () {
+    test('states the recall-only rule (do not re-save / re-judge saved)', () {
+      final prompt = buildReconcilePrompt('x', const []).toLowerCase();
+      // #231: prompt now expresses no-duplicate as recall-only gap-fill.
+      expect(prompt, contains('not already saved'));
+      expect(prompt, contains('never restate, re-judge, or modify a saved'));
+    });
+
+    test('asks for a JSON array of category/text/quote (schema-first)', () {
       final prompt = buildReconcilePrompt('x', const []);
-      expect(prompt.toLowerCase(), contains('do not duplicate'));
+      expect(prompt, contains('JSON array'));
+      expect(prompt, contains('"quote"'));
     });
   });
   group('parseReconcileCalls', () {

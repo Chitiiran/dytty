@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/constants/reconcile_prompt.dart';
-import 'package:dytty/core/constants/tool_declarations.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// Strips markdown code fences from LLM JSON responses.
@@ -196,24 +195,33 @@ $entriesText
     String transcript,
     List<SavedEntrySnapshot> alreadySaved,
   ) async {
+    // #231: schema-first extraction. Force a JSON array of {category, text,
+    // quote} at temperature 0.0 so multi-item splits are structurally
+    // required, instead of relying on function-call emission.
     final model = FirebaseAI.googleAI().generativeModel(
       model: _modelName,
-      tools: [
-        Tool.functionDeclarations([saveEntryDeclaration, editEntryDeclaration]),
-      ],
+      generationConfig: GenerationConfig(
+        temperature: 0.0,
+        responseMimeType: 'application/json',
+        responseSchema: Schema.array(
+          items: Schema.object(
+            properties: {
+              'category': Schema.enumString(
+                enumValues: JournalCategory.values.map((c) => c.name).toList(),
+              ),
+              'text': Schema.string(),
+              'quote': Schema.string(),
+            },
+          ),
+        ),
+      ),
     );
 
     final response = await model.generateContent([
       Content.text(buildReconcilePrompt(transcript, alreadySaved)),
     ]);
 
-    final calls = response.functionCalls
-        .map(
-          (fc) => {'name': fc.name, 'args': Map<String, dynamic>.from(fc.args)},
-        )
-        .toList();
-
-    return parseReconcileCalls(calls);
+    return parseReconcileArray(response.text ?? '');
   }
 
   @override

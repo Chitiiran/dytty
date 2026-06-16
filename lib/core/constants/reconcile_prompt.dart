@@ -1,12 +1,14 @@
 import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
-/// Builds the prompt for the holistic post-call reconcile pass.
+/// Builds the prompt for the holistic post-call reconcile pass (#231).
 ///
-/// The model is given the full call [transcript] and the entries
-/// [alreadySaved] during the call (with their ids). It returns ONLY the
-/// items that were missed (via `save_entry`) or incompletely captured (via
-/// `edit_entry`) — never re-saving what is already captured.
+/// The model sees the full call [transcript] and the entries [alreadySaved]
+/// during the call. It works in three steps — quote → enumerate → gap-fill —
+/// and returns ONLY a JSON array of the journal-worthy items that are MISSING
+/// from the saved set. It never re-judges or restates a saved entry (recall-
+/// only). The schema-first array attacks multi-item under-capture; pair with
+/// [GenerationConfig.responseSchema] in the caller.
 String buildReconcilePrompt(
   String transcript,
   List<SavedEntrySnapshot> alreadySaved,
@@ -20,9 +22,9 @@ String buildReconcilePrompt(
             .join('\n');
 
   return '''
-You are doing a final holistic review of a journaling voice call. You see the
-ENTIRE conversation transcript and every entry that was already saved during the
-call. Your job is to catch anything that was missed or only partially captured.
+You review a finished journaling voice call. You see the ENTIRE transcript and
+every entry already saved during the call. Find every journal-worthy item the
+user shared that is NOT already saved. Work in three steps.
 
 Available categories: $categories
 
@@ -32,24 +34,33 @@ $savedList
 Full call transcript:
 "$transcript"
 
-Rules:
-- Only act on journal-worthy items: real thoughts, feelings, experiences, or
-  reflections the user shared. Ignore filler, small talk, greetings, and the
-  assistant's own words.
-- DO NOT duplicate. Do not duplicate anything already captured in the saved
-  entries above — if an item is already saved, leave it alone.
-- Use save_entry ONLY for journal-worthy items that are genuinely missing from
-  the saved entries.
-- Use edit_entry (with the matching entry id) to complete or correct an entry
-  that was saved incompletely or inaccurately during the call.
-- Split multi-item sentences: if one utterance contains several distinct
-  journal-worthy items, emit a separate save_entry for each.
-- Honor negation and self-correction: if the user retracted, negated, or
-  corrected something, reflect their final intent — do not save retracted items.
-- Ignore anything the user took back or said they did not mean.
-- If nothing was missed and nothing needs editing, make no tool calls at all.
+STEP 1 — QUOTE. Read the transcript and note every verbatim span where the user
+expresses something worth journaling (a real thought, feeling, experience, or
+reflection). ONE sentence may contain MORE THAN ONE span — e.g. a complaint AND
+a thank-you. Ignore filler, greetings, and the assistant's own words.
 
-Call save_entry and edit_entry as needed. Write entry text in first person, as
-if the user wrote it themselves.
+STEP 2 — ENUMERATE. For each span, list every DISTINCT item it contains. A
+single sentence carrying opposing feelings becomes TWO items. Assign each item
+exactly ONE category from the list above. Honor negation/self-correction:
+reflect the user's FINAL intent; never save anything they retracted.
+
+STEP 3 — GAP-FILL (recall-only). Compare your items to the already-saved
+entries. Keep ONLY items that are present in the transcript and NOT already
+saved. Never restate, re-judge, or modify a saved entry. Then, for EACH
+category, re-check the transcript once more for anything in that category you
+missed, and add it (grounded in a quote).
+
+Return ONLY a JSON array. Each element:
+{"category": "<one of: $categories>", "text": "<the item, first person, as if
+the user wrote it>", "quote": "<verbatim span from the transcript>"}
+If nothing is missing, return [].
+
+Example (one sentence, two opposing items):
+Transcript line: "Work was brutal and I almost quit, but honestly I'm just
+grateful my sister called and talked me down."
+[
+  {"category": "negative", "text": "Work was brutal and I almost quit today.", "quote": "Work was brutal and I almost quit"},
+  {"category": "gratitude", "text": "I'm grateful my sister called and talked me down.", "quote": "grateful my sister called and talked me down"}
+]
 ''';
 }
