@@ -821,13 +821,20 @@ class _CallControls extends StatelessWidget {
       return SizedBox(
         width: double.infinity,
         height: 56,
-        child: FilledButton.icon(
-          onPressed: onStart,
-          icon: const Icon(Icons.call_rounded),
-          label: const Text('Start Call'),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
-            foregroundColor: Colors.white,
+        // Semantics label so screen readers + automation can find the button
+        // (the visible 'Start Call' text is canvas-drawn, not in the a11y
+        // tree). (#231)
+        child: Semantics(
+          label: 'Start Call',
+          button: true,
+          child: FilledButton.icon(
+            onPressed: onStart,
+            icon: const Icon(Icons.call_rounded),
+            label: const Text('Start Call'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+            ),
           ),
         ),
       );

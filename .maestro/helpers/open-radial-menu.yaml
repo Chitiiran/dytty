@@ -1,16 +1,13 @@
 appId: com.dytty.dytty
-name: "Reusable: open radial menu safely (#231)"
+name: "Reusable: open voice call from home (#231)"
 ---
-# Guard the blind coordinate tap (7%,35%) so it can't land on the launcher /
-# another app (observed: it launched Costco when the home screen hadn't
-# rendered yet). We do NOT re-launch (that drops logged-in state); instead we
-# settle, then tap, then ASSERT the radial menu actually opened — so a misfire
-# fails the flow loudly instead of silently driving another app.
-- waitForAnimationToEnd:
-    timeout: 8000
-- tapOn:
-    point: "7%,35%"
-    retryTapIfNoChange: true
+# Start the voice call directly from the home-screen "Call" button. The button
+# now carries a Semantics(label: 'Start voice call') (#231), so we tap it by
+# label instead of a fragile screen coordinate (the old 7%,35% calendar-cell
+# tap was stale for the current layout and could miss / drive another app).
 - extendedWaitUntil:
     visible: "Start voice call"
-    timeout: 8000
+    timeout: 12000
+- tapOn:
+    text: "Start voice call"
+    retryTapIfNoChange: true
