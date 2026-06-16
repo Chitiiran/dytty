@@ -5,6 +5,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -93,15 +94,31 @@ class ToggleSpeaker extends VoiceCallEvent {
 enum VoiceCallStatus { idle, connecting, active, ending, ended, error }
 
 class SavedEntry {
+  final String? entryId; // Firestore id once persisted; null until then
   final String categoryId;
   final String text;
   final String transcript;
+  final bool addedByAi; // reconciliation marker: surfaced post-call
+  final bool rewordedByAi; // reconciliation marker: reworded post-call
 
   const SavedEntry({
     required this.categoryId,
     required this.text,
     required this.transcript,
+    this.entryId,
+    this.addedByAi = false,
+    this.rewordedByAi = false,
   });
+
+  SavedEntry copyWith({String? entryId, String? text, bool? rewordedByAi}) =>
+      SavedEntry(
+        entryId: entryId ?? this.entryId,
+        categoryId: categoryId,
+        text: text ?? this.text,
+        transcript: transcript,
+        addedByAi: addedByAi,
+        rewordedByAi: rewordedByAi ?? this.rewordedByAi,
+      );
 }
 
 class VoiceCallState extends Equatable {
@@ -226,9 +243,11 @@ class _EditEntryArgs {
 class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   final GeminiLiveService _service;
   final JournalBloc? _journalBloc;
+  final JournalRepository? _journalRepository;
   final LlmService? _llmService;
   final AudioStorageService? _audioStorage;
   final String? _uid;
+  bool _reconciled = false; // idempotency guard for ReconcileSession
 
   StreamSubscription<Transcript>? _transcriptSub;
   StreamSubscription<void>? _interruptSub;
@@ -257,11 +276,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   VoiceCallBloc({
     required GeminiLiveService service,
     JournalBloc? journalBloc,
+    JournalRepository? journalRepository,
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
   }) : _service = service,
        _journalBloc = journalBloc,
+       _journalRepository = journalRepository,
        _llmService = llmService,
        _audioStorage = audioStorage,
        _uid = uid,
@@ -506,24 +527,45 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       final text = args[_SaveEntryArgs.text] as String? ?? '';
       final transcript = args[_SaveEntryArgs.transcript] as String? ?? '';
 
+      // Capture the Firestore-assigned id so the post-call reconcile pass can
+      // issue edit_entry against this entry (#224). When a repository is wired
+      // we await it for the real id; otherwise fall back to the fire-and-forget
+      // JournalBloc dispatch (preserves prior behavior + test setups).
+      String? createdId;
+      if (_journalRepository != null) {
+        try {
+          final created = await _journalRepository.addCategoryEntry(
+            DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            categoryName,
+            text,
+            source: 'voice',
+            transcript: transcript,
+            tags: const ['voice-call'],
+          );
+          createdId = created.id;
+        } catch (e) {
+          debugPrint('save_entry repository write failed: $e');
+        }
+      } else {
+        _journalBloc?.add(
+          AddVoiceEntry(
+            categoryId: categoryName,
+            text: text,
+            transcript: transcript,
+            tags: const ['voice-call'],
+            date: DateTime.now(),
+          ),
+        );
+      }
+
       final entry = SavedEntry(
+        entryId: createdId,
         categoryId: categoryName,
         text: text,
         transcript: transcript,
       );
 
       emit(state.copyWith(savedEntries: [...state.savedEntries, entry]));
-
-      // Persist to Firestore via JournalBloc
-      _journalBloc?.add(
-        AddVoiceEntry(
-          categoryId: categoryName,
-          text: text,
-          transcript: transcript,
-          tags: const ['voice-call'],
-          date: DateTime.now(),
-        ),
-      );
 
       // Acknowledge the tool call to the model
       await _service.sendToolResponse(call.name, call.id, {
