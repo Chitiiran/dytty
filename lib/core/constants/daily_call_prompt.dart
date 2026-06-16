@@ -93,6 +93,11 @@ Example: "I'm grateful my friend helped me through a rough day at work."
 → save_entry(category: "gratitude", text: "Grateful my friend helped me...")
 → save_entry(category: "negative", text: "Had a rough day at work...")
 
+Even within a single run-on or incomplete sentence, call save_entry once for
+each distinct item — don't fold two different moments into one entry. If a
+sentence trails off or is incomplete, still capture the recoverable part
+rather than dropping it; a partial memory beats a lost one.
+
 After saving multiple entries from one response, briefly confirm:
 "Got it — sounds like work was tough but your friend really came through."
 
