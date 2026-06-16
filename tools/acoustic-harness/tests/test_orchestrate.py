@@ -208,6 +208,18 @@ class TestPreloadedAudio(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(len(sd.played), 1, "no subprocess; in-process play")
 
+    def test_prefer_preloaded_uses_in_process_even_when_not_play_only(self):
+        # #231: single-utterance daily-call (play_only=False) must still use
+        # the fast in-process path when prefer_preloaded is set, to win the
+        # mic-listening race.
+        sd = _FakeSd()
+        audio = PreloadedAudio(self.wav, sd_module=sd)
+        rc = play_audio(
+            self.wav, play_only=False, preloaded=audio, prefer_preloaded=True
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(sd.played), 1, "in-process play, no subprocess")
+
 
 if __name__ == "__main__":
     unittest.main()

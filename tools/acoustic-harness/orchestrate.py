@@ -191,11 +191,19 @@ def play_audio(
     play_only: bool = False,
     tag: str | None = None,
     preloaded: "PreloadedAudio | None" = None,
+    prefer_preloaded: bool = False,
 ) -> int:
     """Play audio. Prefers the pre-warmed in-process path; falls back to
     a play.py subprocess for paths that also monitor logcat (daily call
-    --wait-for), which are not start-latency critical."""
-    if preloaded is not None and play_only:
+    --wait-for).
+
+    #231: subprocess spawn latency (interpreter + PortAudio init) at trigger
+    time loses the mic-listening race on daily-call too — the user utterance
+    intermittently isn't captured. For single-utterance daily-call scenarios
+    there is no "Turn complete" inter-turn sync to honor, so [prefer_preloaded]
+    routes them through the fast in-process path as well.
+    """
+    if preloaded is not None and (play_only or prefer_preloaded):
         print(f"  Playing (preloaded): {os.path.basename(wav_path)}")
         preloaded.play_blocking()
         return 0
@@ -415,8 +423,13 @@ def main() -> None:
     # window. Daily-call paths keep the play.py subprocess (they also
     # monitor logcat and are not start-latency critical). Loaded once,
     # reused across retry attempts.
+    # #231: also pre-warm single-utterance daily-call (no inter-turn sync) so
+    # the in-process play wins the mic-listening race.
     preloaded_wavs: dict = {}
-    if config["flow_type"] == "voice-note":
+    _preload = config["flow_type"] == "voice-note" or (
+        config["flow_type"] == "daily-call" and len(scenario["utterances"]) == 1
+    )
+    if _preload:
         for i, _ in enumerate(scenario["utterances"]):
             wav_name = f"{scenario['name']}_{i}.wav"
             wav_path = os.path.join(args.wavs, wav_name)
@@ -457,6 +470,12 @@ def _run_attempt(args, config, scenario, tag, log_path, preloaded_wavs,
                 play_only=(config["flow_type"] == "voice-note"),
                 tag=tag,
                 preloaded=preloaded_wavs.get(wav_path),
+                # #231: single-utterance daily-call has no inter-turn sync, so
+                # use the fast in-process path to win the mic-listening race.
+                prefer_preloaded=(
+                    config["flow_type"] == "daily-call"
+                    and len(scenario["utterances"]) == 1
+                ),
             )
         audio_played.set()
 
