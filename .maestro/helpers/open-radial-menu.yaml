@@ -1,0 +1,16 @@
+appId: com.dytty.dytty
+name: "Reusable: open radial menu safely (#231)"
+---
+# Guard the blind coordinate tap (7%,35%) so it can't land on the launcher /
+# another app (observed: it launched Costco when the home screen hadn't
+# rendered yet). We do NOT re-launch (that drops logged-in state); instead we
+# settle, then tap, then ASSERT the radial menu actually opened — so a misfire
+# fails the flow loudly instead of silently driving another app.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: "7%,35%"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 8000

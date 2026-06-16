@@ -7,11 +7,8 @@ tags:
 # UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login.yaml"
 
-- tapOn:
-    point: "7%,35%"
-- extendedWaitUntil:
-    visible: "Start voice call"
-    timeout: 5000
+# #231: guarded radial-menu open (re-foregrounds Dytty before the blind tap).
+- runFlow: "../helpers/open-radial-menu.yaml"
 
 - tapOn: "Start voice call"
 - tapOn: "Start Call"
@@ -21,17 +18,30 @@ tags:
     timeout: 20000
 
 # Orchestrator plays both utterances with Turn complete signals between them.
-# Hold the call open long enough for the AI to finish BOTH audio turns —
-# a bare `visible: ".*"` matches instantly and ends the call before the AI
-# responds, so no AI audio is captured (breaks latency/audio measurement).
+# Hold the call open through BOTH turns (utterance -> AI -> utterance -> AI ->
+# saves). `waitForAnimationToEnd` returns instantly on the static call screen
+# (ends the call early), so force a real ~30s dwell with a repeat loop. (#231)
 - extendedWaitUntil:
     visible: "End call"
-    timeout: 45000
-- waitForAnimationToEnd:
-    timeout: 30000
+    timeout: 20000
+- repeat:
+    times: 30
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
 
 - tapOn: "End call"
 
+# Post-call: reconcile fires on EndCall; hold for its logcat to land.
 - extendedWaitUntil:
     visible: "Call Summary"
-    timeout: 10000
+    timeout: 15000
+- repeat:
+    times: 8
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true

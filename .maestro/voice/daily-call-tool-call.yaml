@@ -7,11 +7,9 @@ tags:
 # UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login.yaml"
 
-- tapOn:
-    point: "7%,35%"
-- extendedWaitUntil:
-    visible: "Start voice call"
-    timeout: 5000
+# #231: open the radial menu via a guarded helper (re-foregrounds Dytty so the
+# blind coordinate tap can't land on the launcher / another app).
+- runFlow: "../helpers/open-radial-menu.yaml"
 
 - tapOn: "Start voice call"
 - tapOn: "Start Call"

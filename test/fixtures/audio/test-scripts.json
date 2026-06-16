@@ -153,11 +153,18 @@
     },
     {
       "name": "single-item-good-day",
-      "description": "S4 (single item control): a single positive statement must produce exactly 1 save_entry (positive), never split into multiple. Guards against over-segmentation.",
+      "description": "S4 (single item, clarify-then-save): a vague single statement prompts a gentle clarifying question (subtle-questioning, #231); the user's answer then yields exactly 1 save_entry (positive), never split. Guards over-segmentation AND verifies clarify-vague-save-clear.",
       "path": "daily-call",
       "utterances": [
         {
           "text": "Today was just a good day.",
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 12
+          }
+        },
+        {
+          "text": "Yeah, I finally finished that project I was stuck on, felt really good.",
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
@@ -166,7 +173,7 @@
             "expected_items": [
               {
                 "category": "positive",
-                "anchor": "good day"
+                "anchor": "finished"
               }
             ]
           }
@@ -273,19 +280,23 @@
     },
     {
       "name": "self-correction-final-state",
-      "description": "S12 (self-correction): speaker corrects their own framing mid-sentence. Expect 1 save_entry: positive (the corrected final state \u00e2\u20ac\u201d it ended well), not negative. Guards against capturing the retracted framing.",
+      "description": "S12 (self-correction, clarify-then-save): speaker corrects their framing mid-sentence; a brief utterance may prompt a clarifying question, and the answer yields 1 save_entry reflecting the FINAL (positive) state, never the retracted negative.",
       "path": "daily-call",
       "utterances": [
         {
           "text": "It was a bad day, no actually, it ended well.",
           "expect": {
             "ai_responds": true,
+            "timeout_sec": 12
+          }
+        },
+        {
+          "text": "The morning was rough but I sorted things out by the evening and felt relieved.",
+          "expect": {
+            "ai_responds": true,
             "tool_call": "save_entry",
             "timeout_sec": 15,
             "min_entries": 1,
-            "expected_categories": [
-              "positive"
-            ],
             "expected_items": [
               {
                 "category": "positive",
