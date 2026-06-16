@@ -61,10 +61,18 @@ LiveGenerationConfig buildLiveGenerationConfig() => LiveGenerationConfig(
 ///
 /// Manages session lifecycle, audio I/O, tool calling, and latency tracking.
 class GeminiLiveService {
-  /// Preview model — subject to deprecation/rename by Google.
-  /// If daily call breaks with WebSocket 1008 "model not found", check:
+  /// Live audio model. Upgraded 2026-06-16 from
+  /// `gemini-2.5-flash-native-audio-preview-12-2025`, which has a confirmed
+  /// Google bug: it generates audio and calls a tool simultaneously, so the
+  /// backend closes the socket with WebSocket 1008 ("Operation is not
+  /// implemented") at the first tool-using turn — killing the daily call
+  /// before any save/reconcile (device-diagnosed under #231). Google's own
+  /// fix is the 3.1 Flash Live model, which sequences tool-call after audio.
+  /// Note: 3.1 does NOT support proactive-audio / affective-dialog / VAD
+  /// config (those are 2.5-native-audio only); we don't use them here (#228).
+  /// If daily call breaks with 1008 "model not found", check:
   /// https://firebase.google.com/docs/ai-logic/models
-  static const _model = 'gemini-2.5-flash-native-audio-preview-12-2025';
+  static const _model = 'gemini-3.1-flash-live-preview';
 
   /// Tag used for structured log lines, filterable via `adb logcat`.
   static const _logTag = '[DYTTY]';

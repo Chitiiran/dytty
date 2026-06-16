@@ -79,7 +79,7 @@
             "min_entries": 2,
             "expected_categories": [
               "negative",
-              "gratitude"
+              "positive"
             ],
             "expected_items": [
               {
@@ -87,7 +87,7 @@
                 "anchor": "subscription"
               },
               {
-                "category": "gratitude",
+                "category": "positive",
                 "anchor": "FIFA"
               }
             ]
