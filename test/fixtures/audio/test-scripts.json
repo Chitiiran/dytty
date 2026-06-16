@@ -80,6 +80,16 @@
             "expected_categories": [
               "negative",
               "gratitude"
+            ],
+            "expected_items": [
+              {
+                "category": "negative",
+                "anchor": "subscription"
+              },
+              {
+                "category": "gratitude",
+                "anchor": "FIFA"
+              }
             ]
           }
         }
@@ -91,12 +101,18 @@
       "path": "daily-call",
       "utterances": [
         {
-          "text": "Work was, yeah. And then my mom called and that was actually really nice but I—",
+          "text": "Work was, yeah. And then my mom called and that was actually really nice but I\u00e2\u20ac\u201d",
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
             "timeout_sec": 15,
-            "min_entries": 1
+            "min_entries": 1,
+            "expected_items": [
+              {
+                "category": "gratitude",
+                "anchor": "mom called"
+              }
+            ]
           }
         }
       ]
@@ -116,6 +132,20 @@
             "expected_categories": [
               "beauty",
               "positive"
+            ],
+            "expected_items": [
+              {
+                "category": "beauty",
+                "anchor": "sunset"
+              },
+              {
+                "category": "negative",
+                "anchor": "email Sarah"
+              },
+              {
+                "category": "positive",
+                "anchor": "proud finishing the run"
+              }
             ]
           }
         }
@@ -132,7 +162,13 @@
             "ai_responds": true,
             "tool_call": "save_entry",
             "timeout_sec": 15,
-            "min_entries": 1
+            "min_entries": 1,
+            "expected_items": [
+              {
+                "category": "positive",
+                "anchor": "good day"
+              }
+            ]
           }
         }
       ]
@@ -148,21 +184,32 @@
             "ai_responds": true,
             "tool_call": "save_entry",
             "timeout_sec": 15,
-            "min_entries": 2
+            "min_entries": 2,
+            "expected_items": [
+              {
+                "category": "positive",
+                "anchor": "promotion"
+              },
+              {
+                "category": "negative",
+                "anchor": "terrified of the responsibility"
+              }
+            ]
           }
         }
       ]
     },
     {
       "name": "no-item-liveness-check",
-      "description": "S9 (no journalable content): a connectivity check with no reflective content. Expect 0 save_entry calls — the AI should respond conversationally but save nothing. Guards against hallucinated entries.",
+      "description": "S9 (no journalable content): a connectivity check with no reflective content. Expect 0 save_entry calls \u00e2\u20ac\u201d the AI should respond conversationally but save nothing. Guards against hallucinated entries.",
       "path": "daily-call",
       "utterances": [
         {
           "text": "Um, can you hear me? Is this thing working?",
           "expect": {
             "ai_responds": true,
-            "timeout_sec": 15
+            "timeout_sec": 15,
+            "expected_items": []
           }
         }
       ]
@@ -197,14 +244,36 @@
             "ai_responds": true,
             "tool_call": "save_entry",
             "timeout_sec": 20,
-            "min_entries": 5
+            "min_entries": 5,
+            "expected_items": [
+              {
+                "category": "positive",
+                "anchor": "raise"
+              },
+              {
+                "category": "gratitude",
+                "anchor": "mentor took me to lunch"
+              },
+              {
+                "category": "beauty",
+                "anchor": "cherry blossoms"
+              },
+              {
+                "category": "negative",
+                "anchor": "missed my train"
+              },
+              {
+                "category": "identity",
+                "anchor": "real engineer"
+              }
+            ]
           }
         }
       ]
     },
     {
       "name": "self-correction-final-state",
-      "description": "S12 (self-correction): speaker corrects their own framing mid-sentence. Expect 1 save_entry: positive (the corrected final state — it ended well), not negative. Guards against capturing the retracted framing.",
+      "description": "S12 (self-correction): speaker corrects their own framing mid-sentence. Expect 1 save_entry: positive (the corrected final state \u00e2\u20ac\u201d it ended well), not negative. Guards against capturing the retracted framing.",
       "path": "daily-call",
       "utterances": [
         {
@@ -216,6 +285,12 @@
             "min_entries": 1,
             "expected_categories": [
               "positive"
+            ],
+            "expected_items": [
+              {
+                "category": "positive",
+                "anchor": "ended well"
+              }
             ]
           }
         }
