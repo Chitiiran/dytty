@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:dytty/core/constants/categories.dart';
 import 'package:dytty/core/constants/reconcile_prompt.dart';
 import 'package:dytty/core/constants/tool_declarations.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -54,6 +55,38 @@ List<ReconciledItem> parseReconcileCalls(List<Map<String, dynamic>> calls) {
     }
   }
   return items;
+}
+
+/// Parses the schema-first reconcile response (#231): a JSON array of
+/// `{category, text, quote}` objects into [ReconciledItem] adds.
+///
+/// Invalid categories fall back to 'positive'; empty-text items are dropped;
+/// malformed JSON or a non-list top level yields an empty list (the caller
+/// treats that as a no-op). Tolerates markdown-fenced JSON via [extractJson].
+List<ReconciledItem> parseReconcileArray(String jsonText) {
+  final validCategories = JournalCategory.values.map((c) => c.name).toSet();
+  try {
+    final decoded = jsonDecode(extractJson(jsonText));
+    if (decoded is! List) return const [];
+    final items = <ReconciledItem>[];
+    for (final raw in decoded) {
+      if (raw is! Map) continue;
+      final text = (raw['text'] as String?)?.trim() ?? '';
+      if (text.isEmpty) continue;
+      final cat = (raw['category'] as String?) ?? 'positive';
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.add,
+          category: validCategories.contains(cat) ? cat : 'positive',
+          text: text,
+          sourceTranscript: (raw['quote'] as String?) ?? '',
+        ),
+      );
+    }
+    return items;
+  } catch (_) {
+    return const [];
+  }
 }
 
 class GeminiLlmService implements LlmService {
