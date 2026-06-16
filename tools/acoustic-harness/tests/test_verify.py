@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from verify import parse_logcat, fuzzy_match, verify_scenario, _check_tool_calls, resolve_tag
+from verify import parse_logcat, fuzzy_match, verify_scenario, _check_tool_calls, resolve_tag, score_recall
 
 
 class TestResolveTag(unittest.TestCase):
@@ -465,6 +465,75 @@ class TestVerifyScenario(unittest.TestCase):
         results = verify_scenario(events, [], self._make_scenario())
         user_check = next(r for r in results if "User speech" in r["check"])
         self.assertTrue(user_check["passed"])
+
+
+class TestScoreRecall(unittest.TestCase):
+    """#231: score_recall() — deterministic multi-item recall metric."""
+
+    def test_full_capture(self):
+        expected = [
+            {"category": "negative", "anchor": "work was brutal"},
+            {"category": "gratitude", "anchor": "sister called"},
+        ]
+        saved = [
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+            {"type": "entry_saved", "category": "gratitude", "origin": "reconciled-add"},
+        ]
+        result = score_recall(expected, saved)
+        self.assertEqual(result["recall"], 1.0)
+        self.assertEqual(result["category_accuracy"], 1.0)
+        self.assertFalse(result["over_split"])
+        self.assertFalse(result["hallucination"])
+
+    def test_under_capture(self):
+        expected = [
+            {"category": "negative", "anchor": "a"},
+            {"category": "gratitude", "anchor": "b"},
+        ]
+        saved = [{"type": "entry_saved", "category": "negative", "origin": "in-call"}]
+        result = score_recall(expected, saved)
+        self.assertEqual(result["recall"], 0.5)
+        self.assertFalse(result["over_split"])
+
+    def test_over_split(self):
+        result = score_recall(
+            [{"category": "positive", "anchor": "a"}],
+            [
+                {"type": "entry_saved", "category": "positive", "origin": "in-call"},
+                {"type": "entry_saved", "category": "positive", "origin": "reconciled-add"},
+            ],
+        )
+        self.assertTrue(result["over_split"])
+
+    def test_hallucination(self):
+        result = score_recall(
+            [],
+            [{"type": "entry_saved", "category": "positive", "origin": "in-call"}],
+        )
+        self.assertTrue(result["hallucination"])
+        self.assertEqual(result["recall"], 1.0)  # nothing expected, nothing missed
+
+    def test_verify_scenario_wires_expected_items(self):
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+            {"type": "entry_saved", "category": "gratitude", "origin": "reconciled-add"},
+            {"type": "state", "value": "idle"},
+        ]
+        scenario = {
+            "name": "s",
+            "utterances": [{
+                "text": "x",
+                "expect": {"expected_items": [
+                    {"category": "negative", "anchor": "a"},
+                    {"category": "gratitude", "anchor": "b"},
+                ]},
+            }],
+        }
+        results = verify_scenario(events, [], scenario)
+        recall = next(r for r in results if "multi-item recall" in r["check"])
+        self.assertTrue(recall["passed"], recall["detail"])
+        self.assertEqual(recall["metrics"]["recall"], 1.0)
 
 
 if __name__ == "__main__":

@@ -133,6 +133,48 @@ def fuzzy_match(
     return ratio >= threshold, ratio
 
 
+def score_recall(expected_items: list[dict], saved_events: list[dict]) -> dict:
+    """Deterministic multi-item recall metric (#231).
+
+    expected_items: [{"category": str, "anchor": str}]. The anchor is unused
+        here (kept for future span-level matching); recall is category-multiset
+        based.
+    saved_events: parsed "entry_saved" events [{"type", "category", "origin"}].
+
+    Returns recall (captured / expected by category multiset), category_accuracy
+    (fraction of saved entries whose category was expected), and over_split /
+    hallucination guard flags.
+    """
+    from collections import Counter
+
+    expected_cats = Counter(e["category"] for e in expected_items)
+    saved_cats = Counter(
+        e["category"] for e in saved_events if e.get("type") == "entry_saved"
+    )
+
+    total_expected = sum(expected_cats.values())
+    captured = sum(min(expected_cats[c], saved_cats.get(c, 0)) for c in expected_cats)
+    recall = 1.0 if total_expected == 0 else captured / total_expected
+
+    total_saved = sum(saved_cats.values())
+    correct_saved = sum(
+        min(saved_cats[c], expected_cats.get(c, 0)) for c in saved_cats
+    )
+    category_accuracy = 1.0 if total_saved == 0 else correct_saved / total_saved
+
+    over_split = any(saved_cats.get(c, 0) > expected_cats[c] for c in expected_cats)
+    hallucination = total_expected == 0 and total_saved > 0
+
+    return {
+        "recall": round(recall, 3),
+        "category_accuracy": round(category_accuracy, 3),
+        "captured": captured,
+        "expected": total_expected,
+        "over_split": over_split,
+        "hallucination": hallucination,
+    }
+
+
 def _check_tool_calls(raw_lines: list[str], tool_name: str) -> bool:
     """Check raw logcat lines for tool call invocations.
 
@@ -258,6 +300,23 @@ def verify_scenario(
                     if not missing
                     else f"Missing {missing}; saw {saved_categories}"
                 ),
+            })
+
+        # #231: deterministic multi-item recall metric. Passes when no
+        # over-split / hallucination guard trips; recall/cat_acc surface in JSON.
+        if "expected_items" in expect:
+            recall = score_recall(expect["expected_items"], saved_events)
+            results.append({
+                "check": f"{prefix}: multi-item recall",
+                "passed": not recall["over_split"] and not recall["hallucination"],
+                "detail": (
+                    f"recall={recall['recall']} "
+                    f"cat_acc={recall['category_accuracy']} "
+                    f"captured={recall['captured']}/{recall['expected']} "
+                    f"over_split={recall['over_split']} "
+                    f"hallucination={recall['hallucination']}"
+                ),
+                "metrics": recall,
             })
 
     # Check call ended cleanly
