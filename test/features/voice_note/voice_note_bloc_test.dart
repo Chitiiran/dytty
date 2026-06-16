@@ -940,6 +940,12 @@ class _ErrorLlmService implements LlmService {
   Future<String> generateWeeklySummary(List<String> entries) async => '';
 
   @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async => const [];
+
+  @override
   void dispose() {}
 }
 
@@ -975,6 +981,12 @@ class _EmptySummaryLlmService implements LlmService {
   Future<String> generateWeeklySummary(List<String> entries) async => '';
 
   @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async => const [];
+
+  @override
   void dispose() {}
 }
 
@@ -1005,6 +1017,12 @@ class _SlowLlmService implements LlmService {
 
   @override
   Future<String> generateWeeklySummary(List<String> entries) async => '';
+
+  @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async => const [];
 
   @override
   void dispose() {}

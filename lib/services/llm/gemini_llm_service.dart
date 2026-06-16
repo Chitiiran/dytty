@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:dytty/core/constants/reconcile_prompt.dart';
+import 'package:dytty/core/constants/tool_declarations.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// Strips markdown code fences from LLM JSON responses.
@@ -13,6 +15,45 @@ String extractJson(String text) {
     return match.group(1)!.trim();
   }
   return trimmed;
+}
+
+/// Converts raw `save_entry` / `edit_entry` function calls (each a
+/// `{'name': ..., 'args': {...}}` map) into [ReconciledItem]s.
+///
+/// `save_entry` -> [ReconcileAction.add] (dropped if text is empty).
+/// `edit_entry` -> [ReconcileAction.reword] (dropped if entry_id or text empty).
+/// Unknown call names are ignored. Category defaults to 'positive'.
+List<ReconciledItem> parseReconcileCalls(List<Map<String, dynamic>> calls) {
+  final items = <ReconciledItem>[];
+  for (final call in calls) {
+    final name = call['name'] as String?;
+    final args = (call['args'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+    if (name == 'save_entry') {
+      final text = (args['text'] as String?)?.trim() ?? '';
+      if (text.isEmpty) continue;
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.add,
+          category: (args['category'] as String?) ?? 'positive',
+          text: text,
+          sourceTranscript: (args['transcript'] as String?) ?? '',
+        ),
+      );
+    } else if (name == 'edit_entry') {
+      final entryId = (args['entry_id'] as String?)?.trim() ?? '';
+      final text = (args['text'] as String?)?.trim() ?? '';
+      if (entryId.isEmpty || text.isEmpty) continue;
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.reword,
+          entryId: entryId,
+          text: text,
+        ),
+      );
+    }
+  }
+  return items;
 }
 
 class GeminiLlmService implements LlmService {
@@ -115,6 +156,31 @@ $entriesText
 
     final response = await _model.generateContent([Content.text(prompt)]);
     return response.text ?? '';
+  }
+
+  @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async {
+    final model = FirebaseAI.googleAI().generativeModel(
+      model: _modelName,
+      tools: [
+        Tool.functionDeclarations([saveEntryDeclaration, editEntryDeclaration]),
+      ],
+    );
+
+    final response = await model.generateContent([
+      Content.text(buildReconcilePrompt(transcript, alreadySaved)),
+    ]);
+
+    final calls = response.functionCalls
+        .map(
+          (fc) => {'name': fc.name, 'args': Map<String, dynamic>.from(fc.args)},
+        )
+        .toList();
+
+    return parseReconcileCalls(calls);
   }
 
   @override
