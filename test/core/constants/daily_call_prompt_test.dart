@@ -23,6 +23,20 @@ void main() {
       expect(dailyCallSystemPrompt, contains('beauty'));
       expect(dailyCallSystemPrompt, contains('identity'));
     });
+
+    test('includes #231 questioning-restraint guardrails', () {
+      final p = dailyCallSystemPrompt;
+      // 2:1 reflection-to-question ratio
+      expect(p, contains('at least TWICE as often as questions'));
+      // never ask "why"
+      expect(p.toLowerCase(), contains('never ask "why"'));
+      // don't end every turn on a question
+      expect(p, contains('Do NOT end every turn on a question'));
+      // backchannels for pauses
+      expect(p, contains('backchannel'));
+      // ask only when genuinely unclear
+      expect(p, contains('genuinely unclear'));
+    });
   });
 
   group('dailyCallMinimalPrompt', () {
