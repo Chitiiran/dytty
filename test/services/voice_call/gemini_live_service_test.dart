@@ -414,4 +414,22 @@ void main() {
       ]);
     });
   });
+
+  group('buildLiveGenerationConfig (#231)', () {
+    test('tunes for calmer, shorter turns', () {
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.temperature, 0.7);
+      expect(cfg.maxOutputTokens, 300);
+      expect(cfg.presencePenalty, 0.3);
+      expect(cfg.frequencyPenalty, 0.3);
+    });
+
+    test('keeps audio modality + transcription + a configured voice', () {
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.speechConfig, isNotNull);
+      expect(cfg.speechConfig?.voiceConfig, isNotNull);
+      expect(cfg.inputAudioTranscription, isNotNull);
+      expect(cfg.outputAudioTranscription, isNotNull);
+    });
+  });
 }

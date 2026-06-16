@@ -34,6 +34,25 @@ class Transcript {
   );
 }
 
+/// Builds the live generation config (#231). Extracted as a top-level factory
+/// for test visibility.
+///
+/// Tunes for a calmer, shorter "best friend" delivery using the generation
+/// params firebase_ai exposes on LiveGenerationConfig: lower [temperature],
+/// a [maxOutputTokens] cap to force short turns, and small repetition
+/// penalties. (Proactive audio / VAD silence tuning are NOT in firebase_ai —
+/// they need the raw-WebSocket path, #228.)
+LiveGenerationConfig buildLiveGenerationConfig() => LiveGenerationConfig(
+  responseModalities: [ResponseModalities.audio],
+  inputAudioTranscription: AudioTranscriptionConfig(),
+  outputAudioTranscription: AudioTranscriptionConfig(),
+  speechConfig: SpeechConfig(voiceName: 'Aoede'),
+  temperature: 0.7,
+  maxOutputTokens: 300,
+  presencePenalty: 0.3,
+  frequencyPenalty: 0.3,
+);
+
 /// Wraps the Firebase AI Live API for bidirectional voice streaming.
 ///
 /// Manages session lifecycle, audio I/O, tool calling, and latency tracking.
@@ -163,12 +182,7 @@ class GeminiLiveService {
     try {
       final liveModel = FirebaseAI.googleAI().liveGenerativeModel(
         model: _model,
-        liveGenerationConfig: LiveGenerationConfig(
-          responseModalities: [ResponseModalities.audio],
-          inputAudioTranscription: AudioTranscriptionConfig(),
-          outputAudioTranscription: AudioTranscriptionConfig(),
-          speechConfig: SpeechConfig(voiceName: 'Aoede'),
-        ),
+        liveGenerationConfig: buildLiveGenerationConfig(),
         systemInstruction: Content.text(effectivePrompt),
         tools: [Tool.functionDeclarations(effectiveTools)],
       );
