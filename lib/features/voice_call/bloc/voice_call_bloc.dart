@@ -479,11 +479,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final current = state.transcripts;
     // If the AI was mid-turn, mark its bubble interrupted + finalize it so the
     // history records that the rest of that response was never heard (#12).
-    if (current.isNotEmpty &&
-        current.last.speaker == Speaker.ai &&
-        !current.last.isFinal) {
+    //
+    // Open-mic: the user's partial transcript may have already been appended
+    // before the interrupt signal arrives, so the AI bubble isn't necessarily
+    // last. Find the most recent AI bubble rather than assuming `current.last`.
+    final aiIndex = current.lastIndexWhere((t) => t.speaker == Speaker.ai);
+    if (aiIndex != -1 && !current[aiIndex].isFinal) {
       final updated = List<Transcript>.of(current);
-      updated[updated.length - 1] = current.last.copyWith(
+      updated[aiIndex] = current[aiIndex].copyWith(
         interrupted: true,
         isFinal: true,
       );

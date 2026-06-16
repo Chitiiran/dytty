@@ -1006,6 +1006,49 @@ void main() {
       await bloc.close();
     });
 
+    // #12 open-mic regression: because the mic streams continuously, the user's
+    // partial transcript can be appended AFTER the AI bubble but BEFORE Gemini's
+    // interrupt signal arrives. The AI bubble is then second-to-last, so checking
+    // only `current.last` would never finalize it. Find the last AI bubble.
+    test(
+      'marks the AI transcript interrupted even when a user partial follows it',
+      () async {
+        final bloc = buildBloc();
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+
+        // AI is mid-turn.
+        transcriptController.add(
+          const Transcript(
+            speaker: Speaker.ai,
+            text: 'I think you should',
+            isFinal: false,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // User starts speaking — their partial lands before the interrupt.
+        transcriptController.add(
+          const Transcript(speaker: Speaker.user, text: 'wait', isFinal: false),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        interruptController.add(null);
+        await Future<void>.delayed(Duration.zero);
+
+        final aiBubble = bloc.state.transcripts.firstWhere(
+          (t) => t.speaker == Speaker.ai,
+        );
+        expect(
+          aiBubble.interrupted,
+          isTrue,
+          reason: 'the AI bubble must be finalized even when not last',
+        );
+        expect(aiBubble.isFinal, isTrue);
+        await bloc.close();
+      },
+    );
+
     // #12 open-mic: the mic streams continuously, INCLUDING while the AI is
     // speaking — Gemini's server-side VAD needs that audio to detect barge-in.
     // The echo loop is prevented by platform AEC + flushing playback on the

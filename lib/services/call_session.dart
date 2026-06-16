@@ -44,8 +44,12 @@ class CallSession {
 
     // #12 barge-in: flush queued AI audio the moment Gemini reports the user
     // spoke over it, so the AI goes silent immediately.
-    _interruptSub = bloc.interruptStream.listen((_) {
-      playback.flush();
+    _interruptSub = bloc.interruptStream.listen((_) async {
+      try {
+        await playback.flush();
+      } catch (e) {
+        debugPrint('Audio playback flush error: $e');
+      }
     });
   }
 
