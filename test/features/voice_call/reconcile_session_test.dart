@@ -327,6 +327,59 @@ void main() {
         expect(b.state.savedEntries, isEmpty);
       },
     );
+
+    // #231: the lead from #224 was "an in-call save suppresses the post-call
+    // reconcile". This locks in that reconcile STILL runs when an in-call
+    // entry is already present — it dispatches on any non-empty transcript,
+    // independent of in-call saves, and only ADDS the missed item.
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'reconciles even when an in-call entry is already saved',
+      build: () {
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'gratitude',
+            text: 'Grateful my sister called',
+            sourceTranscript: 'sister called',
+          ),
+        ];
+        return buildBloc();
+      },
+      seed: () => const VoiceCallState().copyWith(
+        // An entry already saved DURING the call (origin in-call).
+        savedEntries: const [
+          SavedEntry(
+            entryId: 'e1',
+            categoryId: 'negative',
+            text: 'Work was brutal',
+            transcript: '',
+          ),
+        ],
+        transcripts: const [
+          Transcript(
+            speaker: Speaker.user,
+            text: 'work was brutal but grateful my sister called',
+            isFinal: true,
+          ),
+        ],
+      ),
+      act: (b) => b.add(const EndCall()),
+      wait: const Duration(milliseconds: 50),
+      verify: (b) {
+        expect(b.state.status, VoiceCallStatus.ended);
+        // The pre-saved in-call entry is untouched...
+        expect(
+          b.state.savedEntries.any(
+            (e) => e.entryId == 'e1' && !e.addedByAi && !e.rewordedByAi,
+          ),
+          isTrue,
+        );
+        // ...and the missed item was added by reconcile.
+        final added = b.state.savedEntries.where((e) => e.addedByAi).toList();
+        expect(added, hasLength(1));
+        expect(added.first.categoryId, 'gratitude');
+      },
+    );
   });
 
   group('AcceptAllReconciled', () {
