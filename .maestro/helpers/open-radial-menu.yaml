@@ -2,12 +2,12 @@ appId: com.dytty.dytty
 name: "Reusable: open voice call from home (#231)"
 ---
 # Start the voice call directly from the home-screen "Call" button. The button
-# now carries a Semantics(label: 'Start voice call') (#231), so we tap it by
-# label instead of a fragile screen coordinate (the old 7%,35% calendar-cell
-# tap was stale for the current layout and could miss / drive another app).
+# carries Semantics(label: 'Start daily call') (#231), so we tap it by label
+# instead of a fragile screen coordinate (the old 7%,35% calendar-cell tap was
+# stale for the current layout and could miss / drive another app).
 - extendedWaitUntil:
-    visible: "Start voice call"
+    visible: "Start daily call"
     timeout: 12000
 - tapOn:
-    text: "Start voice call"
+    text: "Start daily call"
     retryTapIfNoChange: true

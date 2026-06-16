@@ -137,8 +137,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Semantics label so screen readers announce the button and
                   // automation can find it (the visible 'Call' text is drawn to
                   // Flutter's canvas and isn't exposed to the a11y tree). (#231)
+                  // Distinct from the radial menu's 'Start voice call' label
+                  // (avoid an ambiguous finder in widget tests). (#231)
                   child: Semantics(
-                    label: 'Start voice call',
+                    label: 'Start daily call',
                     button: true,
                     child: OutlinedButton.icon(
                       onPressed: () {
