@@ -567,6 +567,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         if (item.entryId == null) continue;
         final idx = updated.indexWhere((e) => e.entryId == item.entryId);
         if (idx == -1) continue; // unknown/deleted id — skip
+        // Persist to the repository directly (mirrors the add path) so the
+        // reword isn't silently lost when _journalBloc is null but the repo is
+        // wired; the bloc (if present) also gets it via its stream. (#232)
+        // (_journalRepository is already non-null — guarded at method entry.)
+        try {
+          await _journalRepository.updateCategoryEntry(
+            _journalDate,
+            item.entryId!,
+            item.text,
+          );
+        } catch (e) {
+          debugPrint('reconcile reword failed: $e');
+        }
         _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
         updated[idx] = updated[idx].copyWith(
           text: item.text,

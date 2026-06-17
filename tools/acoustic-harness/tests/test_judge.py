@@ -43,6 +43,13 @@ class TestStripFences(unittest.TestCase):
     def test_strips_bare_fence(self):
         self.assertEqual(judge._strip_fences('```\n{"a": 1}\n```'), '{"a": 1}')
 
+    def test_strips_single_line_fence(self):
+        # #232 review: a single-line fence must not collapse to '' (the old
+        # line-split approach did).
+        self.assertEqual(
+            judge._strip_fences('```json {"a": 1} ```'), '{"a": 1}'
+        )
+
     def test_fenced_response_loads(self):
         import json as _json
         self.assertEqual(

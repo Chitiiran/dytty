@@ -90,6 +90,11 @@ void main() {
         createdAt: DateTime(2026, 1, 1),
       );
     });
+
+    // #232: reword now persists to the repository directly.
+    when(
+      () => mockRepo.updateCategoryEntry(any(), any(), any()),
+    ).thenAnswer((_) async {});
   });
 
   tearDown(() {
@@ -171,6 +176,15 @@ void main() {
         final e = b.state.savedEntries.firstWhere((e) => e.entryId == 'e1');
         expect(e.rewordedByAi, isTrue);
         expect(e.text, contains('FIFA'));
+        // #232: reword must persist to the repository (not only the bloc), so
+        // it isn't silently lost when _journalBloc is null.
+        verify(
+          () => mockRepo.updateCategoryEntry(
+            any(),
+            'e1',
+            'Paid for a sub I dislike but needed it for FIFA',
+          ),
+        ).called(1);
       },
     );
 

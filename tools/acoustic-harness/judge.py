@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 
 RUBRIC_KEYS = [
@@ -87,16 +88,14 @@ def _strip_fences(text: str) -> str:
 
     Gemini occasionally wraps JSON in a code fence even with
     response_mime_type=application/json; json.loads would then raise. (#232)
+
+    Regex-based so it handles BOTH multi-line and single-line fences (a
+    line-split approach wipes single-line fences to ''). (#232 review)
     """
     text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return text
+    text = re.sub(r"^`{3}(?:[a-zA-Z0-9+-]+)?\s*", "", text)  # opening fence
+    text = re.sub(r"\s*`{3}$", "", text)  # closing fence
+    return text.strip()
 
 
 def aggregate(per_turn: list[dict]) -> dict:
