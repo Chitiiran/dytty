@@ -109,6 +109,20 @@ void main() {
     test('returns empty list when top level is not a list', () {
       expect(parseReconcileArray('{"category":"positive"}'), isEmpty);
     });
+
+    test('tolerates non-string field types without dropping good items', () {
+      // Gemini-review #232: a non-string field (number/bool) must not throw and
+      // collapse the whole reconcile to []. The bad item is skipped (empty
+      // text); the good item still parses.
+      final json = jsonEncode([
+        {'category': 123, 'text': 456, 'quote': true}, // all non-string
+        {'category': 'gratitude', 'text': 'Real item.', 'quote': 'q'},
+      ]);
+      final items = parseReconcileArray(json);
+      expect(items.length, 1);
+      expect(items.single.category, 'gratitude');
+      expect(items.single.text, 'Real item.');
+    });
   });
 
   group('GeminiLlmService', () {

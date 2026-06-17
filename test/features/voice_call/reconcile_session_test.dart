@@ -380,6 +380,45 @@ void main() {
         expect(added.first.categoryId, 'gratitude');
       },
     );
+
+    // #232 (Gemini review): reconcile-add must write with a session date key
+    // (yyyy-MM-dd), not crash/use a malformed key. Captures the date arg the
+    // repository received and asserts it is a well-formed date string.
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'reconcile-add writes a yyyy-MM-dd session date key',
+      build: () {
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'beauty',
+            text: 'The sky was gorgeous',
+            sourceTranscript: 'sky',
+          ),
+        ];
+        return buildBloc();
+      },
+      seed: () => const VoiceCallState().copyWith(
+        transcripts: const [
+          Transcript(speaker: Speaker.user, text: 'sky', isFinal: true),
+        ],
+      ),
+      act: (b) => b.add(const EndCall()),
+      wait: const Duration(milliseconds: 50),
+      verify: (_) {
+        final captured = verify(
+          () => mockRepo.addCategoryEntry(
+            captureAny(),
+            any(),
+            any(),
+            source: any(named: 'source'),
+            transcript: any(named: 'transcript'),
+            tags: any(named: 'tags'),
+          ),
+        ).captured;
+        expect(captured, isNotEmpty);
+        expect(captured.first, matches(r'^\d{4}-\d{2}-\d{2}$'));
+      },
+    );
   });
 
   group('AcceptAllReconciled', () {

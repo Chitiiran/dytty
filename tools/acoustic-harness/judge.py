@@ -79,7 +79,24 @@ def _judge_turn(turn: str, prior_user: str, api_key: str) -> dict:
             "response_mime_type": "application/json",
         },
     )
-    return json.loads(resp.text)
+    return json.loads(_strip_fences(resp.text))
+
+
+def _strip_fences(text: str) -> str:
+    """Strip a markdown ```json ... ``` fence if present.
+
+    Gemini occasionally wraps JSON in a code fence even with
+    response_mime_type=application/json; json.loads would then raise. (#232)
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
 
 
 def aggregate(per_turn: list[dict]) -> dict:
