@@ -7,8 +7,8 @@ tags:
 # UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login-device.yaml"
 
-# #231: guarded radial-menu open (re-foregrounds Dytty before the blind tap).
-- runFlow: "../helpers/open-radial-menu.yaml"
+# #231: guarded daily-call open (re-foregrounds Dytty before the blind tap).
+- runFlow: "../helpers/open-daily-call.yaml"
 
 # Navigate to voice call screen
 

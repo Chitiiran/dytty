@@ -302,19 +302,32 @@ def verify_scenario(
                 ),
             })
 
-        # #231: deterministic multi-item recall metric. Passes when no
-        # over-split / hallucination guard trips; recall/cat_acc surface in JSON.
+        # #231: deterministic multi-item metric. By default this GATES only the
+        # over-split / hallucination guards (recall is data-collection, surfaced
+        # in JSON, not a pass/fail by itself — #231 collects evidence, it does
+        # not yet enforce a recall bar). A scenario can opt INTO a recall gate by
+        # setting `min_recall`; when present, recall below it also fails.
         if "expected_items" in expect:
             recall = score_recall(expect["expected_items"], saved_events)
+            min_recall = expect.get("min_recall")
+            recall_ok = min_recall is None or recall["recall"] >= min_recall
+            gated = "over-split/hallucination" + (
+                f" + recall>={min_recall}" if min_recall is not None else ""
+            )
             results.append({
-                "check": f"{prefix}: multi-item recall",
-                "passed": not recall["over_split"] and not recall["hallucination"],
+                "check": f"{prefix}: multi-item guard ({gated})",
+                "passed": (
+                    not recall["over_split"]
+                    and not recall["hallucination"]
+                    and recall_ok
+                ),
                 "detail": (
                     f"recall={recall['recall']} "
                     f"cat_acc={recall['category_accuracy']} "
                     f"captured={recall['captured']}/{recall['expected']} "
                     f"over_split={recall['over_split']} "
                     f"hallucination={recall['hallucination']}"
+                    + (f" min_recall={min_recall}" if min_recall is not None else "")
                 ),
                 "metrics": recall,
             })

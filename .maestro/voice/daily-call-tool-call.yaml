@@ -7,9 +7,9 @@ tags:
 # UI-only flow — audio + logcat handled by orchestrate.py
 - runFlow: "../helpers/login-device.yaml"
 
-# #231: open the radial menu via a guarded helper (re-foregrounds Dytty so the
-# blind coordinate tap can't land on the launcher / another app).
-- runFlow: "../helpers/open-radial-menu.yaml"
+# #231: start the daily call via a guarded helper (taps the labelled "Call"
+# button, asserting it opened — no fragile coordinate tap).
+- runFlow: "../helpers/open-daily-call.yaml"
 
 - tapOn: "Start Call"
 

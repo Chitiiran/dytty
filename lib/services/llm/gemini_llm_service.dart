@@ -20,6 +20,13 @@ String extractJson(String text) {
 /// Converts raw `save_entry` / `edit_entry` function calls (each a
 /// `{'name': ..., 'args': {...}}` map) into [ReconciledItem]s.
 ///
+/// NOTE (#231): the live reconcile path now uses [parseReconcileArray]
+/// (schema-first JSON array) and no longer calls this. It is retained
+/// (with its tests) because it still handles `edit_entry`/reword — the only
+/// parser that produces [ReconcileAction.reword] — kept for reference and in
+/// case a future reconcile variant re-introduces function-call edits. If that
+/// never lands, remove this and its tests.
+///
 /// `save_entry` -> [ReconcileAction.add] (dropped if text is empty).
 /// `edit_entry` -> [ReconcileAction.reword] (dropped if entry_id or text empty).
 /// Unknown call names are ignored. Category defaults to 'positive'.

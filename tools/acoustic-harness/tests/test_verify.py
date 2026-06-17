@@ -531,9 +531,44 @@ class TestScoreRecall(unittest.TestCase):
             }],
         }
         results = verify_scenario(events, [], scenario)
-        recall = next(r for r in results if "multi-item recall" in r["check"])
+        recall = next(r for r in results if "multi-item guard" in r["check"])
         self.assertTrue(recall["passed"], recall["detail"])
         self.assertEqual(recall["metrics"]["recall"], 1.0)
+
+    def test_recall_not_gated_by_default(self):
+        # Under-capture (1 of 2) must still PASS the guard unless min_recall is
+        # set — #231 collects recall data, it doesn't enforce a bar by default.
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+        ]
+        scenario = {"name": "s", "utterances": [{"text": "x", "expect": {
+            "expected_items": [
+                {"category": "negative", "anchor": "a"},
+                {"category": "gratitude", "anchor": "b"},
+            ],
+        }}]}
+        g = next(r for r in verify_scenario(events, [], scenario)
+                 if "multi-item guard" in r["check"])
+        self.assertEqual(g["metrics"]["recall"], 0.5)
+        self.assertTrue(g["passed"])  # not gated -> passes despite 0.5 recall
+
+    def test_min_recall_gates_when_set(self):
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+        ]
+        scenario = {"name": "s", "utterances": [{"text": "x", "expect": {
+            "min_recall": 1.0,
+            "expected_items": [
+                {"category": "negative", "anchor": "a"},
+                {"category": "gratitude", "anchor": "b"},
+            ],
+        }}]}
+        g = next(r for r in verify_scenario(events, [], scenario)
+                 if "multi-item guard" in r["check"])
+        self.assertEqual(g["metrics"]["recall"], 0.5)
+        self.assertFalse(g["passed"])  # min_recall=1.0 -> 0.5 fails
 
 
 if __name__ == "__main__":

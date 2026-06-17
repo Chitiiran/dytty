@@ -101,7 +101,7 @@
       "path": "daily-call",
       "utterances": [
         {
-          "text": "Work was, yeah. And then my mom called and that was actually really nice but I\u00e2\u20ac\u201d",
+          "text": "Work was, yeah. And then my mom called and that was actually really nice but I\u2014",
           "expect": {
             "ai_responds": true,
             "tool_call": "save_entry",
@@ -131,6 +131,7 @@
             "min_entries": 3,
             "expected_categories": [
               "beauty",
+              "negative",
               "positive"
             ],
             "expected_items": [
@@ -208,7 +209,7 @@
     },
     {
       "name": "no-item-liveness-check",
-      "description": "S9 (no journalable content): a connectivity check with no reflective content. Expect 0 save_entry calls \u00e2\u20ac\u201d the AI should respond conversationally but save nothing. Guards against hallucinated entries.",
+      "description": "S9 (no journalable content): a connectivity check with no reflective content. Expect 0 save_entry calls \u2014 the AI should respond conversationally but save nothing. Guards against hallucinated entries.",
       "path": "daily-call",
       "utterances": [
         {
