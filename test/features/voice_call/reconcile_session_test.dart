@@ -90,6 +90,11 @@ void main() {
         createdAt: DateTime(2026, 1, 1),
       );
     });
+
+    // #232: reword now persists to the repository directly.
+    when(
+      () => mockRepo.updateCategoryEntry(any(), any(), any()),
+    ).thenAnswer((_) async {});
   });
 
   tearDown(() {
@@ -171,6 +176,15 @@ void main() {
         final e = b.state.savedEntries.firstWhere((e) => e.entryId == 'e1');
         expect(e.rewordedByAi, isTrue);
         expect(e.text, contains('FIFA'));
+        // #232: reword must persist to the repository (not only the bloc), so
+        // it isn't silently lost when _journalBloc is null.
+        verify(
+          () => mockRepo.updateCategoryEntry(
+            any(),
+            'e1',
+            'Paid for a sub I dislike but needed it for FIFA',
+          ),
+        ).called(1);
       },
     );
 
@@ -378,6 +392,45 @@ void main() {
         final added = b.state.savedEntries.where((e) => e.addedByAi).toList();
         expect(added, hasLength(1));
         expect(added.first.categoryId, 'gratitude');
+      },
+    );
+
+    // #232 (Gemini review): reconcile-add must write with a session date key
+    // (yyyy-MM-dd), not crash/use a malformed key. Captures the date arg the
+    // repository received and asserts it is a well-formed date string.
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'reconcile-add writes a yyyy-MM-dd session date key',
+      build: () {
+        fakeLlm.reconcileResult = const [
+          ReconciledItem(
+            action: ReconcileAction.add,
+            category: 'beauty',
+            text: 'The sky was gorgeous',
+            sourceTranscript: 'sky',
+          ),
+        ];
+        return buildBloc();
+      },
+      seed: () => const VoiceCallState().copyWith(
+        transcripts: const [
+          Transcript(speaker: Speaker.user, text: 'sky', isFinal: true),
+        ],
+      ),
+      act: (b) => b.add(const EndCall()),
+      wait: const Duration(milliseconds: 50),
+      verify: (_) {
+        final captured = verify(
+          () => mockRepo.addCategoryEntry(
+            captureAny(),
+            any(),
+            any(),
+            source: any(named: 'source'),
+            transcript: any(named: 'transcript'),
+            tags: any(named: 'tags'),
+          ),
+        ).captured;
+        expect(captured, isNotEmpty);
+        expect(captured.first, matches(r'^\d{4}-\d{2}-\d{2}$'));
       },
     );
   });

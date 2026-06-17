@@ -293,6 +293,15 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   StreamSubscription<int>? _latencySub;
   Timer? _elapsedTimer;
   DateTime? _callStartTime;
+
+  /// The session's journal date (yyyy-MM-dd), captured when the call starts so
+  /// in-call saves, post-call reconcile, and post-call rejects all write to the
+  /// SAME day — even if the call spans midnight or the user acts after the day
+  /// rolls over. (#232) Falls back to today when not set (e.g. test seeding).
+  String? _sessionDate;
+  String get _journalDate =>
+      _sessionDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+
   bool _warned5 = false;
   bool _warned9 = false;
 
@@ -378,6 +387,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     try {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
+      // Pin the session's journal date now so every save/reconcile/reject in
+      // this session writes to the same day, even across midnight. (#232)
+      _sessionDate = DateFormat('yyyy-MM-dd').format(_callStartTime!);
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
@@ -527,7 +539,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         if (dup) continue;
         try {
           final created = await _journalRepository.addCategoryEntry(
-            DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            _journalDate,
             item.category,
             item.text,
             source: 'voice',
@@ -550,8 +562,24 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         }
       } else {
         // reword — complete an entry captured incompletely in-call.
+        // Guard null id: a reword with no id (or matching another null-id
+        // entry) must not reach the `item.entryId!` force-unwrap below. (#232)
+        if (item.entryId == null) continue;
         final idx = updated.indexWhere((e) => e.entryId == item.entryId);
         if (idx == -1) continue; // unknown/deleted id — skip
+        // Persist to the repository directly (mirrors the add path) so the
+        // reword isn't silently lost when _journalBloc is null but the repo is
+        // wired; the bloc (if present) also gets it via its stream. (#232)
+        // (_journalRepository is already non-null — guarded at method entry.)
+        try {
+          await _journalRepository.updateCategoryEntry(
+            _journalDate,
+            item.entryId!,
+            item.text,
+          );
+        } catch (e) {
+          debugPrint('reconcile reword failed: $e');
+        }
         _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
         updated[idx] = updated[idx].copyWith(
           text: item.text,
@@ -598,7 +626,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     if (_journalRepository != null && _uid != null) {
       try {
         await _journalRepository.deleteCategoryEntry(
-          DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          _journalDate,
           event.entryId,
         );
       } catch (e) {
@@ -712,7 +740,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       if (_journalRepository != null) {
         try {
           final created = await _journalRepository.addCategoryEntry(
-            DateFormat('yyyy-MM-dd').format(DateTime.now()),
+            _journalDate,
             categoryName,
             text,
             source: 'voice',

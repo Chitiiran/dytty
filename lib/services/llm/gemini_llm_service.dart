@@ -77,15 +77,20 @@ List<ReconciledItem> parseReconcileArray(String jsonText) {
     final items = <ReconciledItem>[];
     for (final raw in decoded) {
       if (raw is! Map) continue;
-      final text = (raw['text'] as String?)?.trim() ?? '';
+      // Type-check each field (the LLM can emit a number/bool). A bad field on
+      // one item must skip THAT item, not throw and collapse the whole pass.
+      final textVal = raw['text'];
+      final text = (textVal is String) ? textVal.trim() : '';
       if (text.isEmpty) continue;
-      final cat = (raw['category'] as String?) ?? 'positive';
+      final catVal = raw['category'];
+      final cat = (catVal is String) ? catVal : 'positive';
+      final quoteVal = raw['quote'];
       items.add(
         ReconciledItem(
           action: ReconcileAction.add,
           category: validCategories.contains(cat) ? cat : 'positive',
           text: text,
-          sourceTranscript: (raw['quote'] as String?) ?? '',
+          sourceTranscript: (quoteVal is String) ? quoteVal : '',
         ),
       );
     }
