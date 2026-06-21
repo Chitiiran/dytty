@@ -41,10 +41,44 @@ def _save_hashes(hashes: dict[str, str], hash_file: str) -> None:
         json.dump(hashes, f, indent=2)
 
 
-def _content_hash(text: str, voice: str, speed: float) -> str:
+def _content_hash(text: str, voice: str, speed: float,
+                  paced: bool = False) -> str:
     """Hash the inputs that determine the WAV output."""
-    key = f"{text}|{voice}|{speed}"
+    key = f"{text}|{voice}|{speed}|paced={paced}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _render_text(pipeline, text: str, voice: str, speed: float, np_mod):
+    """Render one text string to a concatenated audio array via Kokoro."""
+    audio_segments = []
+    for _gs, _ps, audio in pipeline(text, voice=voice, speed=speed):
+        audio_segments.append(audio)
+    if not audio_segments:
+        return None
+    return np_mod.concatenate(audio_segments)
+
+
+def _render_paced(pipeline, text: str, voice: str, speed: float, np_mod):
+    """Render text with human pacing: each sentence/phrase rendered
+    separately and joined with silence gaps (breaths, hesitations, and a
+    trailing end-of-turn gap). Returns a concatenated array or None."""
+    from pacing import build_silence, plan_pacing
+
+    segments = plan_pacing(text, split_long_commas=True)
+    if not segments:
+        return None
+    pieces = []
+    for seg in segments:
+        rendered = _render_text(pipeline, seg.text, voice, speed, np_mod)
+        if rendered is None:
+            continue
+        pieces.append(rendered)
+        if seg.pause_after > 0:
+            pieces.append(build_silence(seg.pause_after, samplerate=24000,
+                                        dtype=rendered.dtype))
+    if not pieces:
+        return None
+    return np_mod.concatenate(pieces)
 
 
 def list_scenarios(data: dict) -> None:
@@ -68,6 +102,7 @@ def generate_wavs(
     force: bool = False,
     voice: str = "af_heart",
     speed: float = 1.0,
+    paced: bool = False,
 ) -> None:
     """Read test-scripts JSON and generate WAV files via Kokoro TTS."""
     # Lazy imports so --help and --list work without torch installed
@@ -93,7 +128,10 @@ def generate_wavs(
             filename = f"{name}_{i}.wav"
             filepath = os.path.join(output_dir, filename)
             text = utterance["text"]
-            content_hash = _content_hash(text, voice, speed)
+            # Per-utterance pacing override: a daily-call demo turn can opt
+            # into human pacing via "paced": true without affecting others.
+            utt_paced = paced or utterance.get("paced", False)
+            content_hash = _content_hash(text, voice, speed, utt_paced)
 
             # Skip if file exists and content hasn't changed
             if os.path.exists(filepath) and not force:
@@ -107,22 +145,30 @@ def generate_wavs(
             else:
                 print(f"  GEN:   {filename} <- \"{text}\"")
 
-            # Kokoro returns generator of (graphemes, phonemes, audio) tuples
-            audio_segments = []
-            for _gs, _ps, audio in pipeline(text, voice=voice, speed=speed):
-                audio_segments.append(audio)
+            if utt_paced:
+                # Human pacing: sentences/phrases rendered separately and
+                # joined with silence gaps + a trailing end-of-turn gap.
+                full_audio = _render_paced(pipeline, text, voice, speed, np)
+            else:
+                full_audio = _render_text(pipeline, text, voice, speed, np)
 
-            if not audio_segments:
+            if full_audio is None:
                 print(f"  ERROR: No audio generated for {filename}")
                 sys.exit(1)
 
-            full_audio = np.concatenate(audio_segments)
+            # Normalize peak to ~0.95 — Kokoro output peaks near 0.5, which
+            # is quiet over the air and costs STT accuracy. Louder = clearer
+            # for the app's mic to transcribe. (Silence stays at zero.)
+            from pacing import normalize_peak
+            full_audio = normalize_peak(full_audio, target=0.95)
 
-            # Append 1.5s silence so STT can finalize the last word.
-            # Without this, the audio ends abruptly and STT clips
-            # the final word before it can be recognized.
-            silence = np.zeros(int(24000 * 1.5), dtype=full_audio.dtype)
-            full_audio = np.concatenate([full_audio, silence])
+            if not utt_paced:
+                # Append 1.5s silence so STT can finalize the last word.
+                # Without this, the audio ends abruptly and STT clips
+                # the final word before it can be recognized. (Paced audio
+                # already ends with its own end_gap.)
+                silence = np.zeros(int(24000 * 1.5), dtype=full_audio.dtype)
+                full_audio = np.concatenate([full_audio, silence])
 
             # Kokoro outputs at 24kHz
             sf.write(filepath, full_audio, 24000)
@@ -163,6 +209,12 @@ def main() -> None:
         default=1.0,
         help="Speech speed multiplier (default: 1.0)",
     )
+    parser.add_argument(
+        "--paced",
+        action="store_true",
+        help="Human pacing: render sentences/phrases with pauses + an "
+             "end-of-turn gap (per-utterance 'paced': true also works)",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.scripts):
@@ -191,6 +243,7 @@ def main() -> None:
         force=args.force,
         voice=args.voice,
         speed=args.speed,
+        paced=args.paced,
     )
 
 

@@ -384,6 +384,14 @@ def main() -> None:
         "--retries", type=int, default=0,
         help="Re-run a failed attempt up to N times (over-air noise)",
     )
+    parser.add_argument(
+        "--turn-taking", choices=["logcat", "mic", "hybrid"], default="logcat",
+        help="Inter-turn sync for multi-turn daily-call: 'logcat' waits on "
+             "the 'Turn complete' marker (brittle under barge-in); 'mic' "
+             "listens to the laptop mic for the AI to finish (human pacing); "
+             "'hybrid' plays the human voice aloud AND sends the exact text "
+             "to the app via adb broadcast for flawless capture (demo)",
+    )
     args = parser.parse_args()
 
     # Resolve tag
@@ -448,35 +456,132 @@ def main() -> None:
     sys.exit(run_with_retries(attempt, args.retries))
 
 
+def _broadcast_inject_text(text: str) -> None:
+    """Send an exact text turn to the app via a debug broadcast (hybrid mode).
+
+    The debug-build receiver in MainActivity forwards this to Flutter's
+    DebugTextInjector, which dispatches InjectUserText to the live call —
+    so the AI gets perfect input while the human voice plays aloud. No-op
+    failure is logged but never wedges the run.
+    """
+    print(f"  Inject text -> app: \"{text[:60]}{'...' if len(text) > 60 else ''}\"")
+    # adb shell re-parses the remote command, so a multi-word --es value must
+    # be a single quoted token on the device side. Single-quote the text and
+    # escape any embedded single quotes ('->'\''). Pass the whole remote
+    # command as ONE python arg so the local shell doesn't re-split it either.
+    safe = text.replace("'", "'\\''")
+    remote = (
+        "am broadcast -a com.dytty.dytty.INJECT_TEXT "
+        f"--es text '{safe}'"
+    )
+    result = subprocess.run(
+        ["adb", "shell", remote],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  WARN: inject broadcast failed: {result.stderr.strip()}")
+    elif "Injected" not in result.stdout and "completed" not in result.stdout:
+        # result=0 with no 'completed' can mean a silent parse issue.
+        pass
+
+
+def _wait_for_ai_via_mic(silence_floor_holder: dict) -> None:
+    """Listen to the laptop mic and block until the AI finishes its turn.
+
+    Records the phone-speaker audio via the laptop mic, feeds it to the
+    energy-based TurnDetector, and returns once the AI has spoken and gone
+    silent (or a timeout/exhaustion). Lets the next turn play only after
+    the AI is done — no more talking over it. Best-effort: any audio error
+    falls back to a fixed dwell so a mic hiccup never wedges the run.
+    """
+    try:
+        import sounddevice as sd
+
+        from mic_listener import open_mic_source, wait_for_ai_turn
+
+        samplerate = 16000
+        blocksize = 800  # 0.05s frames
+        floor = silence_floor_holder.get("floor", 0.01)
+        with sd.InputStream(samplerate=samplerate, channels=1,
+                            blocksize=blocksize, dtype="float32") as stream:
+            source = open_mic_source(stream, blocksize)
+            reason = wait_for_ai_turn(
+                source=source,
+                frame_seconds=blocksize / samplerate,
+                silence_floor=floor,
+                start_threshold=3.0,
+                silence_hangover=1.2,
+                min_speech=0.15,
+                timeout=15.0,
+            )
+        print(f"  AI turn ended ({reason}); playing next utterance")
+    except Exception as exc:  # noqa: BLE001 — best-effort, never wedge
+        print(f"  WARN: mic turn-taking failed ({exc}); dwelling 4s")
+        time.sleep(4.0)
+
+
 def _run_attempt(args, config, scenario, tag, log_path, preloaded_wavs,
                  attempt_no) -> int:
     # Step 1: Clear logcat
     subprocess.run(["adb", "logcat", "-c"], capture_output=True)
     print("  Logcat cleared")
 
+    # Calibrate the mic silence floor BEFORE the call (room tone), so
+    # closed-loop turn-taking keys on real AI speech, not noise. Best-effort.
+    silence_floor_holder: dict = {"floor": 0.01}
+    if args.turn_taking in ("mic", "hybrid") \
+            and config["flow_type"] == "daily-call" \
+            and len(scenario["utterances"]) > 1:
+        try:
+            from mic_listener import calibrate_floor_from_mic
+            floor = calibrate_floor_from_mic(seconds=0.6)
+            silence_floor_holder["floor"] = floor
+            print(f"  Mic silence floor calibrated: {floor:.5f}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  WARN: mic calibration failed ({exc}); using default")
+
     # Step 2: Set up trigger — play audio when signal detected
     audio_played = threading.Event()
 
+    utterances = scenario["utterances"]
+    multi_daily = (
+        config["flow_type"] == "daily-call" and len(utterances) > 1
+    )
+    use_mic_turns = args.turn_taking in ("mic", "hybrid") and multi_daily
+    use_text_inject = args.turn_taking == "hybrid" and multi_daily
+
     def on_trigger(line):
         print(f"  TRIGGER: {line.strip()}")
-        for i, utterance in enumerate(scenario["utterances"]):
+        for i, utterance in enumerate(utterances):
             wav_name = f"{scenario['name']}_{i}.wav"
             wav_path = os.path.join(args.wavs, wav_name)
             if not os.path.exists(wav_path):
                 print(f"  ERROR: WAV not found: {wav_path}")
                 continue
+            # Optional hybrid fallback: also send the exact text to the app
+            # (kept available but OFF by default — the honest demo has the
+            # app HEAR Rose's real voice). Only fires under --turn-taking
+            # hybrid; the default mic mode never injects.
+            if use_text_inject:
+                _broadcast_inject_text(utterance["text"])
             play_audio(
                 wav_path,
-                play_only=(config["flow_type"] == "voice-note"),
+                play_only=(config["flow_type"] == "voice-note" or use_mic_turns),
                 tag=tag,
                 preloaded=preloaded_wavs.get(wav_path),
                 # #231: single-utterance daily-call has no inter-turn sync, so
                 # use the fast in-process path to win the mic-listening race.
                 prefer_preloaded=(
                     config["flow_type"] == "daily-call"
-                    and len(scenario["utterances"]) == 1
+                    and len(utterances) == 1
                 ),
             )
+            # Closed-loop turn-taking: after each turn (except the last),
+            # LISTEN to the laptop mic for the AI's reply and wait until it
+            # finishes before playing the next turn — true human pacing, so
+            # the app hears one clean turn at a time without barge-in.
+            if use_mic_turns and i < len(utterances) - 1:
+                _wait_for_ai_via_mic(silence_floor_holder)
         audio_played.set()
 
     trigger = LogcatTrigger(

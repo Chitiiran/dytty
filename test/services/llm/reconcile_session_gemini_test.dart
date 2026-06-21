@@ -20,11 +20,15 @@ void main() {
       expect(prompt, contains('e1'));
       expect(prompt, contains('Felt proud'));
     });
-    test('states the recall-only rule (do not re-save / re-judge saved)', () {
+    test('states the recall + recategorize-gap rule', () {
       final prompt = buildReconcilePrompt('x', const []).toLowerCase();
-      // #231: prompt now expresses no-duplicate as recall-only gap-fill.
+      // #231: recall gap-fill, now including items the live model saved
+      // under the WRONG category (a category with no matching entry is a gap).
       expect(prompt, contains('not already saved'));
-      expect(prompt, contains('never restate, re-judge, or modify a saved'));
+      expect(prompt, contains('same content and the same category'));
+      expect(prompt, contains('different category'));
+      // Still must not restate an item already saved under its CORRECT category.
+      expect(prompt, contains('never restate an item already'));
     });
 
     test('asks for a JSON array of category/text/quote (schema-first)', () {

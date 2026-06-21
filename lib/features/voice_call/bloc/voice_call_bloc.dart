@@ -105,6 +105,20 @@ class RejectReconciledEntry extends VoiceCallEvent {
   List<Object?> get props => [entryId];
 }
 
+/// Injects a text user-turn into the live session (demo/test seam).
+///
+/// Routed from a debug-only platform broadcast so the acoustic harness can
+/// feed the AI the speaker's EXACT words while their human voice plays
+/// aloud — bypassing lossy over-air STT for a flawless demo. Not used in
+/// normal app flow.
+class InjectUserText extends VoiceCallEvent {
+  final String text;
+  const InjectUserText(this.text);
+
+  @override
+  List<Object?> get props => [text];
+}
+
 class ToggleMute extends VoiceCallEvent {
   const ToggleMute();
 }
@@ -344,6 +358,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<InterruptReceived>(_onInterruptReceived);
     on<ToggleMute>(_onToggleMute);
     on<ToggleSpeaker>(_onToggleSpeaker);
+    on<InjectUserText>(_onInjectUserText);
     on<ReconcileSession>(_onReconcileSession);
     on<AcceptAllReconciled>(_onAcceptAllReconciled);
     on<RejectReconciledEntry>(_onRejectReconciledEntry);
@@ -841,6 +856,36 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
 
   void _onToggleSpeaker(ToggleSpeaker event, Emitter<VoiceCallState> emit) {
     emit(state.copyWith(isSpeakerOn: !state.isSpeakerOn));
+  }
+
+  /// Demo/test seam: forward an exact text turn to the live model so a
+  /// harness can drive the conversation with perfect input (bypassing
+  /// lossy over-air STT) while the human voice still plays in the room.
+  Future<void> _onInjectUserText(
+    InjectUserText event,
+    Emitter<VoiceCallState> emit,
+  ) async {
+    // Text-driven demo: mute the room mic so the played-aloud human voice
+    // does not also reach the model as (garbled) audio — the injected text
+    // is the sole, perfect user input.
+    // Also append it as a final USER transcript bubble so (a) the demo shows
+    // the words on screen and (b) post-call reconcile (#224) sees the full
+    // conversation and can recover any categories the live model missed —
+    // without this, state.transcripts has no user turns and reconcile is a
+    // no-op (the injected text never flows through TranscriptReceived).
+    final userTurn = Transcript(
+      speaker: Speaker.user,
+      text: event.text,
+      isFinal: true,
+    );
+    emit(
+      state.copyWith(
+        isMuted: true,
+        transcripts: [...state.transcripts, userTurn],
+      ),
+    );
+    _harnessLog('Injected user text: ${event.text}');
+    await _service.sendText(event.text);
   }
 
   /// Send mic audio to the model and accumulate for later upload.

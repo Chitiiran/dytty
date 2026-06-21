@@ -82,6 +82,7 @@ void main() {
     when(() => mockService.disconnect()).thenAnswer((_) async {});
     when(() => mockService.dispose()).thenReturn(null);
     when(() => mockService.sendAudio(any())).thenReturn(null);
+    when(() => mockService.sendText(any())).thenAnswer((_) async {});
     when(
       () => mockService.sendToolResponse(any(), any(), any()),
     ).thenAnswer((_) async {});
@@ -1395,5 +1396,64 @@ void main() {
       await bloc.close();
       verify(() => mockService.dispose()).called(1);
     });
+  });
+
+  group('InjectUserText (demo/test seam)', () {
+    test('forwards the exact text to the service as a user turn', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      bloc.add(const InjectUserText('I am grateful for him, even now.'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      verify(
+        () => mockService.sendText('I am grateful for him, even now.'),
+      ).called(1);
+
+      await bloc.close();
+    });
+
+    test(
+      'mutes the mic so played-aloud audio never competes with text',
+      () async {
+        final bloc = buildBloc();
+        bloc.add(const StartCall());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(bloc.state.isMuted, isFalse);
+
+        bloc.add(const InjectUserText('Hello there.'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(bloc.state.isMuted, isTrue);
+
+        await bloc.close();
+      },
+    );
+
+    test(
+      'appends injected text as a final user transcript (feeds reconcile)',
+      () async {
+        final bloc = buildBloc();
+        bloc.add(const StartCall());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        bloc.add(const InjectUserText('The stars were beautiful that night.'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final userTurns = bloc.state.transcripts.where(
+          (t) => t.speaker == Speaker.user,
+        );
+        expect(
+          userTurns.any(
+            (t) =>
+                t.text == 'The stars were beautiful that night.' && t.isFinal,
+          ),
+          isTrue,
+        );
+
+        await bloc.close();
+      },
+    );
   });
 }

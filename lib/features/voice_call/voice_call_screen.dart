@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
+import 'package:dytty/features/voice_call/debug_text_injector.dart';
 import 'package:dytty/services/audio/audio_playback_service.dart';
 import 'package:dytty/services/audio/pcm_sound_playback_service.dart';
 import 'package:dytty/services/call_session.dart';
@@ -58,15 +60,25 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _bloc = VoiceCallBloc(
       service: _service,
       journalBloc: context.read<JournalBloc>(),
+      // #224: wire the repository so post-call reconciliation can persist
+      // categories the live model missed. Without this it silently no-ops.
+      journalRepository: uid != null ? JournalRepository(uid: uid) : null,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
     );
     _ownsBloc = true;
+
+    // Debug-only: let the demo harness inject exact text turns into this
+    // live call (no-op in release; registration is a plain callback).
+    DebugTextInjector.instance.register(
+      (text) => _bloc.add(InjectUserText(text)),
+    );
   }
 
   @override
   void dispose() {
+    DebugTextInjector.instance.unregister();
     _session?.dispose();
     if (_ownsBloc) _bloc.close();
     super.dispose();

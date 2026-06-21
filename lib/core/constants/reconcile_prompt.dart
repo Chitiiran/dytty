@@ -44,11 +44,18 @@ single sentence carrying opposing feelings becomes TWO items. Assign each item
 exactly ONE category from the list above. Honor negation/self-correction:
 reflect the user's FINAL intent; never save anything they retracted.
 
-STEP 3 — GAP-FILL (recall-only). Compare your items to the already-saved
-entries. Keep ONLY items that are present in the transcript and NOT already
-saved. Never restate, re-judge, or modify a saved entry. Then, for EACH
-category, re-check the transcript once more for anything in that category you
-missed, and add it (grounded in a quote).
+STEP 3 — GAP-FILL (recall, including miscategorized items). Compare your items
+to the already-saved entries. An item counts as ALREADY saved only when an
+existing entry has BOTH the same content AND the same category. If the
+transcript clearly expresses an item in a category that has NO matching saved
+entry — even if the same moment was saved under a DIFFERENT category — that
+category is a GAP: add the correctly-categorized item. (Example: the live model
+filed a joyful memory or a beautiful sight under "negative" because the call's
+overall tone was sad; the "positive" / "beauty" item is still missing and you
+MUST add it.) Then, for EACH of the categories, re-check the transcript once
+more: if that category is genuinely present in what the user said but absent
+from the saved set, add it (grounded in a quote). Never restate an item already
+saved under its CORRECT category.
 
 Return ONLY a JSON array. Each element:
 {"category": "<one of: $categories>", "text": "<the item, first person, as if

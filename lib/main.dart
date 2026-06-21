@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:dytty/features/voice_call/debug_text_injector.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -62,6 +63,10 @@ void main() async {
 
   // Enable semantics for accessibility tree (needed for Playwright testing)
   SemanticsBinding.instance.ensureSemantics();
+
+  // Debug-only: platform channel so the demo harness can inject exact text
+  // turns into a live daily call (no-op in release builds).
+  DebugTextInjector.instance.installChannelHandler();
 
   runApp(const DyttyApp());
 }

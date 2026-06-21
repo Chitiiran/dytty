@@ -36,6 +36,62 @@
       ]
     },
     {
+      "name": "rose-demo-all-categories",
+      "description": "Therapist-facing demo: an Old-Rose (Titanic) grief/life-transition monologue across 5 turns, one journal category per turn. The AI warms the client up and reflects between turns; by call end it must have captured entries across ALL 5 categories (negative, gratitude, positive, beauty, identity). Clinically vetted for authentic, non-saccharine grief tone.",
+      "path": "daily-call",
+      "utterances": [
+        {
+          "text": "The hardest thing today was the grief. It came up heavy this morning and it stayed with me. I lost someone on the water a long time ago, a boy named Jack, and some mornings I still wake up and reach for a life the ocean took. That loss is the weight I still carry.",
+          "paced": true,
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 15
+          }
+        },
+        {
+          "text": "But the thing I feel most grateful for is him. I am so thankful Jack came into my life. He taught me to ride like a man, to spit, to laugh with my whole body. I will always be grateful that he showed me how to truly live. That gratitude has never left me.",
+          "paced": true,
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 15
+          }
+        },
+        {
+          "text": "And here is a genuinely happy memory, a really good one. That night, we danced down in steerage, the whole room spinning and laughing together. It was pure joy. It made me so happy, and I still smile every time I think of it. One of the best, most joyful moments of my whole life.",
+          "paced": true,
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 15
+          }
+        },
+        {
+          "text": "The most beautiful thing I have ever seen was the sky that night. The stars were so thick and brilliant, with no city lights to drown them out. And the sea at dawn, flat and silver, stretching out forever. It was breathtaking. I have never seen anything so beautiful in all my life.",
+          "paced": true,
+          "expect": {
+            "ai_responds": true,
+            "timeout_sec": 15
+          }
+        },
+        {
+          "text": "And when I think about who I truly am, my deepest sense of identity, this is it. I am the woman who kept her promise to live. That is who I am at my core. I rode horses, I flew planes, I made every single year count. That is my identity, the truest thing about me, the person I chose to become.",
+          "paced": true,
+          "expect": {
+            "ai_responds": true,
+            "tool_call": "save_entry",
+            "timeout_sec": 20,
+            "min_entries": 5,
+            "expected_categories": [
+              "negative",
+              "gratitude",
+              "positive",
+              "beauty",
+              "identity"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "tool-call-save-entry",
       "description": "Verify AI invokes save_entry during conversation",
       "path": "daily-call",

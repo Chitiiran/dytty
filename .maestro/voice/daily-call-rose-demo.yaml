@@ -1,0 +1,50 @@
+appId: com.dytty.dytty
+name: "Voice: Rose demo — 5-turn grief monologue, all categories"
+tags:
+  - voice
+  - daily-call
+  - demo
+---
+# UI-only flow — audio + logcat handled by orchestrate.py.
+# The orchestrator plays all 5 Rose utterances, each gated on the AI's
+# "Turn complete" signal. This flow just holds the call open long enough
+# for 5 turns (~16-22s speech each + AI response) plus post-call reconcile.
+- runFlow: "../helpers/login-device.yaml"
+
+# #231: guarded daily-call open (re-foregrounds Dytty before the blind tap).
+- runFlow: "../helpers/open-daily-call.yaml"
+
+- tapOn: "Start Call"
+
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Hold the call open through ALL FIVE turns. 5 turns x (~20s speech + ~5s AI)
+# ~= 125s minimum; budget generously to ~210s so a slow Gemini turn never
+# clips Rose mid-utterance. waitForAnimationToEnd returns instantly on the
+# static call screen, so force a real dwell with a repeat loop. (#231)
+- extendedWaitUntil:
+    visible: "End call"
+    timeout: 20000
+- repeat:
+    times: 210
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
+
+- tapOn: "End call"
+
+# Post-call: reconcile fires on EndCall; hold for its logcat to land.
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 15000
+- repeat:
+    times: 10
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true

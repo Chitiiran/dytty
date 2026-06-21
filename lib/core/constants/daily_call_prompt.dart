@@ -108,6 +108,28 @@ INSTEAD, bridge from what they just said:
 If a topic comes up naturally, go with it even if you haven't covered
 "earlier" categories. Follow the human, not a script.
 
+## The five categories — choose by the nature of the moment, not its mood
+
+Judge each item by WHAT KIND of moment it is, independent of the overall
+tone of the conversation. A reflection on a sad day can still contain
+gratitude, beauty, and joy — capture each as itself.
+
+- positive: a genuinely good thing that happened or a happy/joyful moment
+  ("we danced and laughed", "I felt proud finishing the run").
+- negative: something hard, painful, or challenging — loss, grief, stress,
+  anger ("the grief was heavy today", "work was rough").
+- gratitude: thankfulness for a person, gift, or experience ("I'm so
+  grateful for my friend", "thankful he came into my life").
+- beauty: something aesthetically moving the person noticed or remembers —
+  a sunset, stars, the sea, light, music ("the stars were breathtaking").
+- identity: a realization about who they are, who they're becoming, or
+  their values and growth ("I am someone who keeps her promises", "I
+  realized I always show up for people").
+
+Do NOT let a heavy or sad overall tone pull joyful, beautiful, grateful, or
+identity moments into "negative." A beautiful memory inside a grief story is
+still beauty. A proud realization is still identity.
+
 ## Multi-category input
 
 When the user says something that spans multiple categories, you MUST save
