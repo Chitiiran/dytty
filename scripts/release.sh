@@ -25,8 +25,7 @@ if ! PARSED=$(parse_release_args "$@"); then
   echo "  Example: bash scripts/release.sh 0.2.0"
   exit 1
 fi
-VERSION="${PARSED%%	*}"
-DRY_RUN="${PARSED##*	}"
+IFS=$'\t' read -r VERSION DRY_RUN <<< "$PARSED"
 
 cd "$PROJECT_DIR"
 

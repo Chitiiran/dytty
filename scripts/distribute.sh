@@ -60,8 +60,7 @@ if ! BUMPED=$(parse_and_bump_version "$CURRENT_VERSION" "$BUMP_PATCH"); then
   echo "Error: could not parse pubspec version line: '$CURRENT_VERSION'"
   exit 1
 fi
-OLD_VERSION="${BUMPED%%	*}"
-NEW_VERSION="${BUMPED##*	}"
+IFS=$'\t' read -r OLD_VERSION NEW_VERSION <<< "$BUMPED"
 sed -i "s/^version: .*/version: ${NEW_VERSION}/" "$PUBSPEC"
 echo "Bumped version: ${OLD_VERSION} -> ${NEW_VERSION}"
 
