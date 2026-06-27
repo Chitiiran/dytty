@@ -70,14 +70,17 @@ bo_apply_options() {
     return 1
   fi
   # Build the GraphQL option literals from desired JSON (id optional).
+  # Build the option literals. GraphQL string syntax is JSON-compatible, so
+  # JSON.stringify correctly escapes quotes/backslashes/newlines in name,
+  # description, and id. color is an unquoted enum (validated upstream in
+  # board-options.mjs).
   local gql
   gql=$(node -e "
     let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
       const opts=JSON.parse(d);
       const lines=opts.map(o=>{
-        const idPart = o.id ? ('id: \"'+o.id+'\", ') : '';
-        const desc = (o.description||'').replace(/\"/g,'\\\\\"');
-        return '{'+idPart+'name: \"'+o.name+'\", color: '+o.color+', description: \"'+desc+'\"}';
+        const idPart = o.id ? ('id: '+JSON.stringify(o.id)+', ') : '';
+        return '{'+idPart+'name: '+JSON.stringify(o.name)+', color: '+o.color+', description: '+JSON.stringify(o.description||'')+'}';
       });
       console.log(lines.join('\n        '));
     });" <<< "$desired")

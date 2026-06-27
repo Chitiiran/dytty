@@ -119,3 +119,25 @@ test('REGRESSION: editing one option in a full 10-option set preserves all other
   assert.ok(r.out.find(x => x.name === 'dev/radial'));
   assert.ok(!r.out.find(x => x.name === 'dev/radial-menu'));
 });
+
+test('add rejects an unknown color', () => {
+  const r = run(['add', '--name', 'dev/x', '--color', 'PURPEL'], SAMPLE);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /unknown color/i);
+});
+
+test('edit rejects an unknown color (but allows a valid one)', () => {
+  assert.equal(run(['edit', '--target', 'dev/security', '--color', 'NEON'], SAMPLE).code, 1);
+  assert.equal(run(['edit', '--target', 'dev/security', '--color', 'BLUE'], SAMPLE).code, 0);
+});
+
+test('names with special chars (quote/backslash/newline) survive the transform verbatim', () => {
+  // The .sh layer feeds transform output to JSON.stringify when building the
+  // GraphQL literal; this asserts the transform itself does not mangle the name,
+  // so the downstream escaping has correct input to work from.
+  const tricky = 'dev/has "quote" and \\back and \nnewline';
+  const r = run(['edit', '--target', 'dev/security', '--new-name', tricky], SAMPLE);
+  assert.equal(r.code, 0);
+  const t = r.out.find(x => x.id === 'cc88c1ed');
+  assert.equal(t.name, tricky); // exact round-trip, id preserved
+});

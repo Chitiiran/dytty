@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# ============================================================================
+# LIVE BOARD — manual only. MUTATES the real GitHub Project (add+drop a tag).
+# Self-cleaning, but DO NOT wire into CI / test-run.sh.
+# ============================================================================
 # Verifies add-workstream preserves existing ids and is reassignment-free.
 # Uses a live add+drop on a throwaway tag, asserting no other option's id changed.
 set -uo pipefail

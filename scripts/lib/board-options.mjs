@@ -5,10 +5,18 @@
 // No network — see board-options.sh for the gh boundary.
 
 const RESERVED = '(none)';
+// GitHub Project single-select option colors (the set add-workstream.sh advertises).
+const COLORS = new Set(['GRAY', 'BLUE', 'ORANGE', 'GREEN', 'PURPLE', 'RED', 'PINK', 'YELLOW']);
 
 function die(msg) {
   process.stderr.write(`board-options: ${msg}\n`);
   process.exit(1);
+}
+
+function checkColor(color) {
+  if (!COLORS.has(color)) {
+    die(`unknown color "${color}" — valid: ${[...COLORS].join(', ')}`);
+  }
 }
 
 function parseFlags(argv) {
@@ -34,6 +42,7 @@ function findByName(opts, name) {
 
 function add(opts, f) {
   if (!f.name || !f.color) die('add requires --name and --color');
+  checkColor(f.color);
   if (f.name === RESERVED) die(`cannot create reserved option "${RESERVED}"`);
   if (findByName(opts, f.name)) die(`option "${f.name}" already exists`);
   return [...opts, { name: f.name, color: f.color, description: '' }];
@@ -45,6 +54,7 @@ function edit(opts, f) {
   if (f['new-name'] === undefined && f.color === undefined) {
     die('edit requires at least one of --new-name or --color');
   }
+  if (f.color !== undefined) checkColor(f.color);
   const target = findByName(opts, f.target);
   if (!target) die(`option "${f.target}" not found`);
   if (f['new-name'] && f['new-name'] !== f.target && findByName(opts, f['new-name'])) {
