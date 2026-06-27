@@ -74,10 +74,14 @@ echo ""
 echo "=== Running Patrol integration tests ==="
 echo ""
 
-patrol test \
+if ! patrol test \
   --dart-define=USE_EMULATORS=true \
   --dart-define=FIREBASE_ANDROID_API_KEY="${FIREBASE_ANDROID_API_KEY:-dummy}" \
-  $TARGET 2>&1 || true
+  $TARGET 2>&1; then
+  echo ""
+  echo "=== Done (FAILED) ==="
+  exit 1
+fi
 
 echo ""
 echo "=== Done ==="
