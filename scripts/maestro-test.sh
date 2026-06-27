@@ -25,6 +25,7 @@ APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 FLOW=""
 TAGS=""
 SKIP_BUILD=false
+TEST_FAILED=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -148,11 +149,15 @@ if [[ -n "$FLOW" ]]; then
   TARGET="$MAESTRO_DIR/$FLOW"
   if [[ -f "$TARGET" ]]; then
     echo "  Target: $TARGET"
-    $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1 || true
+    if ! $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1; then
+      TEST_FAILED=true
+    fi
     FLOW_INDEX=$((FLOW_INDEX + 1))
   elif [[ -d "$TARGET" ]]; then
     echo "  Target: $TARGET"
-    $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1 || true
+    if ! $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$TARGET" 2>&1; then
+      TEST_FAILED=true
+    fi
     FLOW_INDEX=$((FLOW_INDEX + 1))
   else
     echo "ERROR: $TARGET not found"
@@ -175,7 +180,9 @@ else
     for flow in "${yamls[@]}"; do
       flowname=$(basename "$flow")
       echo "  > $flowname"
-      $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1 || true
+      if ! $MAESTRO_BASE --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1; then
+        TEST_FAILED=true
+      fi
       FLOW_INDEX=$((FLOW_INDEX + 1))
     done
     echo ""
@@ -205,6 +212,14 @@ SCREENSHOT_COUNT=$(find "$SCREENSHOT_DIR" -name "*.png" 2>/dev/null | wc -l)
 echo "  Screenshots captured: $SCREENSHOT_COUNT"
 
 if [[ -f "$SCREENSHOT_DIR/results.xml" ]]; then
-  PASSED=$(grep -c 'failures="0"' "$SCREENSHOT_DIR/results.xml" 2>/dev/null || echo "0")
   echo "  Test results: see $SCREENSHOT_DIR/results.xml"
+fi
+
+if [[ "$TEST_FAILED" == true ]]; then
+  echo ""
+  echo "  RESULT: SOME TESTS FAILED -- check results.xml and screenshots"
+  exit 1
+else
+  echo ""
+  echo "  RESULT: ALL TESTS PASSED"
 fi
