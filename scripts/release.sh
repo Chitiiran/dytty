@@ -18,18 +18,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-VERSION="${1:-}"
-DRY_RUN=false
+source "$SCRIPT_DIR/lib/version.sh"
 
-if [[ -z "$VERSION" ]]; then
+if ! PARSED=$(parse_release_args "$@"); then
   echo "Usage: bash scripts/release.sh <version> [--dry-run]"
   echo "  Example: bash scripts/release.sh 0.2.0"
   exit 1
 fi
-
-if [[ "${2:-}" == "--dry-run" ]]; then
-  DRY_RUN=true
-fi
+IFS=$'\t' read -r VERSION DRY_RUN <<< "$PARSED"
 
 cd "$PROJECT_DIR"
 
@@ -91,10 +87,9 @@ echo ""
 echo "=== Release branch ready ==="
 echo ""
 echo "Next steps:"
-echo "  1. Push:  git push -u origin $BRANCH"
-echo "  2. CI will run: analyze + test + Maestro full suite + App Distribution"
-echo "  3. Dogfooding: distribute APK to testers (2-3 days)"
+echo "  1. Open a PR:  gh pr create --base main --head $BRANCH --title 'Release $VERSION'"
+echo "  2. CI (ci.yml Gate 1) runs on the PR: analyze + test + 80% coverage + build web/APK + Maestro smoke"
+echo "  3. Dogfooding: distribute APK to testers (bash scripts/distribute.sh ...) for 2-3 days"
 echo "  4. Fix P0/P1 bugs on this branch if any"
-echo "  5. When all gates pass:"
-echo "     a. Merge to main:   gh pr create --base main --title 'Release $VERSION'"
-echo "     b. Delete branch:   git branch -d $BRANCH && git push origin --delete $BRANCH"
+echo "  5. On merge to main: Gate 3 (distribute-release) + deploy.yml publish + auto-tag the release"
+echo "     Delete branch after merge:  git push origin --delete $BRANCH"

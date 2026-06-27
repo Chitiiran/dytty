@@ -98,11 +98,12 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define`:
 
 ## CI/CD
 
-Three GitHub Actions workflows:
+Two GitHub Actions workflows:
 
-- **`ci.yml`** — PRs: analyze, test, coverage (60% min), build web + APK, Maestro smoke
-- **`release-candidate.yml`** — Release branches: full test suite + Maestro + Firebase App Distribution
-- **`deploy.yml`** — Main: build web, deploy to Firebase Hosting, git tag
+- **`ci.yml`** — PRs: analyze, test, coverage (80% min), build web + APK, Maestro smoke. On `main`/`dev/release` pushes it also distributes the APK.
+- **`deploy.yml`** — Main push: build web, deploy to Firebase Hosting, auto-tag release.
+
+The main release path is `dev/release` → PR → `main` → `deploy.yml`.
 
 ## Milestone Status
 

@@ -8,6 +8,7 @@ jobs:
   build:
     name: Build Web
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -27,6 +28,7 @@ jobs:
     name: Deploy to Firebase Hosting
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Download web artifact
@@ -46,6 +48,7 @@ jobs:
     name: Tag Release
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
