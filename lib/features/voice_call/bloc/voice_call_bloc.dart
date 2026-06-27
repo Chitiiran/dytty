@@ -5,6 +5,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -75,6 +76,35 @@ class GenerateSessionSummary extends VoiceCallEvent {
   List<Object?> get props => [transcripts];
 }
 
+/// User spoke over the AI; Gemini cancelled its turn (#12).
+class InterruptReceived extends VoiceCallEvent {
+  const InterruptReceived();
+}
+
+/// Post-call holistic reconciliation (#224): re-reads the full transcript and
+/// adds items the live model dropped / rewords ones it captured incompletely.
+class ReconcileSession extends VoiceCallEvent {
+  final String transcript;
+  const ReconcileSession({required this.transcript});
+
+  @override
+  List<Object?> get props => [transcript];
+}
+
+/// User accepted all reconciled entries — clears the post-call AI markers.
+class AcceptAllReconciled extends VoiceCallEvent {
+  const AcceptAllReconciled();
+}
+
+/// User rejected a (usually AI-added) entry from the post-call screen.
+class RejectReconciledEntry extends VoiceCallEvent {
+  final String entryId;
+  const RejectReconciledEntry(this.entryId);
+
+  @override
+  List<Object?> get props => [entryId];
+}
+
 class ToggleMute extends VoiceCallEvent {
   const ToggleMute();
 }
@@ -88,15 +118,31 @@ class ToggleSpeaker extends VoiceCallEvent {
 enum VoiceCallStatus { idle, connecting, active, ending, ended, error }
 
 class SavedEntry {
+  final String? entryId; // Firestore id once persisted; null until then
   final String categoryId;
   final String text;
   final String transcript;
+  final bool addedByAi; // reconciliation marker: surfaced post-call
+  final bool rewordedByAi; // reconciliation marker: reworded post-call
 
   const SavedEntry({
     required this.categoryId,
     required this.text,
     required this.transcript,
+    this.entryId,
+    this.addedByAi = false,
+    this.rewordedByAi = false,
   });
+
+  SavedEntry copyWith({String? entryId, String? text, bool? rewordedByAi}) =>
+      SavedEntry(
+        entryId: entryId ?? this.entryId,
+        categoryId: categoryId,
+        text: text ?? this.text,
+        transcript: transcript,
+        addedByAi: addedByAi,
+        rewordedByAi: rewordedByAi ?? this.rewordedByAi,
+      );
 }
 
 class VoiceCallState extends Equatable {
@@ -205,6 +251,19 @@ class VoiceCallState extends Equatable {
 
 // --- Bloc ---
 
+/// Normalizes text for the mechanical dedup backstop (#224): lowercase, strip
+/// punctuation, collapse whitespace. Two entries with the same category and the
+/// same normalized text are treated as duplicates.
+String normalizeForDedup(String s) => s
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+/// Tagged structured logging for the acoustic test harness (verify.py parses
+/// these). Mirrors the `[DYTTY]` tag used by GeminiLiveService.
+void _harnessLog(String msg) => debugPrint('[DYTTY] $msg');
+
 /// Tool call argument keys for the save_entry function.
 class _SaveEntryArgs {
   static const category = 'category';
@@ -221,16 +280,28 @@ class _EditEntryArgs {
 class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   final GeminiLiveService _service;
   final JournalBloc? _journalBloc;
+  final JournalRepository? _journalRepository;
   final LlmService? _llmService;
   final AudioStorageService? _audioStorage;
   final String? _uid;
+  bool _reconciled = false; // idempotency guard for ReconcileSession
 
   StreamSubscription<Transcript>? _transcriptSub;
+  StreamSubscription<void>? _interruptSub;
   StreamSubscription<FunctionCall>? _toolCallSub;
   StreamSubscription<GeminiLiveState>? _stateSub;
   StreamSubscription<int>? _latencySub;
   Timer? _elapsedTimer;
   DateTime? _callStartTime;
+
+  /// The session's journal date (yyyy-MM-dd), captured when the call starts so
+  /// in-call saves, post-call reconcile, and post-call rejects all write to the
+  /// SAME day — even if the call spans midnight or the user acts after the day
+  /// rolls over. (#232) Falls back to today when not set (e.g. test seeding).
+  String? _sessionDate;
+  String get _journalDate =>
+      _sessionDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+
   bool _warned5 = false;
   bool _warned9 = false;
 
@@ -244,14 +315,20 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   /// Audio output stream for the UI to play back.
   Stream<Uint8List> get audioOutputStream => _service.audioStream;
 
+  /// Barge-in signal (#12): fires when Gemini cancels its turn because the
+  /// user spoke over the AI. The audio session flushes playback on this.
+  Stream<void> get interruptStream => _service.interruptStream;
+
   VoiceCallBloc({
     required GeminiLiveService service,
     JournalBloc? journalBloc,
+    JournalRepository? journalRepository,
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
   }) : _service = service,
        _journalBloc = journalBloc,
+       _journalRepository = journalRepository,
        _llmService = llmService,
        _audioStorage = audioStorage,
        _uid = uid,
@@ -264,8 +341,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<LatencyUpdated>(_onLatencyUpdated);
     on<_SessionTick>(_onSessionTick);
     on<GenerateSessionSummary>(_onGenerateSessionSummary);
+    on<InterruptReceived>(_onInterruptReceived);
     on<ToggleMute>(_onToggleMute);
     on<ToggleSpeaker>(_onToggleSpeaker);
+    on<ReconcileSession>(_onReconcileSession);
+    on<AcceptAllReconciled>(_onAcceptAllReconciled);
+    on<RejectReconciledEntry>(_onRejectReconciledEntry);
   }
 
   Future<void> _onStartCall(
@@ -299,10 +380,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     _latencySub = _service.latencyStream.listen((ms) {
       add(LatencyUpdated(ms));
     });
+    _interruptSub = _service.interruptStream.listen((_) {
+      add(const InterruptReceived());
+    });
 
     try {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
+      // Pin the session's journal date now so every save/reconcile/reject in
+      // this session writes to the same day, even across midnight. (#232)
+      _sessionDate = DateFormat('yyyy-MM-dd').format(_callStartTime!);
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
@@ -362,6 +449,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         ),
       );
     }
+
+    // #224: kick off holistic reconciliation now that the call is over and the
+    // in-call save_entry writes have settled (each is awaited in
+    // _onToolCallReceived, so by here they hold real ids). Runs once.
+    final fullTranscript = state.transcripts
+        .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
+        .join('\n');
+    if (fullTranscript.trim().isNotEmpty) {
+      add(ReconcileSession(transcript: fullTranscript));
+    }
   }
 
   Future<void> _onGenerateSessionSummary(
@@ -395,8 +492,156 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     }
   }
 
+  /// #224: holistic post-call reconciliation. Feeds the full transcript +
+  /// already-saved entries to the LLM, applies the returned add/reword tool
+  /// calls (with an LLM-aware prompt + a mechanical dedup backstop), and marks
+  /// the changes so the post-call screen can surface them.
+  Future<void> _onReconcileSession(
+    ReconcileSession event,
+    Emitter<VoiceCallState> emit,
+  ) async {
+    if (_reconciled ||
+        _llmService == null ||
+        _journalRepository == null ||
+        event.transcript.trim().isEmpty) {
+      return;
+    }
+    _reconciled = true;
+
+    final List<ReconciledItem> items;
+    try {
+      final snapshots = state.savedEntries
+          .map(
+            (e) => SavedEntrySnapshot(
+              entryId: e.entryId,
+              category: e.categoryId,
+              text: e.text,
+            ),
+          )
+          .toList();
+      items = await _llmService.reconcileSession(event.transcript, snapshots);
+    } catch (e) {
+      debugPrint('reconcileSession failed: $e'); // silent no-op
+      return;
+    }
+
+    final updated = List<SavedEntry>.of(state.savedEntries);
+    var addedCount = 0;
+    var rewordedCount = 0;
+    for (final item in items) {
+      if (item.action == ReconcileAction.add) {
+        // Mechanical dedup backstop (category + normalized text).
+        final dup = updated.any(
+          (e) =>
+              e.categoryId == item.category &&
+              normalizeForDedup(e.text) == normalizeForDedup(item.text),
+        );
+        if (dup) continue;
+        try {
+          final created = await _journalRepository.addCategoryEntry(
+            _journalDate,
+            item.category,
+            item.text,
+            source: 'voice',
+            transcript: item.sourceTranscript,
+            tags: const ['voice-call', 'post-call'],
+          );
+          updated.add(
+            SavedEntry(
+              entryId: created.id,
+              categoryId: item.category,
+              text: item.text,
+              transcript: item.sourceTranscript,
+              addedByAi: true,
+            ),
+          );
+          addedCount++;
+          _harnessLog('Entry saved: ${item.category} (origin: reconciled-add)');
+        } catch (e) {
+          debugPrint('reconcile add failed: $e');
+        }
+      } else {
+        // reword — complete an entry captured incompletely in-call.
+        // Guard null id: a reword with no id (or matching another null-id
+        // entry) must not reach the `item.entryId!` force-unwrap below. (#232)
+        if (item.entryId == null) continue;
+        final idx = updated.indexWhere((e) => e.entryId == item.entryId);
+        if (idx == -1) continue; // unknown/deleted id — skip
+        // Persist to the repository directly (mirrors the add path) so the
+        // reword isn't silently lost when _journalBloc is null but the repo is
+        // wired; the bloc (if present) also gets it via its stream. (#232)
+        // (_journalRepository is already non-null — guarded at method entry.)
+        try {
+          await _journalRepository.updateCategoryEntry(
+            _journalDate,
+            item.entryId!,
+            item.text,
+          );
+        } catch (e) {
+          debugPrint('reconcile reword failed: $e');
+        }
+        _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
+        updated[idx] = updated[idx].copyWith(
+          text: item.text,
+          rewordedByAi: true,
+        );
+        rewordedCount++;
+        _harnessLog('Entry reworded: ${updated[idx].categoryId}');
+      }
+    }
+    emit(state.copyWith(savedEntries: updated));
+    _harnessLog(
+      'Reconciliation complete: $addedCount added, $rewordedCount reworded',
+    );
+  }
+
+  void _onAcceptAllReconciled(
+    AcceptAllReconciled event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    // Entries are already persisted; "Accept all" just clears the AI markers.
+    final cleared = state.savedEntries
+        .map(
+          (e) => SavedEntry(
+            entryId: e.entryId,
+            categoryId: e.categoryId,
+            text: e.text,
+            transcript: e.transcript,
+          ),
+        )
+        .toList();
+    emit(state.copyWith(savedEntries: cleared));
+  }
+
+  Future<void> _onRejectReconciledEntry(
+    RejectReconciledEntry event,
+    Emitter<VoiceCallState> emit,
+  ) async {
+    // Remove from the post-call list and tombstone-delete from Firestore.
+    final remaining = state.savedEntries
+        .where((e) => e.entryId != event.entryId)
+        .toList();
+    emit(state.copyWith(savedEntries: remaining));
+    _journalBloc?.add(DeleteEntry(event.entryId));
+    if (_journalRepository != null && _uid != null) {
+      try {
+        await _journalRepository.deleteCategoryEntry(
+          _journalDate,
+          event.entryId,
+        );
+      } catch (e) {
+        debugPrint('reject entry delete failed: $e');
+      }
+    }
+  }
+
   void _onSessionTick(_SessionTick event, Emitter<VoiceCallState> emit) {
     if (_callStartTime == null) return;
+    // Never resurrect a terminal call from a stray in-flight tick (#227).
+    if (state.status == VoiceCallStatus.error ||
+        state.status == VoiceCallStatus.ended) {
+      return;
+    }
     final elapsed = DateTime.now().difference(_callStartTime!);
 
     // Auto-end at session limit
@@ -434,15 +679,43 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final current = state.transcripts;
     final incoming = event.transcript;
 
-    // Append new bubble when: list is empty, speaker changed, or last was final
+    // New bubble when: list is empty, speaker changed, or last bubble is final.
     if (current.isEmpty ||
         current.last.speaker != incoming.speaker ||
         current.last.isFinal) {
       emit(state.copyWith(transcripts: [...current, incoming]));
     } else {
-      // Replace last partial with updated partial/final from same speaker
+      // #123: Gemini streams transcript as incremental DELTAS, so APPEND the
+      // delta to the running bubble rather than replacing it (replacing left
+      // only the last fragment visible — truncated speech).
       final updated = List<Transcript>.of(current);
-      updated[updated.length - 1] = incoming;
+      updated[updated.length - 1] = Transcript(
+        speaker: incoming.speaker,
+        text: current.last.text + incoming.text,
+        isFinal: incoming.isFinal,
+      );
+      emit(state.copyWith(transcripts: updated));
+    }
+  }
+
+  void _onInterruptReceived(
+    InterruptReceived event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    final current = state.transcripts;
+    // If the AI was mid-turn, mark its bubble interrupted + finalize it so the
+    // history records that the rest of that response was never heard (#12).
+    //
+    // Open-mic: the user's partial transcript may have already been appended
+    // before the interrupt signal arrives, so the AI bubble isn't necessarily
+    // last. Find the most recent AI bubble rather than assuming `current.last`.
+    final aiIndex = current.lastIndexWhere((t) => t.speaker == Speaker.ai);
+    if (aiIndex != -1 && !current[aiIndex].isFinal) {
+      final updated = List<Transcript>.of(current);
+      updated[aiIndex] = current[aiIndex].copyWith(
+        interrupted: true,
+        isFinal: true,
+      );
       emit(state.copyWith(transcripts: updated));
     }
   }
@@ -459,24 +732,45 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       final text = args[_SaveEntryArgs.text] as String? ?? '';
       final transcript = args[_SaveEntryArgs.transcript] as String? ?? '';
 
+      // Capture the Firestore-assigned id so the post-call reconcile pass can
+      // issue edit_entry against this entry (#224). When a repository is wired
+      // we await it for the real id; otherwise fall back to the fire-and-forget
+      // JournalBloc dispatch (preserves prior behavior + test setups).
+      String? createdId;
+      if (_journalRepository != null) {
+        try {
+          final created = await _journalRepository.addCategoryEntry(
+            _journalDate,
+            categoryName,
+            text,
+            source: 'voice',
+            transcript: transcript,
+            tags: const ['voice-call'],
+          );
+          createdId = created.id;
+        } catch (e) {
+          debugPrint('save_entry repository write failed: $e');
+        }
+      } else {
+        _journalBloc?.add(
+          AddVoiceEntry(
+            categoryId: categoryName,
+            text: text,
+            transcript: transcript,
+            tags: const ['voice-call'],
+            date: DateTime.now(),
+          ),
+        );
+      }
+
       final entry = SavedEntry(
+        entryId: createdId,
         categoryId: categoryName,
         text: text,
         transcript: transcript,
       );
 
       emit(state.copyWith(savedEntries: [...state.savedEntries, entry]));
-
-      // Persist to Firestore via JournalBloc
-      _journalBloc?.add(
-        AddVoiceEntry(
-          categoryId: categoryName,
-          text: text,
-          transcript: transcript,
-          tags: const ['voice-call'],
-          date: DateTime.now(),
-        ),
-      );
 
       // Acknowledge the tool call to the model
       await _service.sendToolResponse(call.name, call.id, {
@@ -485,6 +779,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       });
 
       debugPrint('Tool call: save_entry → $categoryName: $text');
+      _harnessLog('Entry saved: $categoryName (origin: in-call)');
     } else if (call.name == 'edit_entry') {
       final args = call.args;
       final entryId = args[_EditEntryArgs.entryId] as String? ?? '';
@@ -515,6 +810,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           emit(state.copyWith(status: VoiceCallStatus.active));
         }
       case GeminiLiveState.error:
+        // #227: tear down the call clock so the periodic tick can't revert the
+        // status back to active (which would strand the user in a fake-active
+        // call against a dead socket).
+        _elapsedTimer?.cancel();
+        _callStartTime = null;
         emit(
           state.copyWith(
             status: VoiceCallStatus.error,
@@ -556,10 +856,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     await _toolCallSub?.cancel();
     await _stateSub?.cancel();
     await _latencySub?.cancel();
+    await _interruptSub?.cancel();
     _transcriptSub = null;
     _toolCallSub = null;
     _stateSub = null;
     _latencySub = null;
+    _interruptSub = null;
   }
 
   @override

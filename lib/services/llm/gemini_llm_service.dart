@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:dytty/core/constants/categories.dart';
+import 'package:dytty/core/constants/reconcile_prompt.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 
 /// Strips markdown code fences from LLM JSON responses.
@@ -13,6 +15,89 @@ String extractJson(String text) {
     return match.group(1)!.trim();
   }
   return trimmed;
+}
+
+/// Converts raw `save_entry` / `edit_entry` function calls (each a
+/// `{'name': ..., 'args': {...}}` map) into [ReconciledItem]s.
+///
+/// NOTE (#231): the live reconcile path now uses [parseReconcileArray]
+/// (schema-first JSON array) and no longer calls this. It is retained
+/// (with its tests) because it still handles `edit_entry`/reword — the only
+/// parser that produces [ReconcileAction.reword] — kept for reference and in
+/// case a future reconcile variant re-introduces function-call edits. If that
+/// never lands, remove this and its tests.
+///
+/// `save_entry` -> [ReconcileAction.add] (dropped if text is empty).
+/// `edit_entry` -> [ReconcileAction.reword] (dropped if entry_id or text empty).
+/// Unknown call names are ignored. Category defaults to 'positive'.
+List<ReconciledItem> parseReconcileCalls(List<Map<String, dynamic>> calls) {
+  final items = <ReconciledItem>[];
+  for (final call in calls) {
+    final name = call['name'] as String?;
+    final args = (call['args'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+    if (name == 'save_entry') {
+      final text = (args['text'] as String?)?.trim() ?? '';
+      if (text.isEmpty) continue;
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.add,
+          category: (args['category'] as String?) ?? 'positive',
+          text: text,
+          sourceTranscript: (args['transcript'] as String?) ?? '',
+        ),
+      );
+    } else if (name == 'edit_entry') {
+      final entryId = (args['entry_id'] as String?)?.trim() ?? '';
+      final text = (args['text'] as String?)?.trim() ?? '';
+      if (entryId.isEmpty || text.isEmpty) continue;
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.reword,
+          entryId: entryId,
+          text: text,
+        ),
+      );
+    }
+  }
+  return items;
+}
+
+/// Parses the schema-first reconcile response (#231): a JSON array of
+/// `{category, text, quote}` objects into [ReconciledItem] adds.
+///
+/// Invalid categories fall back to 'positive'; empty-text items are dropped;
+/// malformed JSON or a non-list top level yields an empty list (the caller
+/// treats that as a no-op). Tolerates markdown-fenced JSON via [extractJson].
+List<ReconciledItem> parseReconcileArray(String jsonText) {
+  final validCategories = JournalCategory.values.map((c) => c.name).toSet();
+  try {
+    final decoded = jsonDecode(extractJson(jsonText));
+    if (decoded is! List) return const [];
+    final items = <ReconciledItem>[];
+    for (final raw in decoded) {
+      if (raw is! Map) continue;
+      // Type-check each field (the LLM can emit a number/bool). A bad field on
+      // one item must skip THAT item, not throw and collapse the whole pass.
+      final textVal = raw['text'];
+      final text = (textVal is String) ? textVal.trim() : '';
+      if (text.isEmpty) continue;
+      final catVal = raw['category'];
+      final cat = (catVal is String) ? catVal : 'positive';
+      final quoteVal = raw['quote'];
+      items.add(
+        ReconciledItem(
+          action: ReconcileAction.add,
+          category: validCategories.contains(cat) ? cat : 'positive',
+          text: text,
+          sourceTranscript: (quoteVal is String) ? quoteVal : '',
+        ),
+      );
+    }
+    return items;
+  } catch (_) {
+    return const [];
+  }
 }
 
 class GeminiLlmService implements LlmService {
@@ -115,6 +200,40 @@ $entriesText
 
     final response = await _model.generateContent([Content.text(prompt)]);
     return response.text ?? '';
+  }
+
+  @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async {
+    // #231: schema-first extraction. Force a JSON array of {category, text,
+    // quote} at temperature 0.0 so multi-item splits are structurally
+    // required, instead of relying on function-call emission.
+    final model = FirebaseAI.googleAI().generativeModel(
+      model: _modelName,
+      generationConfig: GenerationConfig(
+        temperature: 0.0,
+        responseMimeType: 'application/json',
+        responseSchema: Schema.array(
+          items: Schema.object(
+            properties: {
+              'category': Schema.enumString(
+                enumValues: JournalCategory.values.map((c) => c.name).toList(),
+              ),
+              'text': Schema.string(),
+              'quote': Schema.string(),
+            },
+          ),
+        ),
+      ),
+    );
+
+    final response = await model.generateContent([
+      Content.text(buildReconcilePrompt(transcript, alreadySaved)),
+    ]);
+
+    return parseReconcileArray(response.text ?? '');
   }
 
   @override

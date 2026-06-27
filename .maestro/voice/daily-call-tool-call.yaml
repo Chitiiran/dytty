@@ -5,28 +5,46 @@ tags:
   - daily-call
 ---
 # UI-only flow — audio + logcat handled by orchestrate.py
-- runFlow: "../helpers/login.yaml"
+- runFlow: "../helpers/login-device.yaml"
 
-- tapOn:
-    point: "7%,35%"
-- extendedWaitUntil:
-    visible: "Start voice call"
-    timeout: 5000
+# #231: start the daily call via a guarded helper (taps the labelled "Call"
+# button, asserting it opened — no fragile coordinate tap).
+- runFlow: "../helpers/open-daily-call.yaml"
 
-- tapOn: "Start voice call"
 - tapOn: "Start Call"
 
 - extendedWaitUntil:
     visible: "In call.*"
     timeout: 20000
 
-# Orchestrator plays utterance and monitors for tool call
+# Orchestrator plays the utterance; hold the call open long enough for the
+# FULL utterance + AI response + in-call save_entry to land before ending.
+# `waitForAnimationToEnd` returns almost instantly on the static call screen
+# (ends the call ~6s in, before saves), so force a real dwell with a repeat
+# loop of short input waits — ~20s total in-call. (#231 device-tuned)
 - extendedWaitUntil:
-    visible: ".*"
-    timeout: 30000
+    visible: "End call"
+    timeout: 20000
+- repeat:
+    times: 20
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
 
 - tapOn: "End call"
 
+# Post-call: reconcile fires on EndCall and makes its own Gemini call; hold
+# for its logcat to land (Reconciliation complete / Entry saved reconciled-add)
+# before the flow exits.
 - extendedWaitUntil:
     visible: "Call Summary"
-    timeout: 10000
+    timeout: 15000
+- repeat:
+    times: 8
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true

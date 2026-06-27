@@ -109,8 +109,17 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       value: _bloc,
       child: BlocListener<VoiceCallBloc, VoiceCallState>(
         listenWhen: (prev, curr) =>
-            curr.savedEntries.length > prev.savedEntries.length,
+            curr.savedEntries.length > prev.savedEntries.length ||
+            (curr.status == VoiceCallStatus.error &&
+                prev.status != VoiceCallStatus.error),
         listener: (context, state) {
+          // #227: the session dropped (e.g. WebSocket 1008) — stop the recorder
+          // so the mic isn't streaming into a dead socket.
+          if (state.status == VoiceCallStatus.error) {
+            _session?.stop();
+            return;
+          }
+
           final entry = state.savedEntries.last;
           final cat = CategoryConfig.defaults.firstWhere(
             (c) => c.id == entry.categoryId,
@@ -509,15 +518,33 @@ class _PostCallSummary extends StatelessWidget {
               ),
             )
           else ...[
-            Text(
-              'Captured entries',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Captured entries',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                // #224: Accept all clears the AI markers (entries already saved).
+                if (savedEntries.any((e) => e.addedByAi || e.rewordedByAi))
+                  TextButton(
+                    onPressed: () => bloc.add(const AcceptAllReconciled()),
+                    child: const Text('Accept all'),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
-            ...savedEntries.map((entry) => _SavedEntryTile(entry: entry)),
+            ...savedEntries.map(
+              (entry) => SavedEntryTile(
+                entry: entry,
+                onReject: entry.entryId == null
+                    ? null
+                    : () => bloc.add(RejectReconciledEntry(entry.entryId!)),
+              ),
+            ),
           ],
 
           const SizedBox(height: 32),
@@ -574,10 +601,12 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _SavedEntryTile extends StatelessWidget {
+@visibleForTesting
+class SavedEntryTile extends StatelessWidget {
   final SavedEntry entry;
+  final VoidCallback? onReject;
 
-  const _SavedEntryTile({required this.entry});
+  const SavedEntryTile({super.key, required this.entry, this.onReject});
 
   @override
   Widget build(BuildContext context) {
@@ -618,9 +647,39 @@ class _SavedEntryTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(entry.text, style: theme.textTheme.bodyMedium),
+                  // #224: reconciliation markers — the post-call holistic pass
+                  // added or reworded this entry. Always visible + editable.
+                  if (entry.addedByAi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'added by AI',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  if (entry.rewordedByAi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'reworded by AI',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
+            if (onReject != null)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Reject entry',
+                onPressed: onReject,
+              ),
           ],
         ),
       ),
@@ -762,13 +821,20 @@ class _CallControls extends StatelessWidget {
       return SizedBox(
         width: double.infinity,
         height: 56,
-        child: FilledButton.icon(
-          onPressed: onStart,
-          icon: const Icon(Icons.call_rounded),
-          label: const Text('Start Call'),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
-            foregroundColor: Colors.white,
+        // Semantics label so screen readers + automation can find the button
+        // (the visible 'Start Call' text is canvas-drawn, not in the a11y
+        // tree). (#231)
+        child: Semantics(
+          label: 'Start Call',
+          button: true,
+          child: FilledButton.icon(
+            onPressed: onStart,
+            icon: const Icon(Icons.call_rounded),
+            label: const Text('Start Call'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+            ),
           ),
         ),
       );

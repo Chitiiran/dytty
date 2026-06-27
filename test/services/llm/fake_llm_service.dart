@@ -5,6 +5,9 @@ import 'package:dytty/services/llm/llm_service.dart';
 class FakeLlmService implements LlmService {
   int callCount = 0;
 
+  /// Scripted result returned by [reconcileSession]. Set in tests.
+  List<ReconciledItem> reconcileResult = const [];
+
   @override
   Future<LlmResponse> generateResponse(String prompt) async {
     callCount++;
@@ -47,6 +50,15 @@ class FakeLlmService implements LlmService {
   Future<String> generateWeeklySummary(List<String> entries) async {
     callCount++;
     return 'Fake weekly summary of ${entries.length} entries.';
+  }
+
+  @override
+  Future<List<ReconciledItem>> reconcileSession(
+    String transcript,
+    List<SavedEntrySnapshot> alreadySaved,
+  ) async {
+    callCount++;
+    return reconcileResult;
   }
 
   @override

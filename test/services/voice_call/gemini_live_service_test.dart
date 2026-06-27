@@ -414,4 +414,29 @@ void main() {
       ]);
     });
   });
+
+  group('buildLiveGenerationConfig (#231)', () {
+    test('tunes for calmer, shorter turns', () {
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.temperature, 0.7);
+      expect(cfg.maxOutputTokens, 300);
+    });
+
+    test('omits presence/frequency penalties (Live backend rejects, 1007)', () {
+      // The Gemini Live backend closes the socket with code 1007 if these
+      // are set, even though the firebase_ai class accepts them.
+      // Device-verified 2026-06-16. See buildLiveGenerationConfig doc.
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.presencePenalty, isNull);
+      expect(cfg.frequencyPenalty, isNull);
+    });
+
+    test('keeps audio modality + transcription + a configured voice', () {
+      final cfg = buildLiveGenerationConfig();
+      expect(cfg.speechConfig, isNotNull);
+      expect(cfg.speechConfig?.voiceConfig, isNotNull);
+      expect(cfg.inputAudioTranscription, isNotNull);
+      expect(cfg.outputAudioTranscription, isNotNull);
+    });
+  });
 }

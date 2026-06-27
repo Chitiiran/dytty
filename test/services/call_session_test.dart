@@ -41,6 +41,11 @@ void main() {
     mockPlayback = MockAudioPlaybackService();
     mockBloc = MockVoiceCallBloc();
 
+    // Default: no interrupts. Individual tests override with their own stream.
+    when(
+      () => mockBloc.interruptStream,
+    ).thenAnswer((_) => const Stream<void>.empty());
+
     session = CallSession(
       recorder: mockRecorder,
       playback: mockPlayback,
@@ -90,6 +95,32 @@ void main() {
       });
     });
 
+    group('interrupt', () {
+      // #12: on Gemini's barge-in signal, the buffered AI audio (which runs
+      // ahead of playback) must be flushed so the AI goes silent immediately.
+      test('flushes playback when the bloc interruptStream fires', () async {
+        final interrupts = StreamController<void>();
+        addTearDown(interrupts.close);
+
+        when(
+          () => mockPlayback.init(sampleRate: 24000, channels: 1),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockBloc.audioOutputStream,
+        ).thenAnswer((_) => const Stream<Uint8List>.empty());
+        when(
+          () => mockBloc.interruptStream,
+        ).thenAnswer((_) => interrupts.stream);
+        when(() => mockPlayback.flush()).thenAnswer((_) async {});
+
+        await session.initPlayback();
+        interrupts.add(null);
+        await Future<void>.delayed(Duration.zero);
+
+        verify(() => mockPlayback.flush()).called(1);
+      });
+    });
+
     group('startRecording', () {
       test('starts recorder stream and sends audio to bloc', () async {
         final audioData = Uint8List.fromList([5, 6, 7, 8]);
@@ -116,6 +147,36 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         verify(() => mockBloc.sendAudio(any())).called(1);
+
+        await controller.close();
+      });
+
+      // #222: AI talks to itself in a loop because the mic picks up the
+      // speaker output (the AI's voice) with no echo cancellation. Enabling
+      // hardware AEC via the VOICE_COMMUNICATION audio source + echoCancel /
+      // noiseSuppress flags is the proper fix.
+      test('requests echo cancellation to prevent AI self-feedback', () async {
+        final controller = StreamController<Uint8List>();
+        when(
+          () => mockRecorder.startStream(any()),
+        ).thenAnswer((_) async => controller.stream);
+
+        await session.startRecording();
+
+        verify(
+          () => mockRecorder.startStream(
+            any(
+              that: isA<RecordConfig>()
+                  .having((c) => c.echoCancel, 'echoCancel', isTrue)
+                  .having((c) => c.noiseSuppress, 'noiseSuppress', isTrue)
+                  .having(
+                    (c) => c.androidConfig.audioSource,
+                    'androidConfig.audioSource',
+                    AndroidAudioSource.voiceCommunication,
+                  ),
+            ),
+          ),
+        ).called(1);
 
         await controller.close();
       });

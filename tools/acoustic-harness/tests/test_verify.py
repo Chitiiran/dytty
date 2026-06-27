@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from verify import parse_logcat, fuzzy_match, verify_scenario, _check_tool_calls, resolve_tag
+from verify import parse_logcat, fuzzy_match, verify_scenario, _check_tool_calls, resolve_tag, score_recall
 
 
 class TestResolveTag(unittest.TestCase):
@@ -225,6 +225,112 @@ class TestParseLogcat(unittest.TestCase):
         os.unlink(path)
 
 
+class TestParseEntryEvents(unittest.TestCase):
+    """#224: parse structured entry-saved / reconciliation log lines."""
+
+    def _write_log(self, lines: list[str]) -> str:
+        fd, path = tempfile.mkstemp(suffix=".log")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(line + "\n")
+        return path
+
+    def test_parses_in_call_entry_saved(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry saved: negative (origin: in-call)",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        saved = [e for e in events if e["type"] == "entry_saved"]
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["category"], "negative")
+        self.assertEqual(saved[0]["origin"], "in-call")
+        os.unlink(path)
+
+    def test_parses_reconciled_add(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry saved: gratitude (origin: reconciled-add)",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        saved = [e for e in events if e["type"] == "entry_saved"]
+        self.assertEqual(saved[0]["origin"], "reconciled-add")
+        os.unlink(path)
+
+    def test_parses_entry_reworded(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Entry reworded: negative",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        rew = [e for e in events if e["type"] == "entry_reworded"]
+        self.assertEqual(len(rew), 1)
+        self.assertEqual(rew[0]["category"], "negative")
+        os.unlink(path)
+
+    def test_parses_reconciliation_complete(self):
+        path = self._write_log([
+            "V/flutter: [DYTTY] Reconciliation complete: 2 added, 1 reworded",
+        ])
+        events, _ = parse_logcat(path, tag="DYTTY")
+        rc = [e for e in events if e["type"] == "reconciliation_complete"]
+        self.assertEqual(len(rc), 1)
+        self.assertEqual(rc[0]["added"], 2)
+        self.assertEqual(rc[0]["reworded"], 1)
+        os.unlink(path)
+
+
+class TestVerifyEntryExpectations(unittest.TestCase):
+    """#224: verify_scenario asserts entry count + categories."""
+
+    def _events(self, *categories):
+        return [
+            {"type": "state", "value": "active"},
+            *[
+                {"type": "entry_saved", "category": c, "origin": "in-call"}
+                for c in categories
+            ],
+        ]
+
+    def _scenario(self, expect):
+        return {
+            "name": "s",
+            "utterances": [{"text": "x", "expect": expect}],
+        }
+
+    def test_min_entries_pass(self):
+        events = self._events("negative", "gratitude")
+        results = verify_scenario(events, [], self._scenario({"min_entries": 2}))
+        check = next(r for r in results if "entries captured" in r["check"].lower())
+        self.assertTrue(check["passed"], check["detail"])
+
+    def test_min_entries_fail(self):
+        events = self._events("negative")
+        results = verify_scenario(events, [], self._scenario({"min_entries": 2}))
+        check = next(r for r in results if "entries captured" in r["check"].lower())
+        self.assertFalse(check["passed"])
+
+    def test_expected_categories_pass(self):
+        events = self._events("negative", "gratitude")
+        results = verify_scenario(
+            events, [], self._scenario({"expected_categories": ["negative", "gratitude"]})
+        )
+        check = next(r for r in results if "categor" in r["check"].lower())
+        self.assertTrue(check["passed"], check["detail"])
+
+    def test_expected_categories_missing_one_fails(self):
+        events = self._events("negative")
+        results = verify_scenario(
+            events, [], self._scenario({"expected_categories": ["negative", "gratitude"]})
+        )
+        check = next(r for r in results if "categor" in r["check"].lower())
+        self.assertFalse(check["passed"])
+
+    def test_no_entry_expectations_adds_no_checks(self):
+        events = self._events("negative")
+        results = verify_scenario(events, [], self._scenario({"ai_responds": True}))
+        self.assertFalse(
+            any("entries captured" in r["check"].lower() for r in results)
+        )
+
+
 class TestCheckToolCalls(unittest.TestCase):
     """Test _check_tool_calls() — raw logcat search for tool invocations."""
 
@@ -359,6 +465,110 @@ class TestVerifyScenario(unittest.TestCase):
         results = verify_scenario(events, [], self._make_scenario())
         user_check = next(r for r in results if "User speech" in r["check"])
         self.assertTrue(user_check["passed"])
+
+
+class TestScoreRecall(unittest.TestCase):
+    """#231: score_recall() — deterministic multi-item recall metric."""
+
+    def test_full_capture(self):
+        expected = [
+            {"category": "negative", "anchor": "work was brutal"},
+            {"category": "gratitude", "anchor": "sister called"},
+        ]
+        saved = [
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+            {"type": "entry_saved", "category": "gratitude", "origin": "reconciled-add"},
+        ]
+        result = score_recall(expected, saved)
+        self.assertEqual(result["recall"], 1.0)
+        self.assertEqual(result["category_accuracy"], 1.0)
+        self.assertFalse(result["over_split"])
+        self.assertFalse(result["hallucination"])
+
+    def test_under_capture(self):
+        expected = [
+            {"category": "negative", "anchor": "a"},
+            {"category": "gratitude", "anchor": "b"},
+        ]
+        saved = [{"type": "entry_saved", "category": "negative", "origin": "in-call"}]
+        result = score_recall(expected, saved)
+        self.assertEqual(result["recall"], 0.5)
+        self.assertFalse(result["over_split"])
+
+    def test_over_split(self):
+        result = score_recall(
+            [{"category": "positive", "anchor": "a"}],
+            [
+                {"type": "entry_saved", "category": "positive", "origin": "in-call"},
+                {"type": "entry_saved", "category": "positive", "origin": "reconciled-add"},
+            ],
+        )
+        self.assertTrue(result["over_split"])
+
+    def test_hallucination(self):
+        result = score_recall(
+            [],
+            [{"type": "entry_saved", "category": "positive", "origin": "in-call"}],
+        )
+        self.assertTrue(result["hallucination"])
+        self.assertEqual(result["recall"], 1.0)  # nothing expected, nothing missed
+
+    def test_verify_scenario_wires_expected_items(self):
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+            {"type": "entry_saved", "category": "gratitude", "origin": "reconciled-add"},
+            {"type": "state", "value": "idle"},
+        ]
+        scenario = {
+            "name": "s",
+            "utterances": [{
+                "text": "x",
+                "expect": {"expected_items": [
+                    {"category": "negative", "anchor": "a"},
+                    {"category": "gratitude", "anchor": "b"},
+                ]},
+            }],
+        }
+        results = verify_scenario(events, [], scenario)
+        recall = next(r for r in results if "multi-item guard" in r["check"])
+        self.assertTrue(recall["passed"], recall["detail"])
+        self.assertEqual(recall["metrics"]["recall"], 1.0)
+
+    def test_recall_not_gated_by_default(self):
+        # Under-capture (1 of 2) must still PASS the guard unless min_recall is
+        # set — #231 collects recall data, it doesn't enforce a bar by default.
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+        ]
+        scenario = {"name": "s", "utterances": [{"text": "x", "expect": {
+            "expected_items": [
+                {"category": "negative", "anchor": "a"},
+                {"category": "gratitude", "anchor": "b"},
+            ],
+        }}]}
+        g = next(r for r in verify_scenario(events, [], scenario)
+                 if "multi-item guard" in r["check"])
+        self.assertEqual(g["metrics"]["recall"], 0.5)
+        self.assertTrue(g["passed"])  # not gated -> passes despite 0.5 recall
+
+    def test_min_recall_gates_when_set(self):
+        events = [
+            {"type": "state", "value": "active"},
+            {"type": "entry_saved", "category": "negative", "origin": "in-call"},
+        ]
+        scenario = {"name": "s", "utterances": [{"text": "x", "expect": {
+            "min_recall": 1.0,
+            "expected_items": [
+                {"category": "negative", "anchor": "a"},
+                {"category": "gratitude", "anchor": "b"},
+            ],
+        }}]}
+        g = next(r for r in verify_scenario(events, [], scenario)
+                 if "multi-item guard" in r["check"])
+        self.assertEqual(g["metrics"]["recall"], 0.5)
+        self.assertFalse(g["passed"])  # min_recall=1.0 -> 0.5 fails
 
 
 if __name__ == "__main__":

@@ -147,6 +147,9 @@ void main() {
       when(
         () => mockVoiceBloc.audioOutputStream,
       ).thenAnswer((_) => const Stream<Uint8List>.empty());
+      when(
+        () => mockVoiceBloc.interruptStream,
+      ).thenAnswer((_) => const Stream<void>.empty());
 
       // Cleanup stubs for dispose
       when(() => mockRecorder.dispose()).thenAnswer((_) async {});
@@ -230,6 +233,9 @@ void main() {
       when(
         () => mockVoiceBloc.audioOutputStream,
       ).thenAnswer((_) => const Stream<Uint8List>.empty());
+      when(
+        () => mockVoiceBloc.interruptStream,
+      ).thenAnswer((_) => const Stream<void>.empty());
 
       // Set up endCall mocks
       when(() => mockRecorder.stop()).thenAnswer((_) async => null);
@@ -296,6 +302,9 @@ void main() {
       when(
         () => mockVoiceBloc.audioOutputStream,
       ).thenAnswer((_) => const Stream<Uint8List>.empty());
+      when(
+        () => mockVoiceBloc.interruptStream,
+      ).thenAnswer((_) => const Stream<void>.empty());
 
       // endCall mocks (called after connect failure)
       when(() => mockRecorder.stop()).thenAnswer((_) async => null);
@@ -364,6 +373,9 @@ void main() {
       when(
         () => mockVoiceBloc.audioOutputStream,
       ).thenAnswer((_) => const Stream<Uint8List>.empty());
+      when(
+        () => mockVoiceBloc.interruptStream,
+      ).thenAnswer((_) => const Stream<void>.empty());
 
       // Cleanup mocks
       when(() => mockRecorder.dispose()).thenAnswer((_) async {});

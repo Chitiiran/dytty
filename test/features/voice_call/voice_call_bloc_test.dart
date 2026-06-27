@@ -35,6 +35,7 @@ void main() {
   late StreamController<GeminiLiveState> stateController;
   late StreamController<Uint8List> audioController;
   late StreamController<int> latencyController;
+  late StreamController<void> interruptController;
 
   setUpAll(() {
     registerFallbackValue(
@@ -55,6 +56,7 @@ void main() {
     stateController = StreamController<GeminiLiveState>.broadcast();
     audioController = StreamController<Uint8List>.broadcast();
     latencyController = StreamController<int>.broadcast();
+    interruptController = StreamController<void>.broadcast();
 
     when(
       () => mockService.transcriptStream,
@@ -71,6 +73,9 @@ void main() {
     when(
       () => mockService.latencyStream,
     ).thenAnswer((_) => latencyController.stream);
+    when(
+      () => mockService.interruptStream,
+    ).thenAnswer((_) => interruptController.stream);
     when(() => mockService.latencyP50).thenReturn(null);
     when(() => mockService.latencyP95).thenReturn(null);
     when(() => mockService.connect()).thenAnswer((_) async {});
@@ -88,6 +93,7 @@ void main() {
     stateController.close();
     audioController.close();
     latencyController.close();
+    interruptController.close();
   });
 
   VoiceCallBloc buildBloc({
@@ -402,29 +408,49 @@ void main() {
   });
 
   group('TranscriptReceived with aggregation', () {
+    // #123: Gemini streams transcript as incremental DELTAS, not cumulative
+    // snapshots (device-confirmed: "Hey" -> "," -> " I" -> " had"). Deltas from
+    // the same speaker must be APPENDED, not replaced — replacing left the
+    // bubble showing only the last fragment (truncated speech).
     blocTest<VoiceCallBloc, VoiceCallState>(
-      'partial from same speaker replaces last bubble (length stays 1)',
+      'partials from same speaker append into one bubble (#123)',
       build: () => buildBloc(),
       seed: () => const VoiceCallState(status: VoiceCallStatus.active),
       act: (bloc) {
         bloc.add(
           const TranscriptReceived(
-            Transcript(speaker: Speaker.user, text: 'Hel', isFinal: false),
+            Transcript(speaker: Speaker.user, text: 'Hey', isFinal: false),
           ),
         );
         bloc.add(
           const TranscriptReceived(
-            Transcript(speaker: Speaker.user, text: 'Hello', isFinal: false),
+            Transcript(speaker: Speaker.user, text: ', I had', isFinal: false),
+          ),
+        );
+        bloc.add(
+          const TranscriptReceived(
+            Transcript(
+              speaker: Speaker.user,
+              text: ' a good day.',
+              isFinal: false,
+            ),
           ),
         );
       },
       expect: () => [
         isA<VoiceCallState>()
             .having((s) => s.transcripts.length, 'length', 1)
-            .having((s) => s.transcripts.last.text, 'text', 'Hel'),
+            .having((s) => s.transcripts.last.text, 'text', 'Hey'),
         isA<VoiceCallState>()
             .having((s) => s.transcripts.length, 'length', 1)
-            .having((s) => s.transcripts.last.text, 'text', 'Hello'),
+            .having((s) => s.transcripts.last.text, 'text', 'Hey, I had'),
+        isA<VoiceCallState>()
+            .having((s) => s.transcripts.length, 'length', 1)
+            .having(
+              (s) => s.transcripts.last.text,
+              'text',
+              'Hey, I had a good day.',
+            ),
       ],
     );
 
@@ -719,6 +745,24 @@ void main() {
       ],
     );
 
+    // #227 regression: after an error, the per-second elapsed timer must not
+    // revert the status back to `active` (which would mask the dropped call and
+    // strand the user in a fake-active session against a dead socket).
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'session tick after error keeps the call in error (not active)',
+      build: () => buildBloc(),
+      act: (bloc) async {
+        bloc.add(const StartCall()); // starts the elapsed timer
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const ServiceStateChanged(GeminiLiveState.error));
+        // Wait past one timer tick (1s) to let any stray tick fire.
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      },
+      verify: (bloc) {
+        expect(bloc.state.status, VoiceCallStatus.error);
+      },
+    );
+
     blocTest<VoiceCallBloc, VoiceCallState>(
       'idle state during active call triggers EndCall',
       build: () => buildBloc(),
@@ -933,6 +977,92 @@ void main() {
     test('recordedAudio is null when no audio recorded', () {
       final bloc = buildBloc();
       expect(bloc.recordedAudio, isNull);
+      bloc.close();
+    });
+
+    // #12: on barge-in, the in-flight AI transcript holds text the user never
+    // heard (audio is generated ahead of playback). Mark it interrupted so the
+    // call history / summary reflect what was actually said.
+    test('marks the in-flight AI transcript interrupted on barge-in', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(Duration.zero);
+
+      transcriptController.add(
+        const Transcript(
+          speaker: Speaker.ai,
+          text: 'I think you should',
+          isFinal: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      interruptController.add(null);
+      await Future<void>.delayed(Duration.zero);
+
+      final last = bloc.state.transcripts.last;
+      expect(last.interrupted, isTrue);
+      expect(last.isFinal, isTrue);
+      await bloc.close();
+    });
+
+    // #12 open-mic regression: because the mic streams continuously, the user's
+    // partial transcript can be appended AFTER the AI bubble but BEFORE Gemini's
+    // interrupt signal arrives. The AI bubble is then second-to-last, so checking
+    // only `current.last` would never finalize it. Find the last AI bubble.
+    test(
+      'marks the AI transcript interrupted even when a user partial follows it',
+      () async {
+        final bloc = buildBloc();
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+
+        // AI is mid-turn.
+        transcriptController.add(
+          const Transcript(
+            speaker: Speaker.ai,
+            text: 'I think you should',
+            isFinal: false,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // User starts speaking — their partial lands before the interrupt.
+        transcriptController.add(
+          const Transcript(speaker: Speaker.user, text: 'wait', isFinal: false),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        interruptController.add(null);
+        await Future<void>.delayed(Duration.zero);
+
+        final aiBubble = bloc.state.transcripts.firstWhere(
+          (t) => t.speaker == Speaker.ai,
+        );
+        expect(
+          aiBubble.interrupted,
+          isTrue,
+          reason: 'the AI bubble must be finalized even when not last',
+        );
+        expect(aiBubble.isFinal, isTrue);
+        await bloc.close();
+      },
+    );
+
+    // #12 open-mic: the mic streams continuously, INCLUDING while the AI is
+    // speaking — Gemini's server-side VAD needs that audio to detect barge-in.
+    // The echo loop is prevented by platform AEC + flushing playback on the
+    // interrupt signal, not by gating the mic (device-validated 2026-06-15).
+    test('forwards mic audio continuously, including during AI speech', () {
+      final bloc = buildBloc();
+      final data = Uint8List.fromList([10, 20, 30]);
+
+      bloc.sendAudio(data);
+      bloc.sendAudio(data);
+
+      verify(() => mockService.sendAudio(data)).called(2);
+      expect(bloc.recordedAudio, isNotNull);
+      expect(bloc.recordedAudio!.length, 6);
       bloc.close();
     });
 

@@ -134,12 +134,21 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: SizedBox(
                   height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/voice-call');
-                    },
-                    icon: const Icon(Icons.call_rounded),
-                    label: const Text('Call'),
+                  // Semantics label so screen readers announce the button and
+                  // automation can find it (the visible 'Call' text is drawn to
+                  // Flutter's canvas and isn't exposed to the a11y tree). (#231)
+                  // Distinct from the radial menu's 'Start voice call' label
+                  // (avoid an ambiguous finder in widget tests). (#231)
+                  child: Semantics(
+                    label: 'Start daily call',
+                    button: true,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/voice-call');
+                      },
+                      icon: const Icon(Icons.call_rounded),
+                      label: const Text('Call'),
+                    ),
                   ),
                 ),
               ),

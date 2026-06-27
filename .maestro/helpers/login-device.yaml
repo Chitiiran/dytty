@@ -8,26 +8,27 @@ name: "Reusable: login via real Google Sign-In (device)"
 - waitForAnimationToEnd:
     timeout: 15000
 
-# Tap the real Google Sign-In button
+# Tap the real Google Sign-In button. Maestro matches the SEMANTICS label
+# (login_screen.dart wraps it in Semantics(label: 'Sign in with Google')), NOT
+# the visible "Continue with Google" text — Flutter renders text to a canvas,
+# so only the semantic label is findable.
 - tapOn:
     text: "Sign in with Google"
     retryTapIfNoChange: true
 
-# Wait for Google account picker to appear
-- waitForAnimationToEnd:
-    timeout: 10000
+# Wait for the system Google account picker ("Choose an account") to appear.
+- extendedWaitUntil:
+    visible: "Choose an account"
+    timeout: 12000
 
-# Select the test account from the Google account picker.
+# Select the test account from the picker (a system overlay — real text nodes).
 # DEVICE_TEST_EMAIL must be set in the environment.
 - tapOn:
     text: ".*${DEVICE_TEST_EMAIL}.*"
     retryTapIfNoChange: true
 
-# Wait for auth + Firestore data loading + home screen render.
-# Triple wait handles: route transition -> loading spinner -> settle.
+# Wait for auth + Firestore load to settle on the home screen.
 - waitForAnimationToEnd:
-    timeout: 15000
-- waitForAnimationToEnd:
-    timeout: 15000
+    timeout: 20000
 - waitForAnimationToEnd:
     timeout: 10000

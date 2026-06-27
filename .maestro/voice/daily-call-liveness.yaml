@@ -5,17 +5,12 @@ tags:
   - daily-call
 ---
 # UI-only flow — audio + logcat handled by orchestrate.py
-- runFlow: "../helpers/login.yaml"
+- runFlow: "../helpers/login-device.yaml"
 
-# Open radial menu by tapping a calendar date
-- tapOn:
-    point: "7%,35%"
-- extendedWaitUntil:
-    visible: "Start voice call"
-    timeout: 5000
+# #231: guarded daily-call open (re-foregrounds Dytty before the blind tap).
+- runFlow: "../helpers/open-daily-call.yaml"
 
 # Navigate to voice call screen
-- tapOn: "Start voice call"
 
 # Start the call
 - tapOn: "Start Call"
@@ -26,10 +21,14 @@ tags:
     visible: "In call.*"
     timeout: 20000
 
-# Wait for AI response (orchestrator plays audio, AI processes)
+# Hold the call open for the AI's full audio response. A bare `visible: ".*"`
+# matches instantly and ends the call before the AI emits audio (no audio /
+# latency captured). waitForAnimationToEnd lets the response land first.
 - extendedWaitUntil:
-    visible: ".*"
-    timeout: 30000
+    visible: "End call"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 15000
 
 # End call
 - tapOn: "End call"

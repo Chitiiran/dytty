@@ -90,6 +90,34 @@ def parse_logcat(log_path: str, tag: str) -> tuple[list[dict], list[str]]:
                     })
             elif msg == "Turn complete":
                 events.append({"type": "turn_complete"})
+            elif msg.startswith("Entry saved: "):
+                # #224: "Entry saved: <category> (origin: <origin>)"
+                m = re.match(r"Entry saved: (\w+) \(origin: ([\w-]+)\)", msg)
+                if m:
+                    events.append({
+                        "type": "entry_saved",
+                        "category": m.group(1),
+                        "origin": m.group(2),
+                    })
+            elif msg.startswith("Entry reworded: "):
+                # #224: "Entry reworded: <category>"
+                m = re.match(r"Entry reworded: (\w+)", msg)
+                if m:
+                    events.append({
+                        "type": "entry_reworded",
+                        "category": m.group(1),
+                    })
+            elif msg.startswith("Reconciliation complete: "):
+                # #224: "Reconciliation complete: <n> added, <m> reworded"
+                m = re.match(
+                    r"Reconciliation complete: (\d+) added, (\d+) reworded", msg
+                )
+                if m:
+                    events.append({
+                        "type": "reconciliation_complete",
+                        "added": int(m.group(1)),
+                        "reworded": int(m.group(2)),
+                    })
 
     return events, raw_lines
 
@@ -103,6 +131,48 @@ def fuzzy_match(
     """
     ratio = SequenceMatcher(None, expected.lower(), actual.lower()).ratio()
     return ratio >= threshold, ratio
+
+
+def score_recall(expected_items: list[dict], saved_events: list[dict]) -> dict:
+    """Deterministic multi-item recall metric (#231).
+
+    expected_items: [{"category": str, "anchor": str}]. The anchor is unused
+        here (kept for future span-level matching); recall is category-multiset
+        based.
+    saved_events: parsed "entry_saved" events [{"type", "category", "origin"}].
+
+    Returns recall (captured / expected by category multiset), category_accuracy
+    (fraction of saved entries whose category was expected), and over_split /
+    hallucination guard flags.
+    """
+    from collections import Counter
+
+    expected_cats = Counter(e["category"] for e in expected_items)
+    saved_cats = Counter(
+        e["category"] for e in saved_events if e.get("type") == "entry_saved"
+    )
+
+    total_expected = sum(expected_cats.values())
+    captured = sum(min(expected_cats[c], saved_cats.get(c, 0)) for c in expected_cats)
+    recall = 1.0 if total_expected == 0 else captured / total_expected
+
+    total_saved = sum(saved_cats.values())
+    correct_saved = sum(
+        min(saved_cats[c], expected_cats.get(c, 0)) for c in saved_cats
+    )
+    category_accuracy = 1.0 if total_saved == 0 else correct_saved / total_saved
+
+    over_split = any(saved_cats.get(c, 0) > expected_cats[c] for c in expected_cats)
+    hallucination = total_expected == 0 and total_saved > 0
+
+    return {
+        "recall": round(recall, 3),
+        "category_accuracy": round(category_accuracy, 3),
+        "captured": captured,
+        "expected": total_expected,
+        "over_split": over_split,
+        "hallucination": hallucination,
+    }
 
 
 def _check_tool_calls(raw_lines: list[str], tool_name: str) -> bool:
@@ -199,6 +269,67 @@ def verify_scenario(
                 "check": f"{prefix}: Tool call '{tool_name}'",
                 "passed": found,
                 "detail": "OK" if found else f"'{tool_name}' not found in logcat",
+            })
+
+        # #224: entry count + category checks. entry_saved covers both in-call
+        # and reconciled-add origins, so this validates the full hybrid pipeline.
+        saved_events = [e for e in events if e["type"] == "entry_saved"]
+        saved_categories = [e["category"] for e in saved_events]
+
+        if "min_entries" in expect:
+            want = expect["min_entries"]
+            got = len(saved_events)
+            results.append({
+                "check": f"{prefix}: entries captured (>= {want})",
+                "passed": got >= want,
+                "detail": (
+                    "OK"
+                    if got >= want
+                    else f"Expected >= {want}, saw {got}: {saved_categories}"
+                ),
+            })
+
+        if "expected_categories" in expect:
+            want_cats = expect["expected_categories"]
+            missing = [c for c in want_cats if c not in saved_categories]
+            results.append({
+                "check": f"{prefix}: expected categories present",
+                "passed": not missing,
+                "detail": (
+                    "OK"
+                    if not missing
+                    else f"Missing {missing}; saw {saved_categories}"
+                ),
+            })
+
+        # #231: deterministic multi-item metric. By default this GATES only the
+        # over-split / hallucination guards (recall is data-collection, surfaced
+        # in JSON, not a pass/fail by itself — #231 collects evidence, it does
+        # not yet enforce a recall bar). A scenario can opt INTO a recall gate by
+        # setting `min_recall`; when present, recall below it also fails.
+        if "expected_items" in expect:
+            recall = score_recall(expect["expected_items"], saved_events)
+            min_recall = expect.get("min_recall")
+            recall_ok = min_recall is None or recall["recall"] >= min_recall
+            gated = "over-split/hallucination" + (
+                f" + recall>={min_recall}" if min_recall is not None else ""
+            )
+            results.append({
+                "check": f"{prefix}: multi-item guard ({gated})",
+                "passed": (
+                    not recall["over_split"]
+                    and not recall["hallucination"]
+                    and recall_ok
+                ),
+                "detail": (
+                    f"recall={recall['recall']} "
+                    f"cat_acc={recall['category_accuracy']} "
+                    f"captured={recall['captured']}/{recall['expected']} "
+                    f"over_split={recall['over_split']} "
+                    f"hallucination={recall['hallucination']}"
+                    + (f" min_recall={min_recall}" if min_recall is not None else "")
+                ),
+                "metrics": recall,
             })
 
     # Check call ended cleanly
