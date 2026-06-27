@@ -8,6 +8,11 @@ on:
   merge_group:
     branches: [main, 'dev/**']
 
+# Cancel superseded runs on PRs only; never cancel main/dev-release/merge_group runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # ──────────────────────────────────────────────────
   # Gate 1.5: Device E2E on physical phone (~8-12 min)
@@ -21,6 +26,10 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 20
     continue-on-error: true
+    # Serialize against voice-nightly.yml (same group) — one shared physical phone.
+    concurrency:
+      group: physical-device
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +42,7 @@ jobs:
           if [[ "$DEVICE_COUNT" -eq 0 ]]; then
             echo "::warning::No physical device connected. Skipping device tests."
             echo "SKIP_DEVICE_TEST=true" >> $GITHUB_ENV
+            echo '### Gate 1.5 SKIPPED (no device connected)' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Device connected: $(adb devices | grep 'device$' | head -1)"
             echo "SKIP_DEVICE_TEST=false" >> $GITHUB_ENV
@@ -81,6 +91,7 @@ jobs:
   analyze-test:
     name: Analyze, Test & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -156,6 +167,7 @@ jobs:
   distribute-dev:
     name: "Gate 2: Distribute Debug APK"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: analyze-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev/release'
     steps:
@@ -193,6 +205,7 @@ jobs:
   distribute-release:
     name: "Gate 3: Distribute Release APK"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: analyze-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
