@@ -18,18 +18,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-VERSION="${1:-}"
-DRY_RUN=false
+source "$SCRIPT_DIR/lib/version.sh"
 
-if [[ -z "$VERSION" ]]; then
+if ! PARSED=$(parse_release_args "$@"); then
   echo "Usage: bash scripts/release.sh <version> [--dry-run]"
   echo "  Example: bash scripts/release.sh 0.2.0"
   exit 1
 fi
-
-if [[ "${2:-}" == "--dry-run" ]]; then
-  DRY_RUN=true
-fi
+VERSION="${PARSED%%	*}"
+DRY_RUN="${PARSED##*	}"
 
 cd "$PROJECT_DIR"
 
