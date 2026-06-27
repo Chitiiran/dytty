@@ -1,0 +1,8 @@
+# Shell scripts and bats tests must keep LF endings — CRLF breaks shebangs/execution.
+*.sh    text eol=lf
+*.bash  text eol=lf
+*.bats  text eol=lf
+
+# Vendored bats-core test runner: force LF for everything so bin/bats stays executable.
+scripts/tests/bats/** text eol=lf
+scripts/tests/bats/bin/bats text eol=lf
