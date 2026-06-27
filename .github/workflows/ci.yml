@@ -261,6 +261,6 @@ jobs:
         with:
           appId: 1:828440302945:android:8a03bc6c01380939392120
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
-          groups: private testers
+          groups: private-testers
           releaseNotes: ${{ steps.notes.outputs.body }}
           file: build/app/outputs/flutter-apk/app-release.apk
