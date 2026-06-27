@@ -22,6 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAESTRO_DIR="$PROJECT_DIR/.maestro"
 HELPERS_DIR="$MAESTRO_DIR/helpers"
+source "$SCRIPT_DIR/lib/env.sh"
 SCREENSHOT_DIR="$PROJECT_DIR/test-output/latest/device-e2e/device"
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 
@@ -116,10 +117,10 @@ if [[ "$SKIP_BUILD" == false ]]; then
   echo ""
   echo "=== Building debug APK (real Firebase) ==="
 
-  # Load API key from .env if present
+  # Load API key from .env if present (anchored: skip comments, keep '=' in value)
   FIREBASE_KEY="${FIREBASE_ANDROID_API_KEY:-}"
-  if [[ -z "$FIREBASE_KEY" && -f "$PROJECT_DIR/.env" ]]; then
-    FIREBASE_KEY=$(grep FIREBASE_ANDROID_API_KEY "$PROJECT_DIR/.env" | cut -d= -f2 || true)
+  if [[ -z "$FIREBASE_KEY" ]]; then
+    FIREBASE_KEY=$(read_env_var FIREBASE_ANDROID_API_KEY "$PROJECT_DIR/.env")
   fi
 
   cd "$PROJECT_DIR"
