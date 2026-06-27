@@ -19,9 +19,13 @@ format_threads() {
   local json="$1"
   printf '%s' "$json" | python -c '
 import json, sys
-data = json.load(sys.stdin)
-rt = data.get("data", {}).get("repository", {}).get("pullRequest", {}).get("reviewThreads", {})
-nodes = rt.get("nodes", []) or []
+data = json.load(sys.stdin) or {}
+if data.get("errors"):
+    print("GraphQL errors:", data["errors"], file=sys.stderr)
+    sys.exit(1)
+pr = (((data.get("data") or {}).get("repository") or {}).get("pullRequest")) or {}
+rt = pr.get("reviewThreads") or {}
+nodes = rt.get("nodes") or []
 total = rt.get("totalCount", len(nodes))
 unresolved = [n for n in nodes if not n.get("isResolved", False)]
 print(f"Review threads: {total} total, {len(unresolved)} unresolved")
@@ -41,7 +45,8 @@ for n in unresolved:
 # Only run the live query when executed directly (not when sourced by tests).
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   PR="${1:-}"
-  if [[ -z "$PR" ]]; then
+  if [[ -z "$PR" || ! "$PR" =~ ^[0-9]+$ ]]; then
+    echo "Error: PR number must be a positive integer" >&2
     echo "Usage: bash scripts/pr-threads.sh <pr#>" >&2
     exit 1
   fi

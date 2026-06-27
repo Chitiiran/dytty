@@ -36,3 +36,10 @@ def test_bad_date_not_expired():
 
 def test_bad_date_days_since_sentinel():
     assert days_since("not-a-date", NOW) == -1
+
+
+def test_invalid_calendar_date_rejected():
+    # impossible dates must be sentinel, not silently rolled over (gemini #242)
+    assert days_since("2026-02-30", NOW) == -1
+    assert days_since("2026-13-01", NOW) == -1
+    assert is_expired("2026-02-30", NOW, 7) is False
