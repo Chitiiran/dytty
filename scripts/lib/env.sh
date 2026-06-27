@@ -6,5 +6,6 @@
 read_env_var() {
   local var="$1" file="$2"
   [[ -f "$file" ]] || return 0
-  grep "^${var}=" "$file" | head -1 | cut -d= -f2- || true
+  # tr -d '\r' strips a trailing CR from CRLF-edited .env files (Windows).
+  grep "^${var}=" "$file" | head -1 | cut -d= -f2- | tr -d '\r' || true
 }

@@ -37,3 +37,10 @@ EOF
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+@test "strips trailing CR from a CRLF .env line — gemini #243" {
+  printf 'CRLF_KEY=crlf-value\r\n' > "$TEST_TMP/.env.crlf"
+  run read_env_var CRLF_KEY "$TEST_TMP/.env.crlf"
+  [ "$status" -eq 0 ]
+  [ "$output" = "crlf-value" ]
+}
