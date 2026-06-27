@@ -146,6 +146,7 @@ jobs:
       - name: Build debug APK
         run: |
           flutter build apk --debug \
+            --no-tree-shake-icons \
             --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Upload web artifact
@@ -224,6 +225,7 @@ jobs:
       - name: Build release APK
         run: |
           flutter build apk --release \
+            --no-tree-shake-icons \
             --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Extract tester checklist from merged PR
