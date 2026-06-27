@@ -63,10 +63,11 @@ if [[ "$DEVICE_COUNT" -eq 0 ]]; then
 fi
 echo "  Devices connected: $DEVICE_COUNT"
 
-# Build target
-TARGET=""
+# Build target as an array so the flag and path stay separate words and the
+# path is safely quoted even if it ever contains spaces.
+TARGET_ARGS=()
 if [[ -n "$FLOW" ]]; then
-  TARGET="--target integration_test/flows/${FLOW}_flow_test.dart"
+  TARGET_ARGS=(--target "integration_test/flows/${FLOW}_flow_test.dart")
 fi
 
 # Run Patrol tests
@@ -77,7 +78,7 @@ echo ""
 if ! patrol test \
   --dart-define=USE_EMULATORS=true \
   --dart-define=FIREBASE_ANDROID_API_KEY="${FIREBASE_ANDROID_API_KEY:-dummy}" \
-  $TARGET 2>&1; then
+  "${TARGET_ARGS[@]}" 2>&1; then
   echo ""
   echo "=== Done (FAILED) ==="
   exit 1
