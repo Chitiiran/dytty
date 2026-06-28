@@ -18,21 +18,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_FILE="$PROJECT_DIR/kb/workflow/workstream-log.json"
 
-# Project board IDs
-PROJECT_NUMBER=1
-PROJECT_OWNER="Chitiiran"
-PROJECT_ID="PVT_kwHOAKyMRs4BTnrv"
-CATEGORY_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1cz8"
-WORKSTREAM_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA2cOQ"
-EFFORT_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1c0A"
-STATUS_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1cwg"
-
-# Status option IDs
-STATUS_INBOX="77421e5b"
-STATUS_READY="f75ad846"
-STATUS_IN_PROGRESS="47fc9ee4"
-STATUS_IN_REVIEW="2b8759c1"
-STATUS_DONE="98236657"
+# Board IDs + option helpers (PROJECT_*, WORKSTREAM_FIELD_ID, STATUS_FIELD_ID,
+# STATUS_DONE_OPTION_ID, WORKSTREAM_NONE_OPTION_ID, ITEM_LIMIT, bo_* functions).
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/board-options.sh"
 
 OBSERVATION_DAYS=7
 PASS=0
@@ -67,6 +56,7 @@ ensure_log_file() {
 
 STAGE=""
 WORKSTREAM=""
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -78,9 +68,17 @@ while [[ $# -gt 0 ]]; do
       WORKSTREAM="$2"
       shift 2
       ;;
+    --force)
+      FORCE=1
+      shift
+      ;;
+    --yes)
+      BO_ASSUME_YES=1
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: bash scripts/verify-workflow.sh --stage <stage> [--workstream <name>]"
+      echo "Usage: bash scripts/verify-workflow.sh --stage <stage> [--workstream <name>] [--force] [--yes]"
       exit 1
       ;;
   esac
@@ -457,6 +455,12 @@ stage_cleanup() {
   ensure_log_file
 
   # Check observation period elapsed
+  # KNOWN-BROKEN on Windows (follow-up): this python `open('$LOG_FILE')` cannot open
+  # the MSYS `/c/...` path that $LOG_FILE expands to (Windows python needs `C:\...`),
+  # so it returns empty and the stage aborts below. session-start avoids this by
+  # piping the file via stdin (`cat "$LOG_FILE" | python -c ...sys.stdin...`). Fix:
+  # convert these stage_cleanup `open()` reads to the same stdin-pipe (or to node
+  # reading the path as an argv arg, which MSYS converts). Tracked separately.
   local MERGE_DATE
   MERGE_DATE=$(python -c "
 import json
@@ -487,35 +491,54 @@ if found:
 
   pass "Observation period elapsed ($DAYS_AGO days since merge)"
 
-  # Delete workstream option from project
   echo ""
-  echo "--- Deleting workstream option ---"
-  local OPTION_ID
-  OPTION_ID=$(python -c "
-import json
-with open('$LOG_FILE') as f:
-    data = json.load(f)
-found = [e for e in data if e.get('workstream') == '$WORKSTREAM' and not e.get('cleanedUp', False)]
-if found:
-    print(found[0].get('optionId', ''))
-" 2>/dev/null || true)
+  echo "--- Safe retire of workstream option ---"
 
-  if [[ -n "$OPTION_ID" ]]; then
-    gh api graphql -f query="
-    mutation {
-      updateProjectV2Field(input: {
-        fieldId: \"$WORKSTREAM_FIELD_ID\"
-        singleSelectOptions: []
-      }) {
-        projectV2Field {
-          ... on ProjectV2SingleSelectField {
-            id
-          }
-        }
-      }
-    }" 2>/dev/null && pass "Workstream option deleted" || warn "Failed to delete workstream option — delete manually in browser"
+  # 1) Read tickets on this workstream from the LIVE board (never the log).
+  local TICKETS_JSON
+  TICKETS_JSON=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json \
+    --jq "[.items[] | select(.workstream == \"$WORKSTREAM\") | {num: .content.number, status: .status}]" 2>/dev/null || echo "[]")
+
+  # 2) Partition by status. Non-Done tickets block (or, with --force, stay on the tag).
+  local NON_DONE
+  NON_DONE=$(echo "$TICKETS_JSON" | node -e '
+    let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+      const nd=JSON.parse(d).filter(t=>t.status!=="Done").map(t=>"#"+t.num+"("+(t.status||"none")+")");
+      console.log(nd.join(" "));
+    });')
+
+  if [[ -n "$NON_DONE" ]]; then
+    if [[ "${FORCE:-0}" != "1" ]]; then
+      fail "Refusing: workstream has non-Done tickets: $NON_DONE"
+      echo "  Reassign or close them first (e.g. bash scripts/assign-tag.sh --issue <N> --field Workstream --value <other>),"
+      echo "  or re-run with --force to drop the tag and leave these tickets on it."
+      summary
+      return
+    fi
+    warn "Proceeding with --force; these non-Done tickets stay on the (about-to-be-removed) tag: $NON_DONE"
+  fi
+
+  # 3) Remove the option via the id-preserving transform (Done tickets keep
+  #    Status=Done; they simply lose the now-meaningless ephemeral Workstream value).
+  local DESIRED
+  DESIRED=$(bo_fetch_field Workstream | node "$SCRIPT_DIR/lib/board-options.mjs" drop --target "$WORKSTREAM") \
+    || { fail "Could not compute option set (is '$WORKSTREAM' still present?)"; summary; return; }
+
+  local DONE_COUNT
+  DONE_COUNT=$(echo "$TICKETS_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).filter(t=>t.status==="Done").length));')
+  echo "  Will remove option '$WORKSTREAM' ($DONE_COUNT Done tickets stay Done)."
+  if ! bo_confirm "Retire workstream tag '$WORKSTREAM'?"; then
+    warn "Aborted by user — option NOT removed."
+    summary
+    return
+  fi
+
+  if bo_apply_options "$WORKSTREAM_FIELD_ID" "$DESIRED" >/dev/null; then
+    pass "Workstream option '$WORKSTREAM' retired safely (survivor ids preserved)"
   else
-    warn "No option ID in log — delete manually in browser"
+    fail "Failed to retire option — board unchanged"
+    summary
+    return
   fi
 
   # Mark log entry as cleaned up
