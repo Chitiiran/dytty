@@ -269,7 +269,11 @@ class GeminiLiveService {
     // Gemini connection — null first so the receive loop breaks, then close.
     final session = _session;
     _session = null;
-    session?.close();
+    // Fire-and-forget: a socket error during a mid-call dispose must not
+    // surface as an unhandled async exception.
+    session?.close().catchError((Object e) {
+      debugPrint('Live session close during dispose failed: $e');
+    });
     _audioController.close();
     _transcriptController.close();
     _toolCallController.close();

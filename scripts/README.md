@@ -28,7 +28,7 @@ never `python3` (broken MS Store stub on the dev box).
 |---|---|
 | `verify-workflow.sh --stage <s>` | Advisory pipeline checks (session-start, triage, batch, pr, post-merge). **Never run `--stage cleanup`** until the #236 defusal lands |
 | `add-workstream.sh <name> --color <C>` | Safe board workstream-option add (id-preserving) |
-| `edit-tag.sh` / `assign-tag.sh` | Safe tag rename/recolor/assign (id-preserving) |
+| `edit-tag.sh` / `assign-tag.sh` | Safe tag rename/recolor/assign (id-preserving) — **lands with #236 (dev/chore-board-tooling), not on main yet** |
 | `pr-threads.sh <pr#>` | Read-only list of unresolved review threads |
 
 ## Diagnostics & tooling
@@ -39,7 +39,7 @@ never `python3` (broken MS Store stub on the dev box).
 | `inject-audio.py` | WAV → emulator virtual mic via gRPC (`pip install grpcio grpcio-tools`) |
 | `lib/env.sh` | `read_env_var KEY FILE` — anchored, CR-stripping .env reader (use this, never raw grep) |
 | `lib/version.sh` | Validated pubspec version parse/bump helpers |
-| `lib/board-options.sh` | Board option mutations that preserve option ids |
+| `lib/board-options.sh` | Board option mutations that preserve option ids — **lands with #236** |
 
 ## Script tests
 

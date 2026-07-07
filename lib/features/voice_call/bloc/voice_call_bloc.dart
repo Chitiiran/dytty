@@ -374,6 +374,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     // handled twice for the rest of the session.
     await _cancelSubscriptions();
     _recordedAudio.clear();
+    // A fresh call gets a fresh reconcile pass (guard is per-session, not
+    // per-bloc) — defuses a silent skip if a restart affordance ever lands.
+    _reconciled = false;
     emit(
       state.copyWith(
         status: VoiceCallStatus.connecting,

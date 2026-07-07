@@ -12,6 +12,7 @@ class ThemeCubit extends Cubit<ThemeMode> {
 
   Future<void> loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
+    if (isClosed) return; // cubit can be closed while awaiting prefs
     final stored = prefs.getString(_keyThemeMode);
     final mode = ThemeMode.values.where((m) => m.name == stored).firstOrNull;
     if (mode != null && mode != state) {

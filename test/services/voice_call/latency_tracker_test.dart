@@ -45,5 +45,16 @@ void main() {
       }
       expect(tracker.p95, 200);
     });
+
+    test('reset clears all data', () {
+      final tracker = LatencyTracker();
+      tracker.add(100);
+      tracker.add(200);
+      tracker.reset();
+      // connect() resets the tracker so percentiles don't leak across
+      // sessions (gemini_live_service.dart) — reset must clear everything.
+      expect(tracker.p50, isNull);
+      expect(tracker.p95, isNull);
+    });
   });
 }
