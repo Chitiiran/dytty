@@ -262,7 +262,12 @@ String normalizeForDedup(String s) => s
 
 /// Tagged structured logging for the acoustic test harness (verify.py parses
 /// these). Mirrors the `[DYTTY]` tag used by GeminiLiveService.
-void _harnessLog(String msg) => debugPrint('[DYTTY] $msg');
+///
+/// Debug builds only: the harness drives debug builds; release/tester logcat
+/// must not receive journal content.
+void _harnessLog(String msg) {
+  if (kDebugMode) debugPrint('[DYTTY] $msg');
+}
 
 /// Tool call argument keys for the save_entry function.
 class _SaveEntryArgs {
@@ -450,7 +455,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           date: _journalDate,
           audioData: Uint8List.fromList(_recordedAudio),
         );
-        debugPrint('Audio uploaded: $url');
+        if (kDebugMode) debugPrint('Audio uploaded: $url');
         emit(state.copyWith(audioUrl: url, uploadingAudio: false));
       } catch (e) {
         debugPrint('Failed to upload audio: $e');
@@ -804,7 +809,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _SaveEntryArgs.category: categoryName,
       });
 
-      debugPrint('Tool call: save_entry → $categoryName: $text');
+      if (kDebugMode) {
+        debugPrint('Tool call: save_entry → $categoryName: $text');
+      }
       _harnessLog('Entry saved: $categoryName (origin: in-call)');
     } else if (call.name == 'edit_entry') {
       final args = call.args;
@@ -838,7 +845,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _EditEntryArgs.entryId: entryId,
       });
 
-      debugPrint('Tool call: edit_entry → $entryId: $text');
+      if (kDebugMode) {
+        debugPrint('Tool call: edit_entry → $entryId: $text');
+      }
     }
   }
 

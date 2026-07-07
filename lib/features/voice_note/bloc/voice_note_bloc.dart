@@ -169,8 +169,13 @@ class VoiceNoteState extends Equatable {
 
 class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
   /// Tag for structured log lines, filterable via `adb logcat`.
+  ///
+  /// Debug builds only: the harness drives debug builds, and these lines
+  /// carry dictated journal content that must not reach release logcat.
   static const _logTag = '[DYTTY]';
-  static void _log(String message) => debugPrint('$_logTag $message');
+  static void _log(String message) {
+    if (kDebugMode) debugPrint('$_logTag $message');
+  }
 
   final SpeechService _speechService;
   final LlmService _llmService;

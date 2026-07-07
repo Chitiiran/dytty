@@ -125,7 +125,13 @@ class GeminiLiveService {
   bool get isConnected => _session != null;
 
   /// Emit a structured log line with the [DYTTY] tag for logcat filtering.
-  static void _log(String message) => debugPrint('$_logTag $message');
+  ///
+  /// Debug builds only: the harness always drives debug builds, and these
+  /// lines carry journal content (transcripts) that must not land in
+  /// release/tester logcat.
+  static void _log(String message) {
+    if (kDebugMode) debugPrint('$_logTag $message');
+  }
 
   /// Emit a state change with logging for test observability.
   void _emitState(GeminiLiveState state) {
