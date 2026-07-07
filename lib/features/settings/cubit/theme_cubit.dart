@@ -34,6 +34,7 @@ class ThemeCubit extends Cubit<ThemeMode> {
           .then((prefs) => prefs.setString(_keyThemeMode, mode.name))
           .catchError((Object e) {
             debugPrint('Failed to persist theme mode: $e');
+            return false; // Future<bool> chain — handler must supply a value
           });
     }
   }
