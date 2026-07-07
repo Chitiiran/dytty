@@ -232,6 +232,9 @@ class VoiceNoteBloc extends Bloc<VoiceNoteEvent, VoiceNoteState> {
     emit(state.copyWith(status: VoiceNoteStatus.listening, transcript: ''));
     await _speechService.startListening(
       onResult: (result) {
+        // Android's STT plugin can flush a final result while the sheet is
+        // being dismissed — add() on a closed bloc throws (#199 sibling).
+        if (isClosed) return;
         add(
           _SpeechResultReceived(
             text: result.recognizedWords,

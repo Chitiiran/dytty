@@ -210,6 +210,76 @@ void main() {
     );
   });
 
+  group('lifecycle robustness', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'retry after a connection error does not duplicate subscriptions',
+      build: () => VoiceCallBloc(service: mockService),
+      act: (bloc) async {
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+        // Connection drops...
+        stateController.add(GeminiLiveState.error);
+        await Future<void>.delayed(Duration.zero);
+        // ...user retries. Before the fix this re-subscribed every service
+        // stream without cancelling the old listeners, so each service event
+        // was handled twice for the rest of the session.
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+        transcriptController.add(
+          const Transcript(speaker: Speaker.user, text: 'once', isFinal: true),
+        );
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        expect(
+          bloc.state.transcripts.length,
+          1,
+          reason:
+              'One service transcript event must produce exactly one '
+              'bubble; duplicates mean stale subscriptions survived retry.',
+        );
+      },
+    );
+
+    test('closing the bloc mid-upload does not throw emit-after-close', () {
+      return runZonedGuarded(
+        () async {
+          final uploadGate = Completer<String>();
+          when(
+            () => mockStorage.uploadCallAudio(
+              uid: any(named: 'uid'),
+              date: any(named: 'date'),
+              audioData: any(named: 'audioData'),
+            ),
+          ).thenAnswer((_) => uploadGate.future);
+
+          final bloc = VoiceCallBloc(
+            service: mockService,
+            audioStorage: mockStorage,
+            uid: 'u1',
+          );
+          // A transcript makes _onEndCall reach its trailing
+          // add(ReconcileSession) — the add-after-close hazard under test.
+          bloc.add(
+            const TranscriptReceived(
+              Transcript(speaker: Speaker.user, text: 'hello', isFinal: true),
+            ),
+          );
+          bloc.sendAudio(Uint8List.fromList([1]));
+          bloc.add(const EndCall());
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          // Screen popped (Done button) while the upload is still in flight.
+          await bloc.close();
+          uploadGate.complete('https://audio.example/late.pcm');
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        },
+        (error, stack) {
+          fail('emit after close leaked out of the handler: $error');
+        },
+      );
+    });
+  });
+
   group('mute privacy', () {
     blocTest<VoiceCallBloc, VoiceCallState>(
       'muted mic audio is neither sent nor recorded for upload',

@@ -364,6 +364,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     StartCall event,
     Emitter<VoiceCallState> emit,
   ) async {
+    // A retry after a connection error re-enters here with the old
+    // subscriptions still live — cancel first or every service event is
+    // handled twice for the rest of the session.
+    await _cancelSubscriptions();
     _recordedAudio.clear();
     emit(
       state.copyWith(
@@ -468,7 +472,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final fullTranscript = state.transcripts
         .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
         .join('\n');
-    if (fullTranscript.trim().isNotEmpty) {
+    // isClosed guard: the post-call screen's Done button can close this bloc
+    // while the upload above is still awaiting — add() on a closed bloc
+    // throws StateError.
+    if (!isClosed && fullTranscript.trim().isNotEmpty) {
       add(ReconcileSession(transcript: fullTranscript));
     }
   }
