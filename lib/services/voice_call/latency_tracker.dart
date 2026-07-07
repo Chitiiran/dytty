@@ -11,9 +11,6 @@ class LatencyTracker {
   /// 95th percentile latency, or null if no measurements.
   int? get p95 => _percentile(0.95);
 
-  /// Unmodifiable view of all recorded measurements.
-  List<int> get measurements => List.unmodifiable(_data);
-
   /// Clear all measurements.
   void reset() => _data.clear();
 
