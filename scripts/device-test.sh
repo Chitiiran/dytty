@@ -216,6 +216,18 @@ for dir in "$MAESTRO_DIR"/*/; do
     continue
   fi
 
+  # Flows takeScreenshot into .maestro/screenshots/latest/<area>/ and Maestro
+  # can't create nested parents — a fresh checkout/worktree (or new runner
+  # workspace) otherwise fails every flow at its first screenshot. 'latest'
+  # may also be a DANGLING junction left by maestro-test.sh's per-run output
+  # swap (e.g. its bats suite deletes the target) — replace it with a real
+  # directory, else both Maestro and mkdir -p fail on it.
+  SHOT_ROOT="$MAESTRO_DIR/screenshots/latest"
+  if [[ -L "$SHOT_ROOT" && ! -e "$SHOT_ROOT" ]]; then
+    rm -f "$SHOT_ROOT"
+  fi
+  mkdir -p "$SHOT_ROOT/$dirname"
+
   shopt -s nullglob
   yamls=("$dir"*.yaml)
   shopt -u nullglob

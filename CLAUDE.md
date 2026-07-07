@@ -13,6 +13,8 @@ Voice-first daily journaling app with 5 structured categories. Flutter + Firebas
 
 **End of session:** Update `kb/PROGRESS.md` — refresh top section, append dated entry to `## Log`.
 
+**Weekly (owner ritual):** 20-minute retro in `kb/workflow/WEEKLY-RETRO.md` — five questions: what reached a device, what broke and why, which signal lied, what did I avoid, what do I kill. The session-start check nudges when it's 8+ days stale.
+
 ## Knowledge Base (`kb/`)
 
 All project knowledge lives in `kb/` (gitignored, private IP). Navigate by the question you're trying to answer:
