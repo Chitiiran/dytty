@@ -1,5 +1,13 @@
 name: CI
 
+# Single source for the toolchain pin — flutter-version references below.
+env:
+  FLUTTER_VERSION: '3.41.1'
+
+# Default token: read-only. Jobs that need more declare it themselves.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, 'dev/**']
@@ -52,7 +60,7 @@ jobs:
         if: env.SKIP_DEVICE_TEST != 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
@@ -62,7 +70,9 @@ jobs:
       - name: Restore google-services.json
         if: env.SKIP_DEVICE_TEST != 'true'
         shell: bash
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Run device tests
         if: env.SKIP_DEVICE_TEST != 'true'
@@ -97,7 +107,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - run: flutter pub get
@@ -141,7 +151,10 @@ jobs:
       # Shared debug keystore is checked into android/debug.keystore and referenced by build.gradle.kts signingConfig.
 
       - name: Restore google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Build debug APK
         run: |
@@ -207,6 +220,9 @@ jobs:
     name: "Gate 3: Distribute Release APK"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
     needs: analyze-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -214,13 +230,16 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - run: flutter pub get
 
       - name: Restore google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Build release APK
         run: |

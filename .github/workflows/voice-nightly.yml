@@ -9,6 +9,9 @@ name: "Voice Nightly: Acoustic E2E"
 # gitignored files (.env, google-services.json), so everything comes
 # from secrets/actions — never from files assumed on the runner.
 
+env:
+  FLUTTER_VERSION: '3.41.1'
+
 on:
   schedule:
     - cron: "0 7 * * *" # 07:00 UTC = 03:00 EDT / 02:00 EST
@@ -40,7 +43,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
@@ -48,7 +51,9 @@ jobs:
 
       - name: Restore google-services.json
         shell: bash
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Cache harness Python deps
         uses: actions/cache@v4
