@@ -301,9 +301,8 @@ void main() {
       robot.expectGenerateSummaryButton();
     });
 
-    testWidgets('shows P50/P95 stat chips when latency was measured', (
-      tester,
-    ) async {
+    testWidgets('real-bloc harness has no latency stats to show '
+        '(P50/P95 need service data — see mock-bloc group)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -319,9 +318,8 @@ void main() {
       robot.expectNoLatencyStat();
     });
 
-    testWidgets('shows "Captured entries" header when entries exist', (
-      tester,
-    ) async {
+    testWidgets('real-bloc harness shows no captured-entries header '
+        '(no entries saved — see mock-bloc group)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
