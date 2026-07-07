@@ -438,11 +438,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       );
 
       try {
-        final now = DateTime.now();
-        final date = DateFormat('yyyy-MM-dd').format(now);
+        // Keyed to the pinned session date (#232) so the audio lands on the
+        // same day-doc as the session's entries even across midnight — the
+        // entry paths already did this; the upload was still using "now".
         final url = await _audioStorage.uploadCallAudio(
           uid: _uid,
-          date: date,
+          date: _journalDate,
           audioData: Uint8List.fromList(_recordedAudio),
         );
         debugPrint('Audio uploaded: $url');
@@ -591,7 +592,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         } catch (e) {
           debugPrint('reconcile reword failed: $e');
         }
-        _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
+        // No JournalBloc dispatch: the repo write above is the single writer
+        // (#232); UpdateEntry would hit the selected date's doc, not the
+        // session's, and the entry stream reconciles the UI anyway.
         updated[idx] = updated[idx].copyWith(
           text: item.text,
           rewordedByAi: true,
@@ -628,13 +631,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     RejectReconciledEntry event,
     Emitter<VoiceCallState> emit,
   ) async {
-    // Remove from the post-call list and tombstone-delete from Firestore.
+    // Remove from the post-call list and delete from Firestore. Single
+    // writer, session-dated (#232): repository when wired (uid is irrelevant
+    // to the repo call — the old `_uid != null` guard silently skipped the
+    // delete); JournalBloc DeleteEntry only as the legacy fallback, since it
+    // targets the selected date's doc rather than the session's.
     final remaining = state.savedEntries
         .where((e) => e.entryId != event.entryId)
         .toList();
     emit(state.copyWith(savedEntries: remaining));
-    _journalBloc?.add(DeleteEntry(event.entryId));
-    if (_journalRepository != null && _uid != null) {
+    if (_journalRepository != null) {
       try {
         await _journalRepository.deleteCategoryEntry(
           _journalDate,
@@ -643,6 +649,8 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       } catch (e) {
         debugPrint('reject entry delete failed: $e');
       }
+    } else {
+      _journalBloc?.add(DeleteEntry(event.entryId));
     }
   }
 
@@ -796,9 +804,25 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       final entryId = args[_EditEntryArgs.entryId] as String? ?? '';
       final text = args[_EditEntryArgs.text] as String? ?? '';
 
-      // Persist edit via JournalBloc
+      // Single writer, session-dated (#232): when the repository is wired,
+      // write through it under _journalDate — a JournalBloc UpdateEntry would
+      // target the user's currently-SELECTED date (wrong doc after calendar
+      // browsing) and double-write. The bloc fallback preserves the legacy
+      // path for setups without a repository.
       if (entryId.isNotEmpty) {
-        _journalBloc?.add(UpdateEntry(entryId: entryId, text: text));
+        if (_journalRepository != null) {
+          try {
+            await _journalRepository.updateCategoryEntry(
+              _journalDate,
+              entryId,
+              text,
+            );
+          } catch (e) {
+            debugPrint('edit_entry repository write failed: $e');
+          }
+        } else {
+          _journalBloc?.add(UpdateEntry(entryId: entryId, text: text));
+        }
       }
 
       // Acknowledge the tool call to the model
