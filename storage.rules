@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Voice-call audio is PII (raw journal speech). Only the owner may touch
+// their own recordings; everything else is denied. Mirrors the per-uid
+// scoping in firestore.rules. Deploy: firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /voice-calls/{uid}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
