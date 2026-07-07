@@ -33,6 +33,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   late final VoiceCallBloc _bloc;
 
   bool _ownsBloc = false;
+  bool _blocInitialized = false;
   CallSession? _session;
 
   @override
@@ -45,6 +46,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    // Guard: a second dependencies change would re-assign the late finals
+    // below and throw. Wiring happens exactly once.
+    if (_blocInitialized) return;
+    _blocInitialized = true;
+
     if (widget.bloc != null) {
       _bloc = widget.bloc!;
       _ownsBloc = false;
@@ -55,9 +61,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     final authState = context.read<AuthBloc>().state;
     final uid = authState is Authenticated ? authState.uid : null;
 
+    final journalBloc = context.read<JournalBloc>();
     _bloc = VoiceCallBloc(
       service: _service,
-      journalBloc: context.read<JournalBloc>(),
+      journalBloc: journalBloc,
+      // #224: reconcile/reword need the repository to add missed items and
+      // capture entry ids — without it _onReconcileSession silently no-ops
+      // (this exact wiring was lost once before; see the regression test in
+      // voice_call_screen_wiring_test.dart). Reuse JournalBloc's repository —
+      // same uid-scoped instance, no fresh Firestore handle.
+      journalRepository: journalBloc.repository,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,

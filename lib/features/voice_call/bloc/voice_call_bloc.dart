@@ -305,6 +305,17 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   bool _warned5 = false;
   bool _warned9 = false;
 
+  /// Wiring probe (#224 regression guard): production construction sites must
+  /// pass a repository or reconcile/reword silently no-op. The first shipped
+  /// version of this feature was dead in production for exactly this reason —
+  /// tests injected a mock repo, nothing asserted what the screen constructs.
+  @visibleForTesting
+  bool get hasJournalRepository => _journalRepository != null;
+
+  /// Test seam: pin the session journal date without a live connect (#232).
+  @visibleForTesting
+  void debugSetSessionDate(String date) => _sessionDate = date;
+
   /// Accumulates mic input PCM data during a call for upload after.
   final List<int> _recordedAudio = [];
 
