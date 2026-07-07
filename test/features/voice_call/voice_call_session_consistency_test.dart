@@ -210,6 +210,33 @@ void main() {
     );
   });
 
+  group('mute privacy', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'muted mic audio is neither sent nor recorded for upload',
+      build: () => VoiceCallBloc(
+        service: mockService,
+        journalRepository: mockRepo,
+        audioStorage: mockStorage,
+        uid: 'u1',
+      ),
+      act: (bloc) async {
+        bloc.add(const ToggleMute());
+        await Future<void>.delayed(Duration.zero);
+        bloc.sendAudio(Uint8List.fromList([9, 9, 9]));
+      },
+      verify: (bloc) {
+        verifyNever(() => mockService.sendAudio(any()));
+        expect(
+          bloc.recordedAudio,
+          isNull,
+          reason:
+              'Muted audio must not be buffered — the buffer is uploaded '
+              'to Cloud Storage after the call (privacy).',
+        );
+      },
+    );
+  });
+
   group('reword/reject single-writer (#232)', () {
     blocTest<VoiceCallBloc, VoiceCallState>(
       'reword persists via repository only — no JournalBloc UpdateEntry',

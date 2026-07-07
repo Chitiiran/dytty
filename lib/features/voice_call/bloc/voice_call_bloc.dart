@@ -879,11 +879,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   }
 
   /// Send mic audio to the model and accumulate for later upload.
+  ///
+  /// Muted means MUTED: not sent to Gemini and not recorded into the buffer
+  /// that uploads to Cloud Storage after the call — the old behavior kept
+  /// recording muted audio into the uploaded file (privacy).
   void sendAudio(Uint8List pcmData) {
+    if (state.isMuted) return;
     _recordedAudio.addAll(pcmData);
-    if (!state.isMuted) {
-      _service.sendAudio(pcmData);
-    }
+    _service.sendAudio(pcmData);
   }
 
   Future<void> _cancelSubscriptions() async {

@@ -1066,21 +1066,17 @@ void main() {
       bloc.close();
     });
 
-    test('does not forward to service when muted', () {
+    test('does not forward OR record when muted (privacy)', () async {
       final bloc = buildBloc();
-      // Manually set muted state by adding ToggleMute
       bloc.add(const ToggleMute());
-      // Wait for state to propagate
-      Future<void>.delayed(const Duration(milliseconds: 50)).then((_) {
-        final data = Uint8List.fromList([10, 20, 30]);
-        bloc.sendAudio(data);
-        // Audio still accumulated for recording
-        expect(bloc.recordedAudio, isNotNull);
-        expect(bloc.recordedAudio!.length, 3);
-        // But NOT forwarded to service
-        verifyNever(() => mockService.sendAudio(any()));
-        bloc.close();
-      });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final data = Uint8List.fromList([10, 20, 30]);
+      bloc.sendAudio(data);
+      // Muted audio must not reach the cloud-upload buffer either — the old
+      // behavior recorded muted audio into the file uploaded after the call.
+      expect(bloc.recordedAudio, isNull);
+      verifyNever(() => mockService.sendAudio(any()));
+      await bloc.close();
     });
 
     test('resumes forwarding when unmuted', () async {
