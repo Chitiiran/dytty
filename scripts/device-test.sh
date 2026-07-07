@@ -5,10 +5,13 @@
 # Used by Gate 1.5 (self-hosted CI) and for manual pre-demo testing.
 #
 # Usage:
-#   bash scripts/device-test.sh                    # Run all flows
+#   bash scripts/device-test.sh                    # Run all non-voice flows
 #   bash scripts/device-test.sh --tags smoke       # Run flows tagged 'smoke'
 #   bash scripts/device-test.sh --skip-build       # Skip APK build (reuse existing)
 #   bash scripts/device-test.sh --skip-cleanup     # Skip Firestore data cleanup
+#   bash scripts/device-test.sh --include-voice    # Also run .maestro/voice flows
+#                                                  # (need orchestrated room audio;
+#                                                  # daily-call flows PLAY AI SPEECH)
 #
 # Prerequisites:
 #   - Physical Android device connected via USB (adb devices)
@@ -30,6 +33,7 @@ APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 TAGS=""
 SKIP_BUILD=false
 SKIP_CLEANUP=false
+INCLUDE_VOICE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -43,6 +47,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-cleanup)
       SKIP_CLEANUP=true
+      shift
+      ;;
+    --include-voice)
+      INCLUDE_VOICE=true
       shift
       ;;
     *)
@@ -198,6 +206,15 @@ TEST_FAILED=false
 for dir in "$MAESTRO_DIR"/*/; do
   dirname=$(basename "$dir")
   [[ "$dirname" == "helpers" || "$dirname" == "screenshots" ]] && continue
+
+  # Voice flows need orchestrated room audio and the daily-call ones start a
+  # real Gemini Live call (AI speech from the phone speaker) — excluded from
+  # default runs (Gate 1.5, manual smoke). voice-nightly.yml owns them via the
+  # acoustic harness. Opt in explicitly with --include-voice.
+  if [[ "$dirname" == "voice" && "$INCLUDE_VOICE" == false ]]; then
+    echo "--- Skipping voice flows (pass --include-voice to run) ---"
+    continue
+  fi
 
   shopt -s nullglob
   yamls=("$dir"*.yaml)
