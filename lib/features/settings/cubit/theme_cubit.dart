@@ -11,12 +11,17 @@ class ThemeCubit extends Cubit<ThemeMode> {
   ThemeCubit() : super(ThemeMode.system);
 
   Future<void> loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (isClosed) return; // cubit can be closed while awaiting prefs
-    final stored = prefs.getString(_keyThemeMode);
-    final mode = ThemeMode.values.where((m) => m.name == stored).firstOrNull;
-    if (mode != null && mode != state) {
-      emit(mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (isClosed) return; // cubit can be closed while awaiting prefs
+      final stored = prefs.getString(_keyThemeMode);
+      final mode = ThemeMode.values.where((m) => m.name == stored).firstOrNull;
+      if (mode != null && mode != state) {
+        emit(mode);
+      }
+    } catch (e) {
+      // Platform-channel hiccup at startup: keep the system default.
+      debugPrint('Failed to load theme: $e');
     }
   }
 
@@ -25,9 +30,11 @@ class ThemeCubit extends Cubit<ThemeMode> {
       emit(mode);
       // Fire-and-forget persistence; a failed write just means the old
       // theme comes back next launch.
-      SharedPreferences.getInstance().then(
-        (prefs) => prefs.setString(_keyThemeMode, mode.name),
-      );
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.setString(_keyThemeMode, mode.name))
+          .catchError((Object e) {
+            debugPrint('Failed to persist theme mode: $e');
+          });
     }
   }
 }

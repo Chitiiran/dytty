@@ -34,8 +34,7 @@ read_pubspec_version() {
     echo "ERROR: pubspec version must be X.Y.Z+N, got: '$ver'" >&2
     return 1
   fi
-  printf '%s
-' "$ver"
+  printf '%s\n' "$ver"
 }
 
 # validate_semver "X.Y.Z"  — release version, no build suffix. Returns non-zero if invalid.

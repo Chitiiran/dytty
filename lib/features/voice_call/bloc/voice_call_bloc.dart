@@ -605,7 +605,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             item.text,
           );
         } catch (e) {
+          // Failed write: skip the UI update too — showing reworded text
+          // that never persisted would lie to the post-call screen.
           debugPrint('reconcile reword failed: $e');
+          continue;
         }
         // No JournalBloc dispatch: the repo write above is the single writer
         // (#232); UpdateEntry would hit the selected date's doc, not the
