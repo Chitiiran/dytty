@@ -259,6 +259,11 @@ class GeminiLiveService {
 
   void dispose() {
     _suppressTimer?.cancel();
+    // #246: disposing mid-call (bloc closed / screen popped) leaked the live
+    // Gemini connection — null first so the receive loop breaks, then close.
+    final session = _session;
+    _session = null;
+    session?.close();
     _audioController.close();
     _transcriptController.close();
     _toolCallController.close();
@@ -266,6 +271,11 @@ class GeminiLiveService {
     _latencyController.close();
     _interruptController.close();
   }
+
+  /// Test seam: inject a session double so dispose/disconnect paths are
+  /// testable without a live Firebase connection (mirrors markClosedForTest).
+  @visibleForTesting
+  void debugSetSession(LiveSession session) => _session = session;
 
   /// Start the receive loop for multi-turn conversations.
   ///
@@ -320,11 +330,12 @@ class GeminiLiveService {
       for (final part in content.modelTurn!.parts) {
         if (part is InlineDataPart && part.mimeType.startsWith('audio/')) {
           if (_measuring && _userLastChunkMs != null) {
-            lastLatencyMs = _nowMs() - _userLastChunkMs!;
-            _latencyTracker.add(lastLatencyMs!);
-            _latencyController.add(lastLatencyMs!);
+            final latency = _nowMs() - _userLastChunkMs!;
+            lastLatencyMs = latency;
+            _latencyTracker.add(latency);
+            _latencyController.add(latency);
             _measuring = false;
-            debugPrint('Response latency: ${lastLatencyMs}ms');
+            debugPrint('Response latency: ${latency}ms');
           }
           emitAudioChunk(part.bytes);
         }
@@ -410,8 +421,9 @@ class GeminiLiveService {
   @visibleForTesting
   void noteAiAudioForTest() {
     if (_measuring && _userLastChunkMs != null) {
-      lastLatencyMs = _nowMs() - _userLastChunkMs!;
-      _latencyTracker.add(lastLatencyMs!);
+      final latency = _nowMs() - _userLastChunkMs!;
+      lastLatencyMs = latency;
+      _latencyTracker.add(latency);
       _measuring = false;
     }
   }
