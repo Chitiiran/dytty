@@ -63,10 +63,10 @@ fi
 # 4. Bump version in pubspec.yaml
 echo "Bumping version to $VERSION..."
 if [[ "$DRY_RUN" == false ]]; then
-  # Extract current build number and increment
-  CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //')
-  BUILD_NUM=$(echo "$CURRENT" | sed 's/.*+//')
-  NEW_BUILD=$((BUILD_NUM + 1))
+  # Extract current build number and increment (validated + CR-safe)
+  CURRENT=$(read_pubspec_version pubspec.yaml)
+  BUILD_NUM="${CURRENT#*+}"
+  NEW_BUILD=$((10#$BUILD_NUM + 1))
   NEW_VERSION="$VERSION+$NEW_BUILD"
 
   sed -i "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
@@ -75,9 +75,7 @@ if [[ "$DRY_RUN" == false ]]; then
   git add pubspec.yaml
   git commit -m "chore: bump version to $NEW_VERSION for release
 
-Preparing release candidate $VERSION.
-
-Refs #45"
+Preparing release candidate $VERSION."
 else
   echo "  [dry-run] Would update pubspec.yaml version to $VERSION+N"
 fi
@@ -88,7 +86,7 @@ echo "=== Release branch ready ==="
 echo ""
 echo "Next steps:"
 echo "  1. Open a PR:  gh pr create --base main --head $BRANCH --title 'Release $VERSION'"
-echo "  2. CI (ci.yml Gate 1) runs on the PR: analyze + test + 80% coverage + build web/APK + Maestro smoke"
+echo "  2. CI (ci.yml Gate 1) runs on the PR: analyze + test + 80% coverage + build web/APK"
 echo "  3. Dogfooding: distribute APK to testers (bash scripts/distribute.sh ...) for 2-3 days"
 echo "  4. Fix P0/P1 bugs on this branch if any"
 echo "  5. On merge to main: Gate 3 (distribute-release) + deploy.yml publish + auto-tag the release"

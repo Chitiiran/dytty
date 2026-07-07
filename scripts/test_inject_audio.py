@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Tests for inject-audio.py — WAV chunking and discovery logic.
 
 Run: python -m pytest scripts/test_inject_audio.py -v
