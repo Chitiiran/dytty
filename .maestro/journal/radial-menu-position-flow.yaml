@@ -4,53 +4,54 @@ tags:
   - smoke
   - journal
 ---
+# Taps calendar dates by their SEMANTIC DATE LABEL, not %-coordinates: the
+# old point taps ("37%,30%") were tuned to one screen and landed between
+# cell rows on other devices (run-5 failure). table_calendar merges the
+# day-number Text into a per-cell label like "Wednesday, July 1, 2026"
+# (uiautomator-verified), so match ".*[^0-9]<day>, .*" — month-agnostic,
+# and [^0-9] keeps 1 from matching 21/31. Edge-clamping geometry itself is
+# unit-tested (radial_arc_utils_test); 'Start voice call' = menu-open signal.
+
 - runFlow: "../helpers/login.yaml"
 
 - takeScreenshot: ".maestro/screenshots/latest/journal/10-home-calendar"
 
-# Test 1: Tap mid-calendar date — menu should open near it
-- tapOn:
-    point: "7%,35%"
-    retryTapIfNoChange: false
+# Test 1: early-month date (top calendar row)
+- tapOn: ".*[^0-9]1, .*"
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
 
-- takeScreenshot: ".maestro/screenshots/latest/journal/11-radial-menu-mid-calendar"
+- takeScreenshot: ".maestro/screenshots/latest/journal/11-radial-menu-top-row"
 
-# Dismiss
+# Dismiss via the barrier (backdrop tap is part of the tested behavior, #158)
 - tapOn:
     point: "5%,95%"
 - extendedWaitUntil:
     notVisible: "Start voice call"
     timeout: 3000
 
-# Test 2: Tap top-row date — menu should clamp within bounds
-- tapOn:
-    point: "37%,30%"
-    retryTapIfNoChange: false
+# Test 2: mid-month date
+- tapOn: ".*[^0-9]14, .*"
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
 
-- takeScreenshot: ".maestro/screenshots/latest/journal/12-radial-menu-top-row"
+- takeScreenshot: ".maestro/screenshots/latest/journal/12-radial-menu-mid-month"
 
-# Dismiss
 - tapOn:
     point: "5%,95%"
 - extendedWaitUntil:
     notVisible: "Start voice call"
     timeout: 3000
 
-# Test 3: Tap bottom-row date
-- tapOn:
-    point: "7%,44%"
-    retryTapIfNoChange: false
+# Test 3: late-month date (bottom calendar rows — clamping region)
+- tapOn: ".*[^0-9]28, .*"
 - extendedWaitUntil:
     visible: "Start voice call"
     timeout: 5000
 
-- takeScreenshot: ".maestro/screenshots/latest/journal/13-radial-menu-bottom-row"
+- takeScreenshot: ".maestro/screenshots/latest/journal/13-radial-menu-late-month"
 
 - tapOn:
     point: "5%,95%"

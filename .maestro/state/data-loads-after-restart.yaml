@@ -15,32 +15,36 @@ tags:
 
 # Ensure today has one entry
 - tapOn: "Today button"
-- waitForAnimationToEnd
+# Journal screen ready <=> the add button's semantics exist (the loading
+# shimmer LOOPS — waitForAnimationToEnd would time out and hard-fail).
+- extendedWaitUntil:
+    visible: "Add Positive Things entry"
+    timeout: 15000
 - tapOn: "Add Positive Things entry"
-- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "What good things happened today.*"
+    timeout: 10000
 - tapOn: "What good things happened today.*"
 - eraseText
 - inputText: "Restart persistence entry"
 - tapOn: "Save"
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible: ".*Restart persistence entry.*"
+- extendedWaitUntil:
+    visible: ".*Restart persistence entry.*"
+    timeout: 10000
 
 - back
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible: "Progress 1 of 5.*"
+- extendedWaitUntil:
+    visible: "Progress 1 of 5.*"
+    timeout: 15000
 
 # Kill the app and relaunch WITHOUT clearing state — auth session and
 # Firestore cache persist, mirroring a real user reopening the app.
 - stopApp
 - launchApp
-- waitForAnimationToEnd:
-    timeout: 15000
-- waitForAnimationToEnd:
-    timeout: 10000
-
-# Dashboard must reflect today's entry with no interaction (#189/#49)
-- assertVisible: "Progress 1 of 5.*"
+# Dashboard must reflect today's entry with no interaction (#189/#49) —
+# progress-card semantics appearing IS the assertion + readiness signal.
+- extendedWaitUntil:
+    visible: "Progress 1 of 5.*"
+    timeout: 30000
 
 - takeScreenshot: ".maestro/screenshots/latest/state/bug189-progress-after-restart"
