@@ -19,6 +19,24 @@ parse_and_bump_version() {
                     "${major}.${minor}.${new_patch}+$((10#$build + 1))"
 }
 
+# read_pubspec_version <pubspec_path> — echoes the version value (X.Y.Z+N),
+# CR-stripped and validated. Returns 1 with a message when absent/malformed.
+read_pubspec_version() {
+  local file="$1" line ver
+  line=$(grep '^version:' "$file" | head -1 || true)
+  if [[ -z "$line" ]]; then
+    echo "ERROR: no 'version:' line in $file" >&2
+    return 1
+  fi
+  ver="${line#version:}"
+  ver="${ver//[[:space:]]/}"   # strips a trailing CR from CRLF files too
+  if ! [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]; then
+    echo "ERROR: pubspec version must be X.Y.Z+N, got: '$ver'" >&2
+    return 1
+  fi
+  printf '%s\n' "$ver"
+}
+
 # validate_semver "X.Y.Z"  — release version, no build suffix. Returns non-zero if invalid.
 validate_semver() {
   local v="$1"

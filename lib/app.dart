@@ -32,7 +32,7 @@ class DyttyApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => AuthBloc(authService: AuthService())),
-        BlocProvider(create: (_) => ThemeCubit()),
+        BlocProvider(create: (_) => ThemeCubit()..loadTheme()),
       ],
       child: BlocBuilder<AuthBloc, AuthState>(
         builder: (context, authState) {

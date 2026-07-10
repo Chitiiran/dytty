@@ -60,3 +60,33 @@ setup() {
   run validate_semver "0.2.0+3"
   [ "$status" -ne 0 ]
 }
+
+@test "read_pubspec_version returns the version value" {
+  f="$BATS_TEST_TMPDIR/pubspec.yaml"
+  printf 'name: x\nversion: 1.2.3+7\n' > "$f"
+  run bash -c "source '$(scripts_dir)/lib/version.sh'; read_pubspec_version '$f'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1.2.3+7" ]
+}
+
+@test "read_pubspec_version strips CR from CRLF pubspec" {
+  f="$BATS_TEST_TMPDIR/pubspec.yaml"
+  printf 'version: 1.2.3+7\r\n' > "$f"
+  run bash -c "source '$(scripts_dir)/lib/version.sh'; read_pubspec_version '$f'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1.2.3+7" ]
+}
+
+@test "read_pubspec_version rejects a version without build suffix" {
+  f="$BATS_TEST_TMPDIR/pubspec.yaml"
+  printf 'version: 1.2.3\n' > "$f"
+  run bash -c "source '$(scripts_dir)/lib/version.sh'; read_pubspec_version '$f'"
+  [ "$status" -ne 0 ]
+}
+
+@test "read_pubspec_version fails on a pubspec with no version line" {
+  f="$BATS_TEST_TMPDIR/pubspec.yaml"
+  printf 'name: x\n' > "$f"
+  run bash -c "source '$(scripts_dir)/lib/version.sh'; read_pubspec_version '$f'"
+  [ "$status" -ne 0 ]
+}

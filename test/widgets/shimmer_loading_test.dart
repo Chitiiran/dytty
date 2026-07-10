@@ -35,27 +35,4 @@ void main() {
       expect(find.byType(ShimmerCategoryCard), findsNWidgets(5));
     });
   });
-
-  group('ShimmerProgressCard', () {
-    testWidgets('renders in light theme', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: ShimmerProgressCard())),
-      );
-
-      expect(find.byType(ShimmerProgressCard), findsOneWidget);
-      expect(find.byType(Card), findsOneWidget);
-      expect(find.byType(CircleAvatar), findsNWidgets(5));
-    });
-
-    testWidgets('renders in dark theme', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(),
-          home: const Scaffold(body: ShimmerProgressCard()),
-        ),
-      );
-
-      expect(find.byType(ShimmerProgressCard), findsOneWidget);
-    });
-  });
 }

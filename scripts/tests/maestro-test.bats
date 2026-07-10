@@ -25,6 +25,17 @@ exit 0'
 teardown() {
   # Remove only the placeholder APK we created (never a real build artifact).
   if [ "${APK_PREEXISTED:-true}" = false ] && [ -f "$APK" ]; then rm -f "$APK"; fi
+  # maestro-test.sh --output-dir swaps .maestro/screenshots/latest to a
+  # junction pointing at our bats temp dir; bats deletes that dir AFTER
+  # teardown, so the junction dangles and every later real run fails at
+  # its first screenshot. Remove any junction that targets a bats tmp —
+  # checking for danglingness here would race the cleanup order.
+  L="$PROJECT_DIR/.maestro/screenshots/latest"
+  if [ -L "$L" ]; then
+    case "$(readlink "$L")" in
+      *bats-run-*) rm -f "$L" ;;
+    esac
+  fi
 }
 
 # Fake maestro that ALWAYS fails, writing a junit xml with a failure to --output.

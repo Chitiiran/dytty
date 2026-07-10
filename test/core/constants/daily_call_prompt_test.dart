@@ -55,4 +55,12 @@ void main() {
       expect(dailyCallMinimalPrompt, isNot(equals(dailyCallSystemPrompt)));
     });
   });
+
+  test('prompt instructs multiple save_entry calls for multi-item utterances '
+      '(#224/#231)', () {
+    final p = dailyCallSystemPrompt.toLowerCase();
+    expect(p, contains('save_entry'));
+    expect(p, contains('each'));
+    expect(p, contains('incomplete'));
+  });
 }

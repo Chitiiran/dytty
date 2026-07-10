@@ -4,21 +4,18 @@ name: "Reusable: login via emulator auth"
 - launchApp:
     clearState: true
 
-# Wait for Flutter cold start (Firebase init + first frame render)
-- waitForAnimationToEnd:
-    timeout: 15000
+# Cold start done <=> the login button's semantics exist. (waitForAnimation
+# hard-fails at timeout on Maestro 2.x, and loading animations loop.)
+- extendedWaitUntil:
+    visible: "Sign in anonymously.*emulator.*"
+    timeout: 20000
 
 - tapOn:
     text: "Sign in anonymously.*emulator.*"
     retryTapIfNoChange: true
 
-# Wait for auth + Firestore data loading + home screen render.
-# The loading spinner is an animation, so waitForAnimationToEnd
-# will wait for it to finish. We chain two waits to handle the
-# sequence: route transition animation -> loading spinner animation.
-- waitForAnimationToEnd:
-    timeout: 15000
-- waitForAnimationToEnd:
-    timeout: 15000
-- waitForAnimationToEnd:
-    timeout: 10000
+# Home ready <=> the progress card's semantics rendered (auth + journal
+# state + categories all loaded).
+- extendedWaitUntil:
+    visible: "Progress .*"
+    timeout: 30000

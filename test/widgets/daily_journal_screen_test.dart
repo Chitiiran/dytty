@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -210,6 +211,19 @@ void main() {
       // Entry text should be hidden
       expect(find.text('Tap to reveal'), findsOneWidget);
       expect(find.text('Secret thought'), findsNothing);
+
+      // ...including from the a11y tree: TalkBack must not speak the hidden
+      // text through the tile's Semantics label.
+      bool labelContains(Widget w, Pattern p) =>
+          w is Semantics && (w.properties.label?.contains(p) ?? false);
+      expect(
+        find.byWidgetPredicate((w) => labelContains(w, 'Secret thought')),
+        findsNothing,
+      );
+      expect(
+        find.byWidgetPredicate((w) => labelContains(w, 'Journal entry hidden')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('tapping add entry button opens bottom sheet', (tester) async {

@@ -22,53 +22,56 @@ tags:
 
 # TRUE POSITIVE: Add one entry, ring should show 1 segment
 - tapOn: "Today button"
-- waitForAnimationToEnd:
-    timeout: 10000
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible: "Positive Things.*"
+# Journal screen ready <=> first category card's semantics exist (the
+# loading shimmer LOOPS, so waitForAnimationToEnd would time out and fail).
+- extendedWaitUntil:
+    visible: "Positive Things.*"
+    timeout: 15000
 
 - tapOn:
     text: "Add Positive Things entry"
     retryTapIfNoChange: true
-- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "What good things happened today.*"
+    timeout: 10000
 - tapOn: "What good things happened today.*"
 - eraseText
 - inputText: "Ring test entry 1"
 - tapOn: "Save"
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible: ".*Ring test entry 1.*"
+- extendedWaitUntil:
+    visible: ".*Ring test entry 1.*"
+    timeout: 10000
 
 - back
-- waitForAnimationToEnd:
-    timeout: 5000
-
-- assertVisible: "Progress 1 of 5.*"
+- extendedWaitUntil:
+    visible: "Progress 1 of 5.*"
+    timeout: 15000
 - takeScreenshot: ".maestro/screenshots/latest/state/ring-02-calendar-one-segment"
 
 # FALSE POSITIVE CHECK: Add to different category, should be exactly 2 not 3
 - tapOn: "Today button"
-- waitForAnimationToEnd:
-    timeout: 10000
+- extendedWaitUntil:
+    visible: "Add Gratitude entry"
+    timeout: 15000
 
 - tapOn:
     text: "Add Gratitude entry"
     retryTapIfNoChange: true
-- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "What are you grateful for today.*"
+    timeout: 10000
 - tapOn: "What are you grateful for today.*"
 - eraseText
 - inputText: "Ring test entry 2"
 - tapOn: "Save"
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible: ".*Ring test entry 2.*"
+- extendedWaitUntil:
+    visible: ".*Ring test entry 2.*"
+    timeout: 10000
 
 - back
-- waitForAnimationToEnd:
-    timeout: 5000
-
-- assertVisible: "Progress 2 of 5.*"
+- extendedWaitUntil:
+    visible: "Progress 2 of 5.*"
+    timeout: 15000
 # Verify it's not 3 of 5 (false positive)
 - assertNotVisible: "Progress 3 of 5.*"
 - takeScreenshot: ".maestro/screenshots/latest/state/ring-03-calendar-two-segments"

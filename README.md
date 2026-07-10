@@ -48,15 +48,16 @@ lib/
 
 ## Testing
 
-5-layer test pyramid with 124 tests:
+5-layer test pyramid (~900+ tests — exact count: the CI test report
+artifact; counts in docs drift, CI doesn't):
 
-| Layer | Tool | Count | Location |
-|-------|------|-------|----------|
-| Unit | `flutter test` | 100 | `test/` |
-| Widget | `flutter test` (Robot pattern) | 17 | `test/widgets/` |
-| Golden | `flutter test` (visual regression) | 7 | `test/goldens/` |
-| Integration | Patrol (scaffold) | — | `integration_test/` |
-| Black Box E2E | Maestro | 9 flows | `.maestro/` |
+| Layer | Tool | Location |
+|-------|------|----------|
+| Unit + Bloc | `flutter test` | `test/` |
+| Widget | `flutter test` (Robot pattern) | `test/widgets/` |
+| Golden | `flutter test` (local only, #48) | `test/goldens/` |
+| Integration | Patrol (scaffold) | `integration_test/` |
+| E2E | Maestro (21 flows: emulator + device) / Playwright (web) | `.maestro/`, `e2e/` |
 
 ```bash
 flutter test                                    # Run unit + widget + golden tests
@@ -98,10 +99,11 @@ API keys live in `.env` (gitignored) and are injected via `--dart-define`:
 
 ## CI/CD
 
-Two GitHub Actions workflows:
+Three GitHub Actions workflows:
 
-- **`ci.yml`** — PRs: analyze, test, coverage (80% min), build web + APK, Maestro smoke. On `main`/`dev/release` pushes it also distributes the APK.
+- **`ci.yml`** — PRs: format, analyze, test, coverage (80% min), build web + debug APK (Gate 1) + advisory device E2E on a self-hosted runner (Gate 1.5, non-voice Maestro flows). Pushes to `dev/release`/`main` also distribute APKs (Gates 2/3).
 - **`deploy.yml`** — Main push: build web, deploy to Firebase Hosting, auto-tag release.
+- **`voice-nightly.yml`** — Nightly acoustic voice E2E on the self-hosted runner + physical phone.
 
 The main release path is `dev/release` → PR → `main` → `deploy.yml`.
 
