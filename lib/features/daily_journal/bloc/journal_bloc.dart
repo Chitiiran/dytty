@@ -223,6 +223,9 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   /// Active subscription to the selected date's entries.
   StreamSubscription<List<CategoryEntry>>? _entriesSubscription;
 
+  /// Set synchronously when close() is called — see _resubscribe.
+  bool _disposed = false;
+
   /// Tombstones for optimistically deleted entries: a snapshot generated
   /// before the delete can arrive after it and resurrect the entry — and
   /// on web the corrective post-delete emit is unreliable (#205).
@@ -289,6 +292,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
   /// (cache-first, auto-updates on sync).
   Future<void> _resubscribe(String dateString) async {
     await _entriesSubscription?.cancel();
+    // The bloc can close during the await (sign-out mid date-switch);
+    // subscribing then leaks the stream and add()s into a closed bloc.
+    // _disposed, not isClosed: close() awaits in-flight handlers before
+    // isClosed flips, so a parked handler would never see it.
+    if (_disposed) return;
     _entriesSubscription = _repository
         .watchCategoryEntries(dateString)
         .listen((entries) => add(_EntriesUpdated(entries)));
@@ -660,6 +668,7 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
 
   @override
   Future<void> close() {
+    _disposed = true;
     _entriesSubscription?.cancel();
     return super.close();
   }

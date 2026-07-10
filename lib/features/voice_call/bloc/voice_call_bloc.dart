@@ -830,6 +830,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       // browsing) and double-write. The bloc fallback preserves the legacy
       // path for setups without a repository.
       if (entryId.isNotEmpty) {
+        // The post-call review page and reconcile snapshots read
+        // state.savedEntries — keep the in-call copy in sync with the edit.
+        emit(
+          state.copyWith(
+            savedEntries: [
+              for (final saved in state.savedEntries)
+                if (saved.entryId == entryId)
+                  saved.copyWith(text: text)
+                else
+                  saved,
+            ],
+          ),
+        );
         if (_journalRepository != null) {
           try {
             await _journalRepository.updateCategoryEntry(

@@ -1388,5 +1388,50 @@ void main() {
         expect(bloc.state.journaledToday, true);
       },
     );
+
+    test('close() during the resubscribe cancel window does not create a new '
+        'subscription (leak that add()s into a closed bloc)', () async {
+      final mockRepo = MockJournalRepository();
+      final cancelGate = Completer<void>();
+      final first = StreamController<List<CategoryEntry>>(
+        onCancel: () => cancelGate.future,
+      );
+      final second = StreamController<List<CategoryEntry>>();
+      var watchCalls = 0;
+      when(() => mockRepo.watchCategoryEntries(any())).thenAnswer((_) {
+        watchCalls++;
+        return watchCalls == 1 ? first.stream : second.stream;
+      });
+      when(
+        () => mockRepo.getMonthCategoryMarkers(any(), any()),
+      ).thenThrow(Exception('offline'));
+      when(() => mockRepo.getStreakData()).thenThrow(Exception('offline'));
+
+      final bloc = JournalBloc(repository: mockRepo);
+      bloc.add(SelectDate(DateTime(2026, 7, 1)));
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(first.hasListener, isTrue);
+
+      // Second SelectDate parks _resubscribe on the gated cancel; the bloc
+      // closes inside that await window (e.g. sign-out during date switch).
+      bloc.add(SelectDate(DateTime(2026, 7, 2)));
+      await Future.delayed(const Duration(milliseconds: 50));
+      final closing = bloc.close();
+      cancelGate.complete();
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        second.hasListener,
+        isFalse,
+        reason:
+            'resubscribing after close leaks the stream and add()s into a '
+            'closed bloc',
+      );
+      await closing;
+      // Not awaited: a controller's close() future only completes once the
+      // done event reaches a listener — and no listener is the point here.
+      unawaited(first.close());
+      unawaited(second.close());
+    });
   });
 }
