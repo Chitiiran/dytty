@@ -1433,5 +1433,57 @@ void main() {
       unawaited(first.close());
       unawaited(second.close());
     });
+
+    test('rapid SelectDate dispatches park on the same cancel — only the '
+        'latest resubscribes (no overwritten-subscription leak)', () async {
+      final mockRepo = MockJournalRepository();
+      final cancelGate = Completer<void>();
+      final first = StreamController<List<CategoryEntry>>(
+        onCancel: () => cancelGate.future,
+      );
+      final second = StreamController<List<CategoryEntry>>();
+      final third = StreamController<List<CategoryEntry>>();
+      final streamsByDate = {
+        '2026-07-01': first.stream,
+        '2026-07-02': second.stream,
+        '2026-07-03': third.stream,
+      };
+      when(() => mockRepo.watchCategoryEntries(any())).thenAnswer(
+        (inv) => streamsByDate[inv.positionalArguments.first as String]!,
+      );
+      when(
+        () => mockRepo.getMonthCategoryMarkers(any(), any()),
+      ).thenThrow(Exception('offline'));
+      when(() => mockRepo.getStreakData()).thenThrow(Exception('offline'));
+
+      final bloc = JournalBloc(repository: mockRepo);
+      bloc.add(SelectDate(DateTime(2026, 7, 1)));
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(first.hasListener, isTrue);
+
+      // Both handlers await the SAME gated cancel of the first subscription;
+      // on release, only the latest may subscribe — the earlier one would be
+      // overwritten in _entriesSubscription and leak, still streaming the
+      // old date's entries.
+      bloc.add(SelectDate(DateTime(2026, 7, 2)));
+      bloc.add(SelectDate(DateTime(2026, 7, 3)));
+      await Future.delayed(const Duration(milliseconds: 50));
+      cancelGate.complete();
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        second.hasListener,
+        isFalse,
+        reason:
+            'the superseded resubscribe must not subscribe — its '
+            'subscription would be overwritten and leak',
+      );
+      expect(third.hasListener, isTrue);
+
+      await bloc.close();
+      unawaited(first.close());
+      unawaited(second.close());
+      unawaited(third.close());
+    });
   });
 }
