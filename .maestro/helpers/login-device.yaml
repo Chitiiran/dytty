@@ -4,9 +4,11 @@ name: "Reusable: login via real Google Sign-In (device)"
 - launchApp:
     clearState: true
 
-# Wait for Flutter cold start (Firebase init + first frame render)
-- waitForAnimationToEnd:
-    timeout: 15000
+# Cold start done <=> the login button's semantics exist. (waitForAnimation
+# hard-fails at timeout on Maestro 2.x, and loading animations loop.)
+- extendedWaitUntil:
+    visible: "Sign in with Google"
+    timeout: 20000
 
 # Tap the real Google Sign-In button. Maestro matches the SEMANTICS label
 # (login_screen.dart wraps it in Semantics(label: 'Sign in with Google')), NOT
@@ -27,8 +29,8 @@ name: "Reusable: login via real Google Sign-In (device)"
     text: ".*${DEVICE_TEST_EMAIL}.*"
     retryTapIfNoChange: true
 
-# Wait for auth + Firestore load to settle on the home screen.
-- waitForAnimationToEnd:
-    timeout: 20000
-- waitForAnimationToEnd:
-    timeout: 10000
+# Home ready <=> the progress card's semantics rendered (auth + journal
+# state + categories all loaded). Label: 'Progress X of Y[, streak ...]'.
+- extendedWaitUntil:
+    visible: "Progress .*"
+    timeout: 30000

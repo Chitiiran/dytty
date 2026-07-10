@@ -482,21 +482,6 @@ void main() {
       });
     });
 
-    group('markEntryReviewed', () {
-      test('sets isReviewed to true on an entry', () async {
-        final entry = await repository.addCategoryEntry(
-          '2026-03-18',
-          'positive',
-          'Test entry',
-        );
-
-        await repository.markEntryReviewed('2026-03-18', entry.id);
-
-        final entries = await repository.getCategoryEntries('2026-03-18');
-        expect(entries.first.isReviewed, true);
-      });
-    });
-
     group('saveReviewSummary', () {
       test('creates a new review summary', () async {
         final now = DateTime(2026, 3, 18);

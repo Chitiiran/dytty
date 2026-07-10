@@ -15,9 +15,8 @@ WAVS="$PROJECT_DIR/test/fixtures/audio/generated"
 LOCK_DIR="$PROJECT_DIR/.device.lock.d"
 export ACOUSTIC_TAG="${ACOUSTIC_TAG:-DYTTY}"
 
-# -f2- (not -f2): values may contain '='. || true: missing file/key must
-# reach the friendly error below, not die on set -e at the assignment.
-EMAIL="${DEVICE_TEST_EMAIL:-$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- || true)}"
+source "$PROJECT_DIR/scripts/lib/env.sh"
+EMAIL="${DEVICE_TEST_EMAIL:-$(read_env_var DEVICE_TEST_EMAIL "$PROJECT_DIR/.env")}"
 if [[ -z "$EMAIL" ]]; then
   echo "ERROR: DEVICE_TEST_EMAIL not set and not in .env" >&2
   exit 2

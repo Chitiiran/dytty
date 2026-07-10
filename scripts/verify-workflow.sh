@@ -31,6 +31,11 @@ STATUS_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1cwg"
 ITEM_LIMIT=250          # board item-list page size (matches CLAUDE.md mandate)
 STALE_PR_DAYS=14        # warn when an open PR is older than this at session-start
 WORKTREE_WARN_AT=5      # warn when this many worktrees exist
+RETRO_WARN_DAYS=8       # nudge when the weekly retro is at least this old
+# Overridable for tests; kb/ is local-only so this is absent on fresh checkouts.
+RETRO_FILE="${DYTTY_RETRO_FILE:-$PROJECT_DIR/kb/workflow/WEEKLY-RETRO.md}"
+
+source "$SCRIPT_DIR/lib/retro-check.sh"
 
 # Status option IDs
 STATUS_INBOX="77421e5b"
@@ -64,6 +69,9 @@ summary() {
 
 ensure_log_file() {
   if [[ ! -f "$LOG_FILE" ]]; then
+    # kb/ is local-only — absent on fresh checkouts/worktrees; create the
+    # parent or this write kills the whole stage under set -e.
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo "[]" > "$LOG_FILE"
   fi
 }
@@ -193,6 +201,23 @@ for e in data:
     warn "$WT_COUNT worktrees exist (>=$WORKTREE_WARN_AT) — consider cleanup: git worktree list"
   else
     pass "$WT_COUNT worktree(s)"
+  fi
+
+  # --- Weekly retro nudge ---
+  # 20 minutes, five questions: what reached a device, what broke and why,
+  # which signal lied to me, what did I avoid, what do I kill.
+  echo ""
+  echo "--- Weekly retro check ---"
+  local RETRO_AGE
+  RETRO_AGE=$(retro_age_days "$RETRO_FILE" "$SCRIPT_DIR/lib")
+  if [[ ! -f "$RETRO_FILE" ]]; then
+    pass "No retro file on this checkout (kb/ is local-only) — skipping"
+  elif [[ "$RETRO_AGE" -lt 0 ]]; then
+    warn "Weekly retro has no dated entry yet — run it (template: kb/workflow/WEEKLY-RETRO.md)"
+  elif [[ "$RETRO_AGE" -ge "$RETRO_WARN_DAYS" ]]; then
+    warn "Last weekly retro was $RETRO_AGE days ago — 20 minutes, five questions: kb/workflow/WEEKLY-RETRO.md"
+  else
+    pass "Last weekly retro $RETRO_AGE day(s) ago"
   fi
 
   summary

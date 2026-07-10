@@ -46,26 +46,15 @@ void main() {
       expect(tracker.p95, 200);
     });
 
-    test('measurements getter returns defensive copy', () {
-      tracker.add(100);
-      expect(tracker.measurements, [100]);
-      final copy = List<int>.of(tracker.measurements);
-      copy.add(999); // mutating the copy
-      expect(tracker.measurements, [100]); // original unchanged
-    });
-
-    test('measurements getter is unmodifiable', () {
-      tracker.add(100);
-      expect(() => tracker.measurements.add(999), throwsUnsupportedError);
-    });
-
     test('reset clears all data', () {
+      final tracker = LatencyTracker();
       tracker.add(100);
       tracker.add(200);
       tracker.reset();
+      // connect() resets the tracker so percentiles don't leak across
+      // sessions (gemini_live_service.dart) — reset must clear everything.
       expect(tracker.p50, isNull);
       expect(tracker.p95, isNull);
-      expect(tracker.measurements, isEmpty);
     });
   });
 }

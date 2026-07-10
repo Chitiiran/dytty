@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:firebase_ai/firebase_ai.dart';
@@ -32,13 +31,13 @@ void main() {
   late StreamController<void> interruptController;
 
   // Counter so each created entry gets a distinct id.
-  var _idCounter = 0;
+  var idCounter = 0;
 
   setUp(() {
     mockService = MockGeminiLiveService();
     mockRepo = MockJournalRepository();
     fakeLlm = FakeLlmService();
-    _idCounter = 0;
+    idCounter = 0;
 
     transcriptController = StreamController<Transcript>.broadcast();
     toolCallController = StreamController<FunctionCall>.broadcast();
@@ -81,9 +80,9 @@ void main() {
         tags: any(named: 'tags'),
       ),
     ).thenAnswer((invocation) async {
-      _idCounter++;
+      idCounter++;
       return CategoryEntry(
-        id: 'new$_idCounter',
+        id: 'new$idCounter',
         categoryId: invocation.positionalArguments[1] as String,
         text: invocation.positionalArguments[2] as String,
         source: 'voice',

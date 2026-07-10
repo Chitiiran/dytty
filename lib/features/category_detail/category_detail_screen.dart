@@ -224,31 +224,21 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
               );
             },
           ),
-          _EntryItem(:final entry, :final date, :final isOlder) =>
-            InlineEntryTile(
-              entry: entry,
-              isEditing: state.editingEntryId == entry.id,
-              isOlderEntry: isOlder,
-              onTapEdit: () {
-                context.read<CategoryDetailBloc>().add(
-                  StartInlineEdit(entry.id),
-                );
-              },
-              onSaveEdit: (newText) {
-                context.read<CategoryDetailBloc>().add(
-                  SaveInlineEdit(
-                    date: date,
-                    entryId: entry.id,
-                    newText: newText,
-                  ),
-                );
-              },
-              onCancelEdit: () {
-                context.read<CategoryDetailBloc>().add(
-                  const CancelInlineEdit(),
-                );
-              },
-            ),
+          _EntryItem(:final entry, :final date) => InlineEntryTile(
+            entry: entry,
+            isEditing: state.editingEntryId == entry.id,
+            onTapEdit: () {
+              context.read<CategoryDetailBloc>().add(StartInlineEdit(entry.id));
+            },
+            onSaveEdit: (newText) {
+              context.read<CategoryDetailBloc>().add(
+                SaveInlineEdit(date: date, entryId: entry.id, newText: newText),
+              );
+            },
+            onCancelEdit: () {
+              context.read<CategoryDetailBloc>().add(const CancelInlineEdit());
+            },
+          ),
         };
       },
     );
@@ -266,15 +256,6 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
       if (!group.isCollapsed) {
         for (final entry in group.entries) {
           items.add(_EntryItem(entry: entry, date: group.date));
-        }
-      }
-    }
-
-    for (final group in state.olderEntries) {
-      items.add(_HeaderItem(group));
-      if (!group.isCollapsed) {
-        for (final entry in group.entries) {
-          items.add(_EntryItem(entry: entry, date: group.date, isOlder: true));
         }
       }
     }
@@ -299,8 +280,7 @@ class _HeaderItem extends _ListItem {
 class _EntryItem extends _ListItem {
   final CategoryEntry entry;
   final String date;
-  final bool isOlder;
-  _EntryItem({required this.entry, required this.date, this.isOlder = false});
+  _EntryItem({required this.entry, required this.date});
 }
 
 /// Call badge icon for the AppBar.

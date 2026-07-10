@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
@@ -57,6 +59,11 @@ Future<void> pumpVoiceCallScreen(
         ),
   );
   when(() => mockJournal.state).thenReturn(journalState ?? JournalState());
+  // The screen wires VoiceCallBloc with JournalBloc's repository (#224);
+  // back the mock with a fake-firestore repo so that read succeeds.
+  when(() => mockJournal.repository).thenReturn(
+    JournalRepository(uid: 'test-uid', firestore: FakeFirebaseFirestore()),
+  );
 
   await tester.pumpWidget(
     MultiBlocProvider(
@@ -294,9 +301,8 @@ void main() {
       robot.expectGenerateSummaryButton();
     });
 
-    testWidgets('shows P50/P95 stat chips when latency was measured', (
-      tester,
-    ) async {
+    testWidgets('real-bloc harness has no latency stats to show '
+        '(P50/P95 need service data — see mock-bloc group)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
@@ -312,9 +318,8 @@ void main() {
       robot.expectNoLatencyStat();
     });
 
-    testWidgets('shows "Captured entries" header when entries exist', (
-      tester,
-    ) async {
+    testWidgets('real-bloc harness shows no captured-entries header '
+        '(no entries saved — see mock-bloc group)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);

@@ -148,7 +148,6 @@ class CategoryDetailState extends Equatable {
   final CategoryDetailStatus status;
   final String categoryId;
   final List<DateGroup> recentEntries;
-  final List<DateGroup> olderEntries;
   final ReviewSummary? reviewSummary;
   final bool hasRecentEntries;
   final String? editingEntryId;
@@ -158,7 +157,6 @@ class CategoryDetailState extends Equatable {
     this.status = CategoryDetailStatus.initial,
     this.categoryId = '',
     this.recentEntries = const [],
-    this.olderEntries = const [],
     this.reviewSummary,
     this.hasRecentEntries = false,
     this.editingEntryId,
@@ -169,7 +167,6 @@ class CategoryDetailState extends Equatable {
     CategoryDetailStatus? status,
     String? categoryId,
     List<DateGroup>? recentEntries,
-    List<DateGroup>? olderEntries,
     ReviewSummary? reviewSummary,
     bool? hasRecentEntries,
     String? editingEntryId,
@@ -181,7 +178,6 @@ class CategoryDetailState extends Equatable {
       status: status ?? this.status,
       categoryId: categoryId ?? this.categoryId,
       recentEntries: recentEntries ?? this.recentEntries,
-      olderEntries: olderEntries ?? this.olderEntries,
       reviewSummary: clearReviewSummary
           ? null
           : (reviewSummary ?? this.reviewSummary),
@@ -198,7 +194,6 @@ class CategoryDetailState extends Equatable {
     status,
     categoryId,
     recentEntries,
-    olderEntries,
     reviewSummary,
     hasRecentEntries,
     editingEntryId,

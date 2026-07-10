@@ -285,6 +285,15 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     }
   }
 
+  /// Replaces the active entry-stream subscription with one for [dateString]
+  /// (cache-first, auto-updates on sync).
+  Future<void> _resubscribe(String dateString) async {
+    await _entriesSubscription?.cancel();
+    _entriesSubscription = _repository
+        .watchCategoryEntries(dateString)
+        .listen((entries) => add(_EntriesUpdated(entries)));
+  }
+
   Future<void> _onSelectDate(
     SelectDate event,
     Emitter<JournalState> emit,
@@ -293,17 +302,11 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       state.copyWith(selectedDate: event.date, status: JournalStatus.loading),
     );
 
-    // Cancel previous date's subscription; fresh subscription supersedes
-    // any pending delete tombstones.
-    await _entriesSubscription?.cancel();
+    // Fresh subscription supersedes any pending delete tombstones.
     _pendingDeletes.clear();
 
     final dateString = JournalState._dateFormat.format(event.date);
-
-    // Subscribe to entry stream (cache-first, auto-updates on sync)
-    _entriesSubscription = _repository
-        .watchCategoryEntries(dateString)
-        .listen((entries) => add(_EntriesUpdated(entries)));
+    await _resubscribe(dateString);
 
     // Fetch markers and streak independently: one failure must not discard
     // the other's data (#189/#49/#151 — a failing streak query silently
@@ -415,8 +418,19 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     );
   }
 
-  Future<void> _onAddEntry(AddEntry event, Emitter<JournalState> emit) async {
-    final targetDate = event.date ?? state.selectedDate;
+  /// Shared add flow for manual and voice entries: pin the target date,
+  /// re-subscribe if it changed, persist, optimistic update. The two event
+  /// handlers previously duplicated this block verbatim.
+  Future<void> _handleAdd(
+    Emitter<JournalState> emit, {
+    required String categoryId,
+    required String text,
+    DateTime? date,
+    String source = 'manual',
+    String? transcript,
+    List<String> tags = const [],
+  }) async {
+    final targetDate = date ?? state.selectedDate;
     final dateString = JournalState._dateFormat.format(targetDate);
     final previousDate = state.selectedDate;
     emit(
@@ -425,57 +439,44 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
 
     // Re-subscribe stream if date changed
     if (targetDate != previousDate) {
-      await _entriesSubscription?.cancel();
-      _entriesSubscription = _repository
-          .watchCategoryEntries(dateString)
-          .listen((entries) => add(_EntriesUpdated(entries)));
+      await _resubscribe(dateString);
     }
 
     try {
       final created = await _repository.addCategoryEntry(
         dateString,
-        event.categoryId,
-        event.text,
+        categoryId,
+        text,
+        source: source,
+        transcript: transcript,
+        tags: tags,
       );
-      _emitOptimisticUpdate(emit, created, event.categoryId, targetDate);
+      _emitOptimisticUpdate(emit, created, categoryId, targetDate);
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
     }
   }
+
+  Future<void> _onAddEntry(AddEntry event, Emitter<JournalState> emit) =>
+      _handleAdd(
+        emit,
+        categoryId: event.categoryId,
+        text: event.text,
+        date: event.date,
+      );
 
   Future<void> _onAddVoiceEntry(
     AddVoiceEntry event,
     Emitter<JournalState> emit,
-  ) async {
-    final targetDate = event.date ?? state.selectedDate;
-    final dateString = JournalState._dateFormat.format(targetDate);
-    final previousDate = state.selectedDate;
-    emit(
-      state.copyWith(status: JournalStatus.saving, selectedDate: targetDate),
-    );
-
-    // Re-subscribe stream if date changed
-    if (targetDate != previousDate) {
-      await _entriesSubscription?.cancel();
-      _entriesSubscription = _repository
-          .watchCategoryEntries(dateString)
-          .listen((entries) => add(_EntriesUpdated(entries)));
-    }
-
-    try {
-      final created = await _repository.addCategoryEntry(
-        dateString,
-        event.categoryId,
-        event.text,
-        source: 'voice',
-        transcript: event.transcript,
-        tags: event.tags,
-      );
-      _emitOptimisticUpdate(emit, created, event.categoryId, targetDate);
-    } catch (e) {
-      emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
-    }
-  }
+  ) => _handleAdd(
+    emit,
+    categoryId: event.categoryId,
+    text: event.text,
+    date: event.date,
+    source: 'voice',
+    transcript: event.transcript,
+    tags: event.tags,
+  );
 
   Future<void> _onUpdateEntry(
     UpdateEntry event,

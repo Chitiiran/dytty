@@ -899,6 +899,30 @@ void main() {
       expect(const UpdateTranscript('hi'), const UpdateTranscript('hi'));
     });
   });
+
+  group('close during recognition', () {
+    test('speech result arriving after close is ignored (no throw)', () async {
+      final bloc = VoiceNoteBloc(
+        speechService: speechService,
+        llmService: llmService,
+      );
+      bloc.add(const StartListening());
+      await Future<void>.delayed(Duration.zero);
+      final onResult = speechService.lastOnResult;
+      expect(onResult, isNotNull);
+      await bloc.close();
+      // Android's STT plugin can flush a final result while the sheet is
+      // being dismissed — the callback must not add() into a closed bloc.
+      expect(
+        () => onResult!.call(
+          SpeechRecognitionResult([
+            SpeechRecognitionWords('late', ['late'], 0.9),
+          ], true),
+        ),
+        returnsNormally,
+      );
+    });
+  });
 }
 
 /// Speech service that throws on initialize.
