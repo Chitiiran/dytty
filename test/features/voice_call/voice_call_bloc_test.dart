@@ -5,6 +5,7 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -17,6 +18,8 @@ class MockGeminiLiveService extends Mock implements GeminiLiveService {}
 
 class MockJournalBloc extends Mock implements JournalBloc {}
 
+class MockJournalRepository extends Mock implements JournalRepository {}
+
 class MockLlmService extends Mock implements LlmService {}
 
 class MockAudioStorageService extends Mock implements AudioStorageService {}
@@ -26,6 +29,7 @@ class MockAudioStorageService extends Mock implements AudioStorageService {}
 void main() {
   late MockGeminiLiveService mockService;
   late MockJournalBloc mockJournalBloc;
+  late MockJournalRepository mockJournalRepository;
   late MockLlmService mockLlmService;
   late MockAudioStorageService mockAudioStorage;
 
@@ -48,6 +52,10 @@ void main() {
   setUp(() {
     mockService = MockGeminiLiveService();
     mockJournalBloc = MockJournalBloc();
+    mockJournalRepository = MockJournalRepository();
+    when(
+      () => mockJournalRepository.updateCategoryEntry(any(), any(), any()),
+    ).thenAnswer((_) async {});
     mockLlmService = MockLlmService();
     mockAudioStorage = MockAudioStorageService();
 
@@ -98,6 +106,7 @@ void main() {
 
   VoiceCallBloc buildBloc({
     JournalBloc? journalBloc,
+    JournalRepository? journalRepository,
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
@@ -105,6 +114,7 @@ void main() {
     return VoiceCallBloc(
       service: mockService,
       journalBloc: journalBloc,
+      journalRepository: journalRepository,
       llmService: llmService,
       audioStorage: audioStorage,
       uid: uid,
@@ -663,6 +673,78 @@ void main() {
           }),
         ).called(1);
       },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'edit_entry updates savedEntries so post-call review and reconcile '
+      'snapshots see the edited text (repository-wired)',
+      build: () => buildBloc(journalRepository: mockJournalRepository),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        savedEntries: [
+          SavedEntry(
+            entryId: 'entry-42',
+            categoryId: 'positive',
+            text: 'Old text',
+            transcript: 'Old transcript',
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(
+        ToolCallReceived(
+          FunctionCall('edit_entry', {
+            'entry_id': 'entry-42',
+            'text': 'Updated entry text',
+          }, id: 'edit-2'),
+        ),
+      ),
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.savedEntries.single.text,
+          'savedEntries text',
+          'Updated entry text',
+        ),
+      ],
+      verify: (_) {
+        verify(
+          () => mockJournalRepository.updateCategoryEntry(
+            any(),
+            'entry-42',
+            'Updated entry text',
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'edit_entry updates savedEntries on the JournalBloc fallback path',
+      build: () => buildBloc(journalBloc: mockJournalBloc),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        savedEntries: [
+          SavedEntry(
+            entryId: 'entry-42',
+            categoryId: 'positive',
+            text: 'Old text',
+            transcript: 'Old transcript',
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(
+        ToolCallReceived(
+          FunctionCall('edit_entry', {
+            'entry_id': 'entry-42',
+            'text': 'Updated entry text',
+          }, id: 'edit-3'),
+        ),
+      ),
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.savedEntries.single.text,
+          'savedEntries text',
+          'Updated entry text',
+        ),
+      ],
     );
 
     blocTest<VoiceCallBloc, VoiceCallState>(
