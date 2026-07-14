@@ -1,0 +1,60 @@
+appId: com.dytty.dytty
+name: "Voice: call from a past date saves to that date, not today (#252)"
+tags:
+  - voice
+  - daily-call
+  - regression
+---
+# UI-only flow — audio + logcat handled by orchestrate.py. Regression for
+# #252: entries spoken in a call launched from a past date landed on today.
+#
+# Rig-tuning caveat: this assumes JournalBloc's selectedDate survives the
+# `back` to home (the screen captures it at call-bloc construction). If it
+# resets on back, start the call from the journal day screen's own call
+# affordance instead — screenshot early rather than guessing (owner rule).
+- runFlow: "../helpers/login-device.yaml"
+
+- assertVisible: "Progress 0 of 5"
+
+# Browse to yesterday, then return home with that date still selected.
+- tapOn: "Today button"
+- waitForAnimationToEnd
+- tapOn: "Previous day"
+- waitForAnimationToEnd
+- back
+- waitForAnimationToEnd
+
+- runFlow: "../helpers/open-daily-call.yaml"
+- tapOn: "Start Call"
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "End call"
+    timeout: 20000
+- repeat:
+    times: 20
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
+
+- tapOn: "End call"
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 15000
+- tapOn: "Done"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Today's dashboard must be untouched — the entry belongs to yesterday.
+- assertVisible: "Progress 0 of 5.*"
+- assertVisible: "You haven.*journaled today.*"
+
+# The entry must be on yesterday's journal list.
+- tapOn: "Today button"
+- waitForAnimationToEnd
+- tapOn: "Previous day"
+- waitForAnimationToEnd
+- takeScreenshot: ".maestro/screenshots/latest/voice/252-past-date-call"
