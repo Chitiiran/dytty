@@ -307,6 +307,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   String get _journalDate =>
       _sessionDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
 
+  /// Journal date the call was launched from (yyyy-MM-dd), wired at
+  /// construction by the screen from JournalBloc.state.selectedDate. A call
+  /// started from a past date's screen must save to THAT date (#252) — the
+  /// old pin from _callStartTime always hit today. Null (notification /
+  /// review-call launches) falls back to the call start date.
+  final String? _launchDate;
+
+  /// Wiring probe (#252, same rationale as [hasJournalRepository]): the
+  /// screen must pass the viewed date or past-date calls silently save to
+  /// today again.
+  @visibleForTesting
+  String? get debugLaunchDate => _launchDate;
+
   bool _warned5 = false;
   bool _warned9 = false;
 
@@ -342,12 +355,16 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
+    DateTime? journalDate,
   }) : _service = service,
        _journalBloc = journalBloc,
        _journalRepository = journalRepository,
        _llmService = llmService,
        _audioStorage = audioStorage,
        _uid = uid,
+       _launchDate = journalDate == null
+           ? null
+           : DateFormat('yyyy-MM-dd').format(journalDate),
        super(const VoiceCallState()) {
     on<StartCall>(_onStartCall);
     on<EndCall>(_onEndCall);
@@ -411,8 +428,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
       // Pin the session's journal date now so every save/reconcile/reject in
-      // this session writes to the same day, even across midnight. (#232)
-      _sessionDate = DateFormat('yyyy-MM-dd').format(_callStartTime!);
+      // this session writes to the same day, even across midnight (#232).
+      // The launch date (the journal date the user was viewing) wins over
+      // the wall clock (#252).
+      _sessionDate =
+          _launchDate ?? DateFormat('yyyy-MM-dd').format(_callStartTime!);
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
