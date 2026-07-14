@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
@@ -1484,6 +1485,148 @@ void main() {
       unawaited(first.close());
       unawaited(second.close());
       unawaited(third.close());
+    });
+  });
+
+  group('external entry absorption (#250)', () {
+    // The voice-call path persists repository-direct (id capture, #224/#232)
+    // and mirrors each write here as a STATE-ONLY event. Aggregates must
+    // update; the repository must never be written by these handlers.
+    blocTest<JournalBloc, JournalState>(
+      'ExternalEntryAdded for today bumps counts, markers, and entries',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) => bloc.add(
+        ExternalEntryAdded(
+          entry: CategoryEntry(
+            id: 'ext1',
+            categoryId: 'positive',
+            text: 'from the call',
+            source: 'voice',
+            createdAt: DateTime.now(),
+          ),
+          date: DateTime.now(),
+        ),
+      ),
+      verify: (bloc) {
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        expect(bloc.state.todayCategoryCounts['positive'], 1);
+        expect(bloc.state.journaledToday, isTrue);
+        expect(bloc.state.monthCategoryMarkers[todayStr]?['positive'], 1);
+        expect(bloc.state.entries.map((e) => e.id), contains('ext1'));
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'ExternalEntryAdded for a past date marks that date only — today and '
+      'the visible entry list stay untouched',
+      build: () => JournalBloc(repository: repository),
+      act: (bloc) => bloc.add(
+        ExternalEntryAdded(
+          entry: CategoryEntry(
+            id: 'ext2',
+            categoryId: 'positive',
+            text: 'past call entry',
+            source: 'voice',
+            createdAt: DateTime(2026, 7, 3, 10),
+          ),
+          date: DateTime(2026, 7, 3),
+        ),
+      ),
+      verify: (bloc) {
+        expect(bloc.state.monthCategoryMarkers['2026-07-03']?['positive'], 1);
+        expect(bloc.state.todayCategoryCounts, isEmpty);
+        expect(bloc.state.journaledToday, isFalse);
+        expect(
+          bloc.state.entries,
+          isEmpty,
+          reason:
+              'selected date is today — a past-date external entry must '
+              'not appear in the visible list',
+        );
+      },
+    );
+
+    test(
+      'ExternalEntryAdded persists nothing — the caller already wrote it',
+      () async {
+        final bloc = JournalBloc(repository: repository);
+        bloc.add(
+          ExternalEntryAdded(
+            entry: CategoryEntry(
+              id: 'ext3',
+              categoryId: 'gratitude',
+              text: 'already persisted by VoiceCallBloc',
+              source: 'voice',
+              createdAt: DateTime(2026, 7, 3, 10),
+            ),
+            date: DateTime(2026, 7, 3),
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 50));
+        expect(await repository.getCategoryEntries('2026-07-03'), isEmpty);
+        await bloc.close();
+      },
+    );
+
+    blocTest<JournalBloc, JournalState>(
+      'ExternalEntryRemoved decrements counts and markers',
+      build: () => JournalBloc(repository: repository),
+      seed: () {
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        return JournalState(
+          status: JournalStatus.loaded,
+          entries: [
+            CategoryEntry(
+              id: 'ext1',
+              categoryId: 'positive',
+              text: 'from the call',
+              source: 'voice',
+              createdAt: DateTime.now(),
+            ),
+          ],
+          monthCategoryMarkers: {
+            todayStr: {'positive': 1},
+          },
+          todayCategoryCounts: {'positive': 1},
+        );
+      },
+      act: (bloc) => bloc.add(
+        ExternalEntryRemoved(
+          entryId: 'ext1',
+          categoryId: 'positive',
+          date: DateTime.now(),
+        ),
+      ),
+      wait: const Duration(milliseconds: 50),
+      verify: (bloc) {
+        expect(bloc.state.todayCategoryCounts, isEmpty);
+        expect(bloc.state.journaledToday, isFalse);
+        expect(bloc.state.entries, isEmpty);
+      },
+    );
+
+    test('ExternalEntryRemoved does not delete from the repository', () async {
+      final created = await repository.addCategoryEntry(
+        '2026-07-03',
+        'positive',
+        'still here',
+      );
+      final bloc = JournalBloc(repository: repository);
+      bloc.add(
+        ExternalEntryRemoved(
+          entryId: created.id,
+          categoryId: 'positive',
+          date: DateTime(2026, 7, 3),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 50));
+      final persisted = await repository.getCategoryEntries('2026-07-03');
+      expect(
+        persisted.map((e) => e.id),
+        contains(created.id),
+        reason: 'state-only event — the caller owns the repository delete',
+      );
+      await bloc.close();
     });
   });
 }

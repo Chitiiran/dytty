@@ -1,0 +1,54 @@
+appId: com.dytty.dytty
+name: "Voice: home progress refreshes after daily call saves entries (#250)"
+tags:
+  - voice
+  - daily-call
+  - regression
+---
+# UI-only flow — audio + logcat handled by orchestrate.py. Regression for
+# #250: call-path saves bypassed JournalBloc, home stayed "Progress 0 of 5"
+# until restart.
+- runFlow: "../helpers/login-device.yaml"
+
+# Clean slate on home before the call.
+- assertVisible: "Progress 0 of 5"
+
+- runFlow: "../helpers/open-daily-call.yaml"
+- tapOn: "Start Call"
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+
+# Hold the call open for the orchestrator utterance + in-call save_entry
+# (waitForAnimationToEnd returns instantly on the static call screen).
+- extendedWaitUntil:
+    visible: "End call"
+    timeout: 20000
+- repeat:
+    times: 20
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
+
+- tapOn: "End call"
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 15000
+# Let reconcile finish before leaving the summary.
+- repeat:
+    times: 8
+    commands:
+      - extendedWaitUntil:
+          visible: "NEVER_APPEARS_DWELL_SENTINEL"
+          timeout: 1000
+          optional: true
+
+# Back to home: progress must have moved off 0 WITHOUT restart (#250).
+- tapOn: "Done"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: "Progress 0 of 5"
+- assertVisible: "Progress .* of 5.*"
+- takeScreenshot: ".maestro/screenshots/latest/voice/250-home-refresh"
