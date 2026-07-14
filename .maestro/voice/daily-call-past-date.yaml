@@ -12,6 +12,12 @@ tags:
 # `back` to home (the screen captures it at call-bloc construction). If it
 # resets on back, start the call from the journal day screen's own call
 # affordance instead — screenshot early rather than guessing (owner rule).
+#
+# Rig-tuning TODO (review finding): add a positive assertVisible on
+# yesterday's list keyed to the orchestrator utterance script — the AI's
+# saved entry text is nondeterministic, so it can't be asserted here yet.
+# Until then the negative assertions below carry the #252 signal (a
+# save-to-today regression breaks "Progress 0 of 5").
 - runFlow: "../helpers/login-device.yaml"
 
 - assertVisible: "Progress 0 of 5"

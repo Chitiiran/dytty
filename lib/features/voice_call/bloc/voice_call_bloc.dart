@@ -310,8 +310,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   /// Journal date the call was launched from (yyyy-MM-dd), wired at
   /// construction by the screen from JournalBloc.state.selectedDate. A call
   /// started from a past date's screen must save to THAT date (#252) — the
-  /// old pin from _callStartTime always hit today. Null (notification /
-  /// review-call launches) falls back to the call start date.
+  /// old pin from _callStartTime always hit today. Null only for
+  /// review-call launches and direct test construction (the notification
+  /// route reuses VoiceCallScreen, which always passes selectedDate);
+  /// falls back to the call start date.
   final String? _launchDate;
 
   /// Wiring probe (#252, same rationale as [hasJournalRepository]): the
