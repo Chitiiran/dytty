@@ -71,6 +71,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       // voice_call_screen_wiring_test.dart). Reuse JournalBloc's repository —
       // same uid-scoped instance, no fresh Firestore handle.
       journalRepository: journalBloc.repository,
+      // #252: a call launched from a past date's screen saves to THAT date.
+      journalDate: journalBloc.state.selectedDate,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
