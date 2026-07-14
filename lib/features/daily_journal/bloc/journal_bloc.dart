@@ -80,6 +80,37 @@ class AddVoiceEntry extends JournalEvent {
   List<Object?> get props => [categoryId, text, transcript, tags, date];
 }
 
+/// An entry another writer already persisted (the voice-call path writes
+/// repository-direct to capture Firestore ids, #224/#232). State-only:
+/// updates aggregates, never writes. Without this the home ring, calendar
+/// circles, and streak stay stale until a full SelectDate refetch (#250).
+class ExternalEntryAdded extends JournalEvent {
+  final CategoryEntry entry;
+  final DateTime date;
+
+  const ExternalEntryAdded({required this.entry, required this.date});
+
+  @override
+  List<Object?> get props => [entry, date];
+}
+
+/// An entry another writer already deleted (post-call reject). State-only
+/// mirror of DeleteEntry: decrement aggregates + tombstone, no repo write.
+class ExternalEntryRemoved extends JournalEvent {
+  final String entryId;
+  final String categoryId;
+  final DateTime date;
+
+  const ExternalEntryRemoved({
+    required this.entryId,
+    required this.categoryId,
+    required this.date,
+  });
+
+  @override
+  List<Object?> get props => [entryId, categoryId, date];
+}
+
 class LoadMonthMarkers extends JournalEvent {
   final int year;
   final int month;
@@ -252,6 +283,8 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     on<LoadMonthMarkers>(_onLoadMonthMarkers);
     on<LoadStreak>(_onLoadStreak);
     on<_EntriesUpdated>(_onEntriesUpdated);
+    on<ExternalEntryAdded>(_onExternalEntryAdded);
+    on<ExternalEntryRemoved>(_onExternalEntryRemoved);
   }
 
   String _cacheKey(int year, int month) =>
@@ -425,7 +458,13 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
     emit(
       state.copyWith(
         status: JournalStatus.loaded,
-        entries: [...state.entries.where((e) => e.id != created.id), created],
+        // Only merge into the visible list when it IS this date's list —
+        // an external write for another day must not leak into the selected
+        // date's entries (#250). The add flows pin selectedDate to the
+        // target date before calling this, so the guard is a no-op there.
+        entries: dateString == state.selectedDateString
+            ? [...state.entries.where((e) => e.id != created.id), created]
+            : state.entries,
         monthCategoryMarkers: currentMarkers,
         todayCategoryCounts: todayCounts,
         currentStreak: optimisticStreak,
@@ -594,6 +633,79 @@ class JournalBloc extends Bloc<JournalEvent, JournalState> {
       }
     } catch (e) {
       emit(state.copyWith(status: JournalStatus.error, error: e.toString()));
+    }
+  }
+
+  void _onExternalEntryAdded(
+    ExternalEntryAdded event,
+    Emitter<JournalState> emit,
+  ) {
+    // Already persisted by the caller (single writer) — aggregates only.
+    _emitOptimisticUpdate(
+      emit,
+      event.entry,
+      event.entry.categoryId,
+      event.date,
+    );
+  }
+
+  Future<void> _onExternalEntryRemoved(
+    ExternalEntryRemoved event,
+    Emitter<JournalState> emit,
+  ) async {
+    // Already deleted by the caller — mirror _onDeleteEntry's state updates
+    // without the repository write.
+    final dateStr = JournalState._dateFormat.format(event.date);
+    // Tombstone: a pre-delete stream snapshot must not resurrect it (#205).
+    _pendingDeletes.add(event.entryId);
+
+    final currentMarkers = _cloneMarkers(state.monthCategoryMarkers);
+    final dateMarkers = currentMarkers[dateStr];
+    if (dateMarkers != null) {
+      final count = (dateMarkers[event.categoryId] ?? 1) - 1;
+      if (count <= 0) {
+        dateMarkers.remove(event.categoryId);
+      } else {
+        dateMarkers[event.categoryId] = count;
+      }
+      if (dateMarkers.isEmpty) {
+        currentMarkers.remove(dateStr);
+      }
+    }
+    _markerCache[_cacheKey(event.date.year, event.date.month)] = currentMarkers;
+
+    Map<String, int>? todayCounts;
+    if (dateStr == JournalState._dateFormat.format(DateTime.now())) {
+      todayCounts = Map<String, int>.from(state.todayCategoryCounts);
+      final count = (todayCounts[event.categoryId] ?? 1) - 1;
+      if (count <= 0) {
+        todayCounts.remove(event.categoryId);
+      } else {
+        todayCounts[event.categoryId] = count;
+      }
+    }
+
+    emit(
+      state.copyWith(
+        status: JournalStatus.loaded,
+        entries: state.entries.where((e) => e.id != event.entryId).toList(),
+        monthCategoryMarkers: currentMarkers,
+        todayCategoryCounts: todayCounts,
+      ),
+    );
+
+    // Streak may shrink if that was the day's only entry — refresh in the
+    // background, same as _onDeleteEntry.
+    try {
+      final streak = await _repository.getStreakData();
+      emit(
+        state.copyWith(
+          currentStreak: streak.currentStreak,
+          lastJournalDate: streak.lastJournalDate,
+        ),
+      );
+    } catch (_) {
+      // Non-critical.
     }
   }
 
