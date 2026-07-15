@@ -27,7 +27,9 @@ tags:
 - back
 - waitForAnimationToEnd:
     timeout: 5000
-- assertVisible: "Progress 1 of 5.*"
+# Streak suffix must appear with the first entry (#235): the label renders
+# "Progress N of 5, streak K day(s)" only when currentStreak > 0.
+- assertVisible: "Progress 1 of 5, streak 1 day.*"
 
 # Delete the entry
 - tapOn: "Today button"
@@ -44,5 +46,9 @@ tags:
     timeout: 5000
 - assertVisible: "Progress 0 of 5.*"
 - assertVisible: "You haven.*journaled today.*"
+# Streak label reverts with the deleted streak-carrying entry (#235):
+# suffix renders only when currentStreak > 0, and the delete handler
+# refreshes streak from the repository in the background.
+- assertNotVisible: ".*streak 1 day.*"
 
 - takeScreenshot: ".maestro/screenshots/latest/state/162-delete-ring-unfills"

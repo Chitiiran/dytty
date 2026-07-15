@@ -32,7 +32,8 @@ SCENARIOS=(
   self-correction-final-state
 )
 
-EMAIL="${DEVICE_TEST_EMAIL:-$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- || true)}"
+source "$PROJECT_DIR/scripts/lib/env.sh"
+EMAIL="${DEVICE_TEST_EMAIL:-$(read_env_var DEVICE_TEST_EMAIL "$PROJECT_DIR/.env")}"
 
 echo "=== #231 daily-call recall sweep — ${#SCENARIOS[@]} scenarios ==="
 pass=0; fail=0
@@ -63,3 +64,7 @@ done
 echo ""
 echo "=== sweep done: $pass passed, $fail failed (of ${#SCENARIOS[@]}) ==="
 echo "Per-scenario output: $OUT_DIR/"
+
+# Propagate failures (sibling voice-sweep.sh already does) — without this a
+# fully-failed sweep exits 0 and a future CI wiring would be false-green.
+[[ "$fail" -eq 0 ]]

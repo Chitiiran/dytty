@@ -1,5 +1,13 @@
 name: CI
 
+# Single source for the toolchain pin — flutter-version references below.
+env:
+  FLUTTER_VERSION: '3.41.1'
+
+# Default token: read-only. Jobs that need more declare it themselves.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, 'dev/**']
@@ -7,6 +15,11 @@ on:
     branches: [main, 'dev/**']
   merge_group:
     branches: [main, 'dev/**']
+
+# Cancel superseded runs on PRs only; never cancel main/dev-release/merge_group runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ──────────────────────────────────────────────────
@@ -21,6 +34,10 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 20
     continue-on-error: true
+    # Serialize against voice-nightly.yml (same group) — one shared physical phone.
+    concurrency:
+      group: physical-device
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +50,7 @@ jobs:
           if [[ "$DEVICE_COUNT" -eq 0 ]]; then
             echo "::warning::No physical device connected. Skipping device tests."
             echo "SKIP_DEVICE_TEST=true" >> $GITHUB_ENV
+            echo '### Gate 1.5 SKIPPED (no device connected)' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Device connected: $(adb devices | grep 'device$' | head -1)"
             echo "SKIP_DEVICE_TEST=false" >> $GITHUB_ENV
@@ -42,7 +60,7 @@ jobs:
         if: env.SKIP_DEVICE_TEST != 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
@@ -52,7 +70,9 @@ jobs:
       - name: Restore google-services.json
         if: env.SKIP_DEVICE_TEST != 'true'
         shell: bash
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Run device tests
         if: env.SKIP_DEVICE_TEST != 'true'
@@ -81,12 +101,13 @@ jobs:
   analyze-test:
     name: Analyze, Test & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - run: flutter pub get
@@ -130,11 +151,15 @@ jobs:
       # Shared debug keystore is checked into android/debug.keystore and referenced by build.gradle.kts signingConfig.
 
       - name: Restore google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Build debug APK
         run: |
           flutter build apk --debug \
+            --no-tree-shake-icons \
             --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Upload web artifact
@@ -156,6 +181,7 @@ jobs:
   distribute-dev:
     name: "Gate 2: Distribute Debug APK"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: analyze-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev/release'
     steps:
@@ -193,6 +219,10 @@ jobs:
   distribute-release:
     name: "Gate 3: Distribute Release APK"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
     needs: analyze-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -200,17 +230,21 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - run: flutter pub get
 
       - name: Restore google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Build release APK
         run: |
           flutter build apk --release \
+            --no-tree-shake-icons \
             --dart-define=FIREBASE_ANDROID_API_KEY=${{ secrets.FIREBASE_ANDROID_API_KEY }}
 
       - name: Extract tester checklist from merged PR
@@ -246,6 +280,6 @@ jobs:
         with:
           appId: 1:828440302945:android:8a03bc6c01380939392120
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DYTTY_4B83D }}
-          groups: private testers
+          groups: private-testers
           releaseNotes: ${{ steps.notes.outputs.body }}
           file: build/app/outputs/flutter-apk/app-release.apk

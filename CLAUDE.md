@@ -13,6 +13,8 @@ Voice-first daily journaling app with 5 structured categories. Flutter + Firebas
 
 **End of session:** Update `kb/PROGRESS.md` — refresh top section, append dated entry to `## Log`.
 
+**Weekly (owner ritual):** 20-minute retro in `kb/workflow/WEEKLY-RETRO.md` — five questions: what reached a device, what broke and why, which signal lied, what did I avoid, what do I kill. The session-start check nudges when it's 8+ days stale.
+
 ## Knowledge Base (`kb/`)
 
 All project knowledge lives in `kb/` (gitignored, private IP). Navigate by the question you're trying to answer:
@@ -20,7 +22,7 @@ All project knowledge lives in `kb/` (gitignored, private IP). Navigate by the q
 | Folder | Question it answers | Key files |
 |--------|-------------------|-----------|
 | `kb/decisions/` | "Why did we choose X?" | ADRs (001-009), RESEARCH-*.md |
-| `kb/workflow/` | "How does work flow?" | GIT-WORKFLOW.md, CI-GATES.md, TESTING.md, RELEASE.md, FEEDBACK.md, DECISION-MAKING.md |
+| `kb/workflow/` | "How does work flow?" | GIT-WORKFLOW.md, CI-GATES.md, TESTING.md, RELEASE.md, FEEDBACK.md, DECISION-MAKING.md, COST-ESTIMATION.md |
 | `kb/product/` | "What are we building?" | OBJECTIVES.md, ROADMAP.md |
 | `kb/specs/` | "What will we build and how?" | SPEC-*.md (design), PLAN-*.md (implementation) |
 | `kb/feedback/` | "What did users say?" | Raw feedback files, DOGFOODING_INTERVIEW.md |
@@ -80,6 +82,7 @@ main (stable, always releasable)
 │   ├── dev/feat-*
 │   └── dev/chore-*
 ├── dev/release (composed from selected dev/* for testing)
+├── release/X.Y.Z (store-cut branch — version bump + tag; see kb/workflow/RELEASE.md)
 └── feature branches (agent work: fix/*, feat/*, chore/*)
 ```
 
@@ -90,7 +93,7 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 - Agent work targets `dev/*` branches, not `main`.
 - Agent chooses branch base per-task: `dev/*` if touching recent changes, `main` if independent.
 - You create `dev/*` branches, agents target them.
-- PRs to `dev/*` require passing Gate 1 CI before merge.
+- Gate 1 CI **runs** on `dev/*` PRs (should be green) but is **advisory — not a required check** on dev/* (the `dev branches` ruleset enforces only PR-required + conversation-resolution; Gate 1 is required only on `main`).
 - Compose `dev/release` from selected `dev/*` branches before promoting to `main`.
 - Fix forward, never revert on `dev/*`.
 
@@ -98,10 +101,10 @@ Full details: `kb/workflow/GIT-WORKFLOW.md`
 
 | Gate | Trigger | Time | Runner | What runs |
 |------|---------|------|--------|-----------|
-| Gate 1 | PR to dev/* or main | ~3-5 min | Cloud | format, analyze, unit/widget tests, coverage (80%), web build, debug APK |
+| Gate 1 | PR to dev/* or main | ~3-5 min | Cloud | format, analyze, unit/widget tests, coverage (80%), web build, debug APK. Required check on `main` only; advisory on dev/*. Job name: `Analyze, Test & Build` |
 | Gate 1.5 | PR (advisory) | ~8-12 min | Self-hosted + phone | Maestro on physical device, real Firebase, real Google Sign-In |
 | Gate 2 | Push to dev/release | ~5-7 min | Cloud | Gate 1 + distribute debug APK to `developers` group. Planned: Playwright, Patrol |
-| Gate 3 | Push to main | ~8-10 min | Cloud | Gate 1 + release APK + distribute to `private testers` group. Planned: Playwright, Patrol, Goldens (#48) |
+| Gate 3 | Push to main | ~8-10 min | Cloud | Gate 1 + release APK + distribute to `private-testers` group (alias, not display name — #247). Planned: Playwright, Patrol, Goldens (#48) |
 
 ## Testing
 
@@ -129,7 +132,7 @@ TDD is mandatory. Full strategy: `kb/workflow/TESTING.md`
 
 ### Project Board
 - `bash scripts/add-workstream.sh <name> --color <COLOR>` — add workstream option safely (never use raw GraphQL)
-- `gh project item-list 1 --owner Chitiiran --limit 100 --format json` — fetch all project items (always use `--limit 100`)
+- `gh project item-list 1 --owner Chitiiran --limit 250 --format json` — fetch all project items (always use `--limit 250`)
 
 ### Release & Distribution
 - `bash scripts/release.sh <version>` — create release branch with version bump
@@ -139,7 +142,7 @@ TDD is mandatory. Full strategy: `kb/workflow/TESTING.md`
 - Flutter 3.41.1 / Dart 3.11.0
 - Firebase Auth (Google Sign-In), Cloud Firestore, Firebase Storage
 - State management: Bloc (`AuthBloc`, `JournalBloc`, `ThemeCubit`, `VoiceNoteBloc`)
-- LLM: Gemini 2.5 Flash via `firebase_ai` (swappable `LlmService` interface)
+- LLM (split): `gemini-3.1-flash-live-preview` (live daily call — 2.5-native-audio had a tool-call socket-close bug, see gemini_live_service.dart) + `gemini-2.5-flash` (reconcile/categorize), via `firebase_ai ^3.12.2` (swappable `LlmService` interface).
 - E2E: Playwright (web), Maestro (Android), Patrol (integration)
 
 ## Architecture
@@ -161,6 +164,9 @@ users/{uid}/
 
 ## Environment Variables
 API keys in `.env` (gitignored), injected via `--dart-define`. See `.env.example`.
+
+## Known Environment Issues
+- **Windows `python3` is a broken MS Store stub** on this box — use `python` (the working interpreter). Scripts using `python3` shebangs may no-op silently. For `scripts/inject-audio.py`: `pip install grpcio grpcio-tools`.
 
 ## Worktrees
 - Directory: `.worktrees/` (gitignored)

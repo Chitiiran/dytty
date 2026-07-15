@@ -28,6 +28,13 @@ class StartCall extends VoiceCallEvent {
   List<Object?> get props => [systemPrompt];
 }
 
+/// The screen's auto-start found no usable microphone (#251). With no Start
+/// Call button left, this is the only way the user learns why nothing
+/// happened.
+class PermissionDenied extends VoiceCallEvent {
+  const PermissionDenied();
+}
+
 class EndCall extends VoiceCallEvent {
   const EndCall();
 }
@@ -262,7 +269,12 @@ String normalizeForDedup(String s) => s
 
 /// Tagged structured logging for the acoustic test harness (verify.py parses
 /// these). Mirrors the `[DYTTY]` tag used by GeminiLiveService.
-void _harnessLog(String msg) => debugPrint('[DYTTY] $msg');
+///
+/// Debug builds only: the harness drives debug builds; release/tester logcat
+/// must not receive journal content.
+void _harnessLog(String msg) {
+  if (kDebugMode) debugPrint('[DYTTY] $msg');
+}
 
 /// Tool call argument keys for the save_entry function.
 class _SaveEntryArgs {
@@ -302,8 +314,34 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   String get _journalDate =>
       _sessionDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
 
+  /// Journal date the call was launched from (yyyy-MM-dd), wired at
+  /// construction by the screen from JournalBloc.state.selectedDate. A call
+  /// started from a past date's screen must save to THAT date (#252) — the
+  /// old pin from _callStartTime always hit today. Null only for
+  /// review-call launches and direct test construction (the notification
+  /// route reuses VoiceCallScreen, which always passes selectedDate);
+  /// falls back to the call start date.
+  final String? _launchDate;
+
+  /// Wiring probe (#252, same rationale as [hasJournalRepository]): the
+  /// screen must pass the viewed date or past-date calls silently save to
+  /// today again.
+  @visibleForTesting
+  String? get debugLaunchDate => _launchDate;
+
   bool _warned5 = false;
   bool _warned9 = false;
+
+  /// Wiring probe (#224 regression guard): production construction sites must
+  /// pass a repository or reconcile/reword silently no-op. The first shipped
+  /// version of this feature was dead in production for exactly this reason —
+  /// tests injected a mock repo, nothing asserted what the screen constructs.
+  @visibleForTesting
+  bool get hasJournalRepository => _journalRepository != null;
+
+  /// Test seam: pin the session journal date without a live connect (#232).
+  @visibleForTesting
+  void debugSetSessionDate(String date) => _sessionDate = date;
 
   /// Accumulates mic input PCM data during a call for upload after.
   final List<int> _recordedAudio = [];
@@ -326,14 +364,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
+    DateTime? journalDate,
   }) : _service = service,
        _journalBloc = journalBloc,
        _journalRepository = journalRepository,
        _llmService = llmService,
        _audioStorage = audioStorage,
        _uid = uid,
+       _launchDate = journalDate == null
+           ? null
+           : DateFormat('yyyy-MM-dd').format(journalDate),
        super(const VoiceCallState()) {
     on<StartCall>(_onStartCall);
+    on<PermissionDenied>(_onPermissionDenied);
     on<EndCall>(_onEndCall);
     on<TranscriptReceived>(_onTranscriptReceived);
     on<ToolCallReceived>(_onToolCallReceived);
@@ -349,11 +392,30 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<RejectReconciledEntry>(_onRejectReconciledEntry);
   }
 
+  void _onPermissionDenied(
+    PermissionDenied event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        status: VoiceCallStatus.error,
+        error: 'Microphone permission needed',
+      ),
+    );
+  }
+
   Future<void> _onStartCall(
     StartCall event,
     Emitter<VoiceCallState> emit,
   ) async {
+    // A retry after a connection error re-enters here with the old
+    // subscriptions still live — cancel first or every service event is
+    // handled twice for the rest of the session.
+    await _cancelSubscriptions();
     _recordedAudio.clear();
+    // A fresh call gets a fresh reconcile pass (guard is per-session, not
+    // per-bloc) — defuses a silent skip if a restart affordance ever lands.
+    _reconciled = false;
     emit(
       state.copyWith(
         status: VoiceCallStatus.connecting,
@@ -388,8 +450,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
       // Pin the session's journal date now so every save/reconcile/reject in
-      // this session writes to the same day, even across midnight. (#232)
-      _sessionDate = DateFormat('yyyy-MM-dd').format(_callStartTime!);
+      // this session writes to the same day, even across midnight (#232).
+      // The launch date (the journal date the user was viewing) wins over
+      // the wall clock (#252).
+      _sessionDate =
+          _launchDate ?? DateFormat('yyyy-MM-dd').format(_callStartTime!);
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
@@ -427,14 +492,15 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       );
 
       try {
-        final now = DateTime.now();
-        final date = DateFormat('yyyy-MM-dd').format(now);
+        // Keyed to the pinned session date (#232) so the audio lands on the
+        // same day-doc as the session's entries even across midnight — the
+        // entry paths already did this; the upload was still using "now".
         final url = await _audioStorage.uploadCallAudio(
           uid: _uid,
-          date: date,
+          date: _journalDate,
           audioData: Uint8List.fromList(_recordedAudio),
         );
-        debugPrint('Audio uploaded: $url');
+        if (kDebugMode) debugPrint('Audio uploaded: $url');
         emit(state.copyWith(audioUrl: url, uploadingAudio: false));
       } catch (e) {
         debugPrint('Failed to upload audio: $e');
@@ -456,7 +522,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final fullTranscript = state.transcripts
         .map((t) => '${t.speaker == Speaker.user ? "You" : "AI"}: ${t.text}')
         .join('\n');
-    if (fullTranscript.trim().isNotEmpty) {
+    // isClosed guard: the post-call screen's Done button can close this bloc
+    // while the upload above is still awaiting — add() on a closed bloc
+    // throws StateError.
+    if (!isClosed && fullTranscript.trim().isNotEmpty) {
       add(ReconcileSession(transcript: fullTranscript));
     }
   }
@@ -556,6 +625,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             ),
           );
           addedCount++;
+          // Aggregates absorb the reconciled add too (#250).
+          _journalBloc?.add(
+            ExternalEntryAdded(
+              entry: created,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
           _harnessLog('Entry saved: ${item.category} (origin: reconciled-add)');
         } catch (e) {
           debugPrint('reconcile add failed: $e');
@@ -578,9 +654,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             item.text,
           );
         } catch (e) {
+          // Failed write: skip the UI update too — showing reworded text
+          // that never persisted would lie to the post-call screen.
           debugPrint('reconcile reword failed: $e');
+          continue;
         }
-        _journalBloc?.add(UpdateEntry(entryId: item.entryId!, text: item.text));
+        // No JournalBloc dispatch: the repo write above is the single writer
+        // (#232); UpdateEntry would hit the selected date's doc, not the
+        // session's, and the entry stream reconciles the UI anyway.
         updated[idx] = updated[idx].copyWith(
           text: item.text,
           rewordedByAi: true,
@@ -617,21 +698,43 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     RejectReconciledEntry event,
     Emitter<VoiceCallState> emit,
   ) async {
-    // Remove from the post-call list and tombstone-delete from Firestore.
+    // Remove from the post-call list and delete from Firestore. Single
+    // writer, session-dated (#232): repository when wired (uid is irrelevant
+    // to the repo call — the old `_uid != null` guard silently skipped the
+    // delete); JournalBloc DeleteEntry only as the legacy fallback, since it
+    // targets the selected date's doc rather than the session's.
+    // Capture the rejected entry's category before filtering — the absorb
+    // event below needs it to decrement the right aggregate (#250).
+    final rejectedIdx = state.savedEntries.indexWhere(
+      (e) => e.entryId == event.entryId,
+    );
+    final rejected = rejectedIdx >= 0 ? state.savedEntries[rejectedIdx] : null;
     final remaining = state.savedEntries
         .where((e) => e.entryId != event.entryId)
         .toList();
     emit(state.copyWith(savedEntries: remaining));
-    _journalBloc?.add(DeleteEntry(event.entryId));
-    if (_journalRepository != null && _uid != null) {
+    if (_journalRepository != null) {
       try {
         await _journalRepository.deleteCategoryEntry(
           _journalDate,
           event.entryId,
         );
+        // Mirror the delete into the aggregates (#250) — state-only; a
+        // DeleteEntry event would double-delete against the SELECTED date.
+        if (rejected != null) {
+          _journalBloc?.add(
+            ExternalEntryRemoved(
+              entryId: event.entryId,
+              categoryId: rejected.categoryId,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
+        }
       } catch (e) {
         debugPrint('reject entry delete failed: $e');
       }
+    } else {
+      _journalBloc?.add(DeleteEntry(event.entryId));
     }
   }
 
@@ -748,6 +851,15 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             tags: const ['voice-call'],
           );
           createdId = created.id;
+          // Mirror the direct write into JournalBloc so home/calendar
+          // aggregates update without a refetch (#250). State-only event —
+          // the repo write above stays the single writer.
+          _journalBloc?.add(
+            ExternalEntryAdded(
+              entry: created,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
         } catch (e) {
           debugPrint('save_entry repository write failed: $e');
         }
@@ -778,16 +890,47 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _SaveEntryArgs.category: categoryName,
       });
 
-      debugPrint('Tool call: save_entry → $categoryName: $text');
+      if (kDebugMode) {
+        debugPrint('Tool call: save_entry → $categoryName: $text');
+      }
       _harnessLog('Entry saved: $categoryName (origin: in-call)');
     } else if (call.name == 'edit_entry') {
       final args = call.args;
       final entryId = args[_EditEntryArgs.entryId] as String? ?? '';
       final text = args[_EditEntryArgs.text] as String? ?? '';
 
-      // Persist edit via JournalBloc
+      // Single writer, session-dated (#232): when the repository is wired,
+      // write through it under _journalDate — a JournalBloc UpdateEntry would
+      // target the user's currently-SELECTED date (wrong doc after calendar
+      // browsing) and double-write. The bloc fallback preserves the legacy
+      // path for setups without a repository.
       if (entryId.isNotEmpty) {
-        _journalBloc?.add(UpdateEntry(entryId: entryId, text: text));
+        // The post-call review page and reconcile snapshots read
+        // state.savedEntries — keep the in-call copy in sync with the edit.
+        emit(
+          state.copyWith(
+            savedEntries: [
+              for (final saved in state.savedEntries)
+                if (saved.entryId == entryId)
+                  saved.copyWith(text: text)
+                else
+                  saved,
+            ],
+          ),
+        );
+        if (_journalRepository != null) {
+          try {
+            await _journalRepository.updateCategoryEntry(
+              _journalDate,
+              entryId,
+              text,
+            );
+          } catch (e) {
+            debugPrint('edit_entry repository write failed: $e');
+          }
+        } else {
+          _journalBloc?.add(UpdateEntry(entryId: entryId, text: text));
+        }
       }
 
       // Acknowledge the tool call to the model
@@ -796,7 +939,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         _EditEntryArgs.entryId: entryId,
       });
 
-      debugPrint('Tool call: edit_entry → $entryId: $text');
+      if (kDebugMode) {
+        debugPrint('Tool call: edit_entry → $entryId: $text');
+      }
     }
   }
 
@@ -844,11 +989,14 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   }
 
   /// Send mic audio to the model and accumulate for later upload.
+  ///
+  /// Muted means MUTED: not sent to Gemini and not recorded into the buffer
+  /// that uploads to Cloud Storage after the call — the old behavior kept
+  /// recording muted audio into the uploaded file (privacy).
   void sendAudio(Uint8List pcmData) {
+    if (state.isMuted) return;
     _recordedAudio.addAll(pcmData);
-    if (!state.isMuted) {
-      _service.sendAudio(pcmData);
-    }
+    _service.sendAudio(pcmData);
   }
 
   Future<void> _cancelSubscriptions() async {

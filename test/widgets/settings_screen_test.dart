@@ -19,10 +19,6 @@ void main() {
 
   late SettingsScreenRobot robot;
 
-  setUpAll(() {
-    registerFallbackValue(VoiceNoteHandling.ask);
-  });
-
   setUp(() {
     Animate.restartOnHotReload = false;
   });
@@ -385,57 +381,15 @@ void main() {
       verify(() => mockSettingsCubit.toggleReminder()).called(1);
     });
 
-    testWidgets('shows voice note handling options (#32)', (tester) async {
+    testWidgets('voice notes section retired with one-shot flow (#251)', (
+      tester,
+    ) async {
       await tester.pumpApp(const SettingsScreen());
       await tester.pump(const Duration(seconds: 1));
-
-      robot = SettingsScreenRobot(tester);
-      await robot.scrollTo(find.text('Voice notes'));
-      expect(find.text('Ask each time'), findsOneWidget);
-      expect(find.text('Summarize automatically'), findsOneWidget);
-      expect(find.text('Keep raw transcript'), findsOneWidget);
-    });
-
-    testWidgets('marks persisted handling as selected (#32)', (tester) async {
-      await tester.pumpApp(
-        const SettingsScreen(),
-        settingsState: const SettingsState(
-          loaded: true,
-          voiceNoteHandling: VoiceNoteHandling.summarize,
-        ),
-      );
-      await tester.pump(const Duration(seconds: 1));
-
-      robot = SettingsScreenRobot(tester);
-      await robot.scrollTo(find.text('Keep raw transcript'));
-      robot.expectThemeSelected('Summarize automatically');
-      robot.expectThemeNotSelected('Ask each time');
-      robot.expectThemeNotSelected('Keep raw transcript');
-    });
-
-    testWidgets('tapping handling option calls cubit (#32)', (tester) async {
-      final mockSettingsCubit = MockSettingsCubit();
-      when(
-        () => mockSettingsCubit.state,
-      ).thenReturn(const SettingsState(loaded: true));
-      when(
-        () => mockSettingsCubit.setVoiceNoteHandling(any()),
-      ).thenAnswer((_) async {});
-
-      await tester.pumpApp(
-        const SettingsScreen(),
-        settingsCubit: mockSettingsCubit,
-      );
-      await tester.pump(const Duration(seconds: 1));
-
-      robot = SettingsScreenRobot(tester);
-      await robot.scrollTo(find.text('Keep raw transcript'));
-      await tester.tap(find.text('Keep raw transcript'));
-      await tester.pump();
-
-      verify(
-        () => mockSettingsCubit.setVoiceNoteHandling(VoiceNoteHandling.raw),
-      ).called(1);
+      expect(find.text('Voice notes'), findsNothing);
+      expect(find.text('Ask each time'), findsNothing);
+      expect(find.text('Summarize automatically'), findsNothing);
+      expect(find.text('Keep raw transcript'), findsNothing);
     });
 
     testWidgets('toggles daily call calls cubit', (tester) async {

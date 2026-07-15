@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
+
+class _MockLiveSession extends Mock implements LiveSession {}
 
 void main() {
   group('Transcript', () {
@@ -437,6 +441,20 @@ void main() {
       expect(cfg.speechConfig?.voiceConfig, isNotNull);
       expect(cfg.inputAudioTranscription, isNotNull);
       expect(cfg.outputAudioTranscription, isNotNull);
+    });
+  });
+
+  group('dispose (#246)', () {
+    test('closes the live session so a mid-call dispose does not leak it', () {
+      final session = _MockLiveSession();
+      when(() => session.close()).thenAnswer((_) async {});
+
+      final service = GeminiLiveService();
+      service.debugSetSession(session);
+      service.dispose();
+
+      verify(() => session.close()).called(1);
+      expect(service.isConnected, isFalse);
     });
   });
 }

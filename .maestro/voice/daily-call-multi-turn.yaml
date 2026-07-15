@@ -10,7 +10,7 @@ tags:
 # #231: guarded daily-call open (re-foregrounds Dytty before the blind tap).
 - runFlow: "../helpers/open-daily-call.yaml"
 
-- tapOn: "Start Call"
+# (#251) no Start Call tap — the call screen auto-connects on entry
 
 - extendedWaitUntil:
     visible: "In call.*"

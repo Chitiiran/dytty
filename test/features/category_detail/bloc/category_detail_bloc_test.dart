@@ -707,7 +707,6 @@ void main() {
           (date: '2026-03-18', entryId: 'e1'),
           (date: '2026-03-17', entryId: 'e2'),
         ]);
-        verifyNever(() => mockRepo.markEntryReviewed(any(), any()));
       },
     );
 

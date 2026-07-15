@@ -1,0 +1,27 @@
+appId: com.dytty.dytty
+name: "Voice: mic FAB auto-connects the daily call"
+tags:
+  - voice
+  - smoke
+---
+# #251: the mic FAB is the sole capture entry; the call screen auto-connects
+# on entry — no Ready state, no Start Call button.
+- runFlow: "../helpers/login.yaml"
+
+- tapOn: "Start daily call"
+
+# Auto-connect: without any further tap the banner must leave idle and
+# reach a live call (emulator connects real Gemini — proven during #255).
+- extendedWaitUntil:
+    visible: "In call.*"
+    timeout: 20000
+- assertNotVisible: "Start Call"
+- takeScreenshot: ".maestro/screenshots/latest/voice/autoconnect-in-call"
+
+- tapOn: "End call"
+# Post-call landing is the Call Summary page (canonical name pending
+# glossary refresh in PR2).
+- extendedWaitUntil:
+    visible: "Call Summary"
+    timeout: 15000
+- tapOn: "Done"

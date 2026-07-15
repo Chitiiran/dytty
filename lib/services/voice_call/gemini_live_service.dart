@@ -125,12 +125,18 @@ class GeminiLiveService {
   bool get isConnected => _session != null;
 
   /// Emit a structured log line with the [DYTTY] tag for logcat filtering.
-  static void _log(String message) => debugPrint('$_logTag $message');
+  ///
+  /// Debug builds only: the harness always drives debug builds, and these
+  /// lines carry journal content (transcripts) that must not land in
+  /// release/tester logcat.
+  static void _log(String message) {
+    if (kDebugMode) debugPrint('$_logTag $message');
+  }
 
   /// Emit a state change with logging for test observability.
   void _emitState(GeminiLiveState state) {
     _log('Call state: ${state.name}');
-    _stateController.add(state);
+    if (!_stateController.isClosed) _stateController.add(state);
   }
 
   /// Monotonic clock for latency measurement (injectable for tests).
@@ -259,6 +265,15 @@ class GeminiLiveService {
 
   void dispose() {
     _suppressTimer?.cancel();
+    // #246: disposing mid-call (bloc closed / screen popped) leaked the live
+    // Gemini connection — null first so the receive loop breaks, then close.
+    final session = _session;
+    _session = null;
+    // Fire-and-forget: a socket error during a mid-call dispose must not
+    // surface as an unhandled async exception.
+    session?.close().catchError((Object e) {
+      debugPrint('Live session close during dispose failed: $e');
+    });
     _audioController.close();
     _transcriptController.close();
     _toolCallController.close();
@@ -266,6 +281,11 @@ class GeminiLiveService {
     _latencyController.close();
     _interruptController.close();
   }
+
+  /// Test seam: inject a session double so dispose/disconnect paths are
+  /// testable without a live Firebase connection (mirrors markClosedForTest).
+  @visibleForTesting
+  void debugSetSession(LiveSession session) => _session = session;
 
   /// Start the receive loop for multi-turn conversations.
   ///
@@ -320,11 +340,14 @@ class GeminiLiveService {
       for (final part in content.modelTurn!.parts) {
         if (part is InlineDataPart && part.mimeType.startsWith('audio/')) {
           if (_measuring && _userLastChunkMs != null) {
-            lastLatencyMs = _nowMs() - _userLastChunkMs!;
-            _latencyTracker.add(lastLatencyMs!);
-            _latencyController.add(lastLatencyMs!);
+            final latency = _nowMs() - _userLastChunkMs!;
+            lastLatencyMs = latency;
+            _latencyTracker.add(latency);
+            // Late events (receive loop draining during dispose) must not
+            // throw into closed controllers — applies to every add below.
+            if (!_latencyController.isClosed) _latencyController.add(latency);
             _measuring = false;
-            debugPrint('Response latency: ${lastLatencyMs}ms');
+            debugPrint('Response latency: ${latency}ms');
           }
           emitAudioChunk(part.bytes);
         }
@@ -341,17 +364,21 @@ class GeminiLiveService {
       // "now", but input transcription only fires on actual speech, so it
       // marks true end-of-speech (#223).
       if (_measuring) _userLastChunkMs = _nowMs();
-      _transcriptController.add(
-        Transcript(speaker: Speaker.user, text: text, isFinal: isFinal),
-      );
+      if (!_transcriptController.isClosed) {
+        _transcriptController.add(
+          Transcript(speaker: Speaker.user, text: text, isFinal: isFinal),
+        );
+      }
     }
     if (content.outputTranscription?.text != null) {
       final text = content.outputTranscription!.text!;
       final isFinal = content.outputTranscription!.finished == true;
       _log('AI said: $text (final: $isFinal)');
-      _transcriptController.add(
-        Transcript(speaker: Speaker.ai, text: text, isFinal: isFinal),
-      );
+      if (!_transcriptController.isClosed) {
+        _transcriptController.add(
+          Transcript(speaker: Speaker.ai, text: text, isFinal: isFinal),
+        );
+      }
     }
   }
 
@@ -362,7 +389,7 @@ class GeminiLiveService {
   @visibleForTesting
   void emitAudioChunk(Uint8List bytes) {
     _log('Audio chunk received: ${bytes.length} bytes');
-    _audioController.add(bytes);
+    if (!_audioController.isClosed) _audioController.add(bytes);
   }
 
   void _emitInterrupt() {
@@ -379,7 +406,7 @@ class GeminiLiveService {
     // turns would be silently dropped from latency stats (#223).
     _modelTurnComplete = true;
     _measuring = false;
-    _interruptController.add(null);
+    if (!_interruptController.isClosed) _interruptController.add(null);
   }
 
   /// Test seam mirroring [emitAudioChunk] — drives [interruptStream] without a
@@ -410,8 +437,9 @@ class GeminiLiveService {
   @visibleForTesting
   void noteAiAudioForTest() {
     if (_measuring && _userLastChunkMs != null) {
-      lastLatencyMs = _nowMs() - _userLastChunkMs!;
-      _latencyTracker.add(lastLatencyMs!);
+      final latency = _nowMs() - _userLastChunkMs!;
+      lastLatencyMs = latency;
+      _latencyTracker.add(latency);
       _measuring = false;
     }
   }
@@ -419,7 +447,7 @@ class GeminiLiveService {
   void _handleToolCall(LiveServerToolCall toolCall) {
     if (toolCall.functionCalls == null) return;
     for (final call in toolCall.functionCalls!) {
-      _toolCallController.add(call);
+      if (!_toolCallController.isClosed) _toolCallController.add(call);
     }
   }
 }

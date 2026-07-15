@@ -1,5 +1,8 @@
 name: Deploy
 
+env:
+  FLUTTER_VERSION: '3.41.1'
+
 on:
   push:
     branches: [main]
@@ -8,11 +11,12 @@ jobs:
   build:
     name: Build Web
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.1'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
       - name: Build web
@@ -27,6 +31,7 @@ jobs:
     name: Deploy to Firebase Hosting
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Download web artifact
@@ -46,6 +51,7 @@ jobs:
     name: Tag Release
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
