@@ -323,6 +323,103 @@ void main() {
       });
     });
 
+    group('delete → streak cycle (#235)', () {
+      String dstr(DateTime d) =>
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+      test(
+        'deleting today\'s only entry reverts streak to yesterday',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 3; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          expect((await repository.getStreakData()).currentStreak, 3);
+
+          await repository.deleteCategoryEntry(
+            dstr(today),
+            entries[dstr(today)]!.id,
+          );
+
+          final streak = await repository.getStreakData();
+          expect(
+            streak.currentStreak,
+            2,
+            reason: 'walk starts from yesterday once today has no entries',
+          );
+          expect(
+            streak.lastJournalDate,
+            dstr(today.subtract(const Duration(days: 1))),
+          );
+        },
+      );
+
+      test(
+        'deleting a bridge day recomputes longestStreak from data',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 5; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          expect((await repository.getStreakData()).longestStreak, 5);
+
+          // Delete day -2: [-4,-3] and [-1,0] remain — two 2-day runs.
+          final bridge = dstr(today.subtract(const Duration(days: 2)));
+          await repository.deleteCategoryEntry(bridge, entries[bridge]!.id);
+
+          final streak = await repository.getStreakData();
+          expect(streak.currentStreak, 2);
+          expect(
+            streak.longestStreak,
+            2,
+            reason:
+                'max streak is recomputed from surviving data — deleting '
+                'a bridge day retroactively lowers it (accepted semantics, '
+                'SPEC-235)',
+          );
+        },
+      );
+
+      test(
+        're-adding after a streak-breaking delete restores the streak',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 3; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          await repository.deleteCategoryEntry(
+            dstr(today),
+            entries[dstr(today)]!.id,
+          );
+          expect((await repository.getStreakData()).currentStreak, 2);
+
+          await repository.addCategoryEntry(dstr(today), 'gratitude', 'Redo');
+
+          final streak = await repository.getStreakData();
+          expect(streak.currentStreak, 3);
+          expect(streak.lastJournalDate, dstr(today));
+        },
+      );
+    });
+
     group('getUserSettings / updateUserSettings', () {
       test('returns default settings when no profile exists', () async {
         final settings = await repository.getUserSettings();
