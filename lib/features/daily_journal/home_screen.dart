@@ -12,7 +12,6 @@ import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
 import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
 import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
-import 'package:dytty/features/voice_note/widgets/voice_recording_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -124,34 +123,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              // #251: the mic FAB IS the daily call — sole capture entry.
               FloatingActionButton.large(
-                onPressed: () => _openVoiceNote(context),
-                tooltip: 'Record voice note',
+                onPressed: () => _startTodayCall(context),
+                tooltip: 'Start daily call',
                 elevation: 2,
                 child: const Icon(Icons.mic_rounded, size: 32),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  // Semantics label so screen readers announce the button and
-                  // automation can find it (the visible 'Call' text is drawn to
-                  // Flutter's canvas and isn't exposed to the a11y tree). (#231)
-                  // Distinct from the radial menu's 'Start voice call' label
-                  // (avoid an ambiguous finder in widget tests). (#231)
-                  child: Semantics(
-                    label: 'Start daily call',
-                    button: true,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/voice-call');
-                      },
-                      icon: const Icon(Icons.call_rounded),
-                      label: const Text('Call'),
-                    ),
-                  ),
-                ),
-              ),
+              const Spacer(),
             ],
           ),
         ),
@@ -379,7 +359,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!journalState.journaledToday)
                   Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _NudgeCard(onTap: () => _openVoiceNote(context)),
+                        child: _NudgeCard(
+                          onTap: () => _startTodayCall(context),
+                        ),
                       )
                       .animate()
                       .fadeIn(duration: 400.ms)
@@ -415,64 +397,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  SnackBar _buildVoiceNoteSnackBar(
-    BuildContext context, {
-    required CategoryConfig category,
-    required String text,
-  }) {
-    final theme = Theme.of(context);
-    final preview = text.length > 60 ? '${text.substring(0, 60)}...' : text;
-
-    return SnackBar(
-      duration: const Duration(seconds: 3),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      backgroundColor: theme.colorScheme.inverseSurface,
-      content: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: category.color.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(category.icon, size: 16, color: category.color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Saved to ${category.displayName}',
-                  style: TextStyle(
-                    color: theme.colorScheme.onInverseSurface,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  preview,
-                  style: TextStyle(
-                    color: theme.colorScheme.onInverseSurface.withValues(
-                      alpha: 0.7,
-                    ),
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -621,37 +545,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _openVoiceNote(BuildContext context) async {
-    final result = await showVoiceRecordingSheet(context);
-    if (result == null || !context.mounted) return;
-
-    final bloc = context.read<JournalBloc>();
-    final today = DateTime.now();
-    bloc.add(
-      AddVoiceEntry(
-        categoryId: result.categoryId,
-        text: result.text,
-        transcript: result.transcript,
-        tags: result.tags,
-        date: today,
-      ),
-    );
-
-    if (context.mounted) {
-      final categoryState = context.read<CategoryCubit>().state;
-      final category = categoryState.findById(result.categoryId);
-
-      Navigator.pushNamed(context, '/daily-journal');
-      if (category != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          _buildVoiceNoteSnackBar(
-            context,
-            category: category,
-            text: result.text,
-          ),
-        );
-      }
-    }
+  void _startTodayCall(BuildContext context) {
+    // A FAB/nudge call is explicitly a TODAY capture: reset any stale
+    // selected date so the call bloc's journalDate wiring (#252) picks up
+    // today. The radial mic deliberately skips this — its cell tap already
+    // selected the target date.
+    context.read<JournalBloc>().add(SelectDate(DateTime.now()));
+    Navigator.pushNamed(context, '/voice-call');
   }
 }
 
