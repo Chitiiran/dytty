@@ -5,10 +5,13 @@
 # Used by Gate 1.5 (self-hosted CI) and for manual pre-demo testing.
 #
 # Usage:
-#   bash scripts/device-test.sh                    # Run all flows
+#   bash scripts/device-test.sh                    # Run all non-voice flows
 #   bash scripts/device-test.sh --tags smoke       # Run flows tagged 'smoke'
 #   bash scripts/device-test.sh --skip-build       # Skip APK build (reuse existing)
 #   bash scripts/device-test.sh --skip-cleanup     # Skip Firestore data cleanup
+#   bash scripts/device-test.sh --include-voice    # Also run .maestro/voice flows
+#                                                  # (need orchestrated room audio;
+#                                                  # daily-call flows PLAY AI SPEECH)
 #
 # Prerequisites:
 #   - Physical Android device connected via USB (adb devices)
@@ -22,6 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAESTRO_DIR="$PROJECT_DIR/.maestro"
 HELPERS_DIR="$MAESTRO_DIR/helpers"
+source "$SCRIPT_DIR/lib/env.sh"
 SCREENSHOT_DIR="$PROJECT_DIR/test-output/latest/device-e2e/device"
 APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 
@@ -29,6 +33,7 @@ APK_PATH="$PROJECT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 TAGS=""
 SKIP_BUILD=false
 SKIP_CLEANUP=false
+INCLUDE_VOICE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -42,6 +47,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-cleanup)
       SKIP_CLEANUP=true
+      shift
+      ;;
+    --include-voice)
+      INCLUDE_VOICE=true
       shift
       ;;
     *)
@@ -60,13 +69,13 @@ fi
 # ── Load test email from .env if not set ──────────────
 # Anchored grep + -f2-: skip commented lines, keep values containing '='.
 if [[ -z "${DEVICE_TEST_EMAIL:-}" && -f "$PROJECT_DIR/.env" ]]; then
-  DEVICE_TEST_EMAIL=$(grep '^DEVICE_TEST_EMAIL=' "$PROJECT_DIR/.env" | cut -d= -f2- || true)
+  DEVICE_TEST_EMAIL=$(read_env_var DEVICE_TEST_EMAIL "$PROJECT_DIR/.env")
 fi
 # UID powers device-cleanup.sh's direct path — the auth:export email
 # lookup fallback does not work (#206), so cleanup silently no-ops
 # between flows and every flow after the first inherits stale data.
 if [[ -z "${DEVICE_TEST_UID:-}" && -f "$PROJECT_DIR/.env" ]]; then
-  DEVICE_TEST_UID=$(grep '^DEVICE_TEST_UID=' "$PROJECT_DIR/.env" | cut -d= -f2- || true)
+  DEVICE_TEST_UID=$(read_env_var DEVICE_TEST_UID "$PROJECT_DIR/.env")
   export DEVICE_TEST_UID
 fi
 if [[ -z "${DEVICE_TEST_EMAIL:-}" ]]; then
@@ -116,10 +125,10 @@ if [[ "$SKIP_BUILD" == false ]]; then
   echo ""
   echo "=== Building debug APK (real Firebase) ==="
 
-  # Load API key from .env if present
+  # Load API key from .env if present (anchored: skip comments, keep '=' in value)
   FIREBASE_KEY="${FIREBASE_ANDROID_API_KEY:-}"
-  if [[ -z "$FIREBASE_KEY" && -f "$PROJECT_DIR/.env" ]]; then
-    FIREBASE_KEY=$(grep FIREBASE_ANDROID_API_KEY "$PROJECT_DIR/.env" | cut -d= -f2 || true)
+  if [[ -z "$FIREBASE_KEY" ]]; then
+    FIREBASE_KEY=$(read_env_var FIREBASE_ANDROID_API_KEY "$PROJECT_DIR/.env")
   fi
 
   cd "$PROJECT_DIR"
@@ -150,7 +159,7 @@ echo "  login.yaml -> login-device.yaml (real Google Sign-In)"
 if [[ "$SKIP_CLEANUP" == false ]] && command -v firebase &>/dev/null; then
   echo ""
   echo "=== Pre-run: cleaning test data from Firestore ==="
-  bash "$SCRIPT_DIR/device-cleanup.sh" 2>/dev/null || echo "  WARNING: Pre-run cleanup failed (non-fatal)"
+  bash "$SCRIPT_DIR/device-cleanup.sh" || echo "  WARNING: Pre-run cleanup failed (non-fatal)"
 fi
 
 # ── Create output directory ───────────────────────────
@@ -198,6 +207,27 @@ for dir in "$MAESTRO_DIR"/*/; do
   dirname=$(basename "$dir")
   [[ "$dirname" == "helpers" || "$dirname" == "screenshots" ]] && continue
 
+  # Voice flows need orchestrated room audio and the daily-call ones start a
+  # real Gemini Live call (AI speech from the phone speaker) — excluded from
+  # default runs (Gate 1.5, manual smoke). voice-nightly.yml owns them via the
+  # acoustic harness. Opt in explicitly with --include-voice.
+  if [[ "$dirname" == "voice" && "$INCLUDE_VOICE" == false ]]; then
+    echo "--- Skipping voice flows (pass --include-voice to run) ---"
+    continue
+  fi
+
+  # Flows takeScreenshot into .maestro/screenshots/latest/<area>/ and Maestro
+  # can't create nested parents — a fresh checkout/worktree (or new runner
+  # workspace) otherwise fails every flow at its first screenshot. 'latest'
+  # may also be a DANGLING junction left by maestro-test.sh's per-run output
+  # swap (e.g. its bats suite deletes the target) — replace it with a real
+  # directory, else both Maestro and mkdir -p fail on it.
+  SHOT_ROOT="$MAESTRO_DIR/screenshots/latest"
+  if [[ -L "$SHOT_ROOT" && ! -e "$SHOT_ROOT" ]]; then
+    rm -f "$SHOT_ROOT"
+  fi
+  mkdir -p "$SHOT_ROOT/$dirname"
+
   shopt -s nullglob
   yamls=("$dir"*.yaml)
   shopt -u nullglob
@@ -209,7 +239,7 @@ for dir in "$MAESTRO_DIR"/*/; do
     echo "  > $flowname"
     # Clean test data between flows so each starts from zero
     if [[ "$SKIP_CLEANUP" == false ]] && command -v firebase &>/dev/null; then
-      bash "$SCRIPT_DIR/device-cleanup.sh" 2>/dev/null || true
+      bash "$SCRIPT_DIR/device-cleanup.sh" || echo "  WARNING: between-flow cleanup failed (stale data may leak into next flow)"
     fi
     if ! "${MAESTRO_ARGS[@]}" --output "$FLOW_RESULTS_DIR/$FLOW_INDEX.xml" "$flow" 2>&1; then
       TEST_FAILED=true

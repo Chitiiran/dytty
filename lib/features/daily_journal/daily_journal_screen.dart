@@ -414,7 +414,11 @@ class _EntryTileState extends State<_EntryTile> {
     final theme = Theme.of(context);
 
     return Semantics(
-      label: 'Journal entry: ${widget.entry.text}',
+      // Hidden entries must not leak through the a11y tree — TalkBack would
+      // otherwise speak the text while the screen shows "Tap to reveal".
+      label: _isHidden
+          ? 'Journal entry hidden'
+          : 'Journal entry: ${widget.entry.text}',
       child: Dismissible(
         key: ValueKey(widget.entry.id),
         direction: DismissDirection.endToStart,

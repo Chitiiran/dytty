@@ -28,7 +28,7 @@ echo ""
 
 # 2. App installed?
 echo "--- App ---"
-APP_INFO=$($ADB shell dumpsys package "$PKG" 2>/dev/null | grep "versionName\|versionCode\|targetSdkVersion" | head -3)
+APP_INFO=$($ADB shell dumpsys package "$PKG" 2>/dev/null | grep "versionName\|versionCode\|targetSdkVersion" | head -3 || true)
 if [[ -z "$APP_INFO" ]]; then
   echo "ERROR: $PKG is NOT installed"
   exit 1

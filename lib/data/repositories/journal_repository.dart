@@ -152,11 +152,6 @@ class JournalRepository {
     return result;
   }
 
-  /// Marks a category entry as reviewed.
-  Future<void> markEntryReviewed(String date, String entryId) async {
-    await _categoryEntries(date).doc(entryId).update({'isReviewed': true});
-  }
-
   /// Firestore's WriteBatch operation limit.
   static const _maxBatchOps = 500;
 

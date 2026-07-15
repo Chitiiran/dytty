@@ -5,6 +5,7 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -17,6 +18,8 @@ class MockGeminiLiveService extends Mock implements GeminiLiveService {}
 
 class MockJournalBloc extends Mock implements JournalBloc {}
 
+class MockJournalRepository extends Mock implements JournalRepository {}
+
 class MockLlmService extends Mock implements LlmService {}
 
 class MockAudioStorageService extends Mock implements AudioStorageService {}
@@ -26,6 +29,7 @@ class MockAudioStorageService extends Mock implements AudioStorageService {}
 void main() {
   late MockGeminiLiveService mockService;
   late MockJournalBloc mockJournalBloc;
+  late MockJournalRepository mockJournalRepository;
   late MockLlmService mockLlmService;
   late MockAudioStorageService mockAudioStorage;
 
@@ -48,6 +52,10 @@ void main() {
   setUp(() {
     mockService = MockGeminiLiveService();
     mockJournalBloc = MockJournalBloc();
+    mockJournalRepository = MockJournalRepository();
+    when(
+      () => mockJournalRepository.updateCategoryEntry(any(), any(), any()),
+    ).thenAnswer((_) async {});
     mockLlmService = MockLlmService();
     mockAudioStorage = MockAudioStorageService();
 
@@ -98,6 +106,7 @@ void main() {
 
   VoiceCallBloc buildBloc({
     JournalBloc? journalBloc,
+    JournalRepository? journalRepository,
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
@@ -105,6 +114,7 @@ void main() {
     return VoiceCallBloc(
       service: mockService,
       journalBloc: journalBloc,
+      journalRepository: journalRepository,
       llmService: llmService,
       audioStorage: audioStorage,
       uid: uid,
@@ -666,6 +676,78 @@ void main() {
     );
 
     blocTest<VoiceCallBloc, VoiceCallState>(
+      'edit_entry updates savedEntries so post-call review and reconcile '
+      'snapshots see the edited text (repository-wired)',
+      build: () => buildBloc(journalRepository: mockJournalRepository),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        savedEntries: [
+          SavedEntry(
+            entryId: 'entry-42',
+            categoryId: 'positive',
+            text: 'Old text',
+            transcript: 'Old transcript',
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(
+        ToolCallReceived(
+          FunctionCall('edit_entry', {
+            'entry_id': 'entry-42',
+            'text': 'Updated entry text',
+          }, id: 'edit-2'),
+        ),
+      ),
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.savedEntries.single.text,
+          'savedEntries text',
+          'Updated entry text',
+        ),
+      ],
+      verify: (_) {
+        verify(
+          () => mockJournalRepository.updateCategoryEntry(
+            any(),
+            'entry-42',
+            'Updated entry text',
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'edit_entry updates savedEntries on the JournalBloc fallback path',
+      build: () => buildBloc(journalBloc: mockJournalBloc),
+      seed: () => const VoiceCallState(
+        status: VoiceCallStatus.active,
+        savedEntries: [
+          SavedEntry(
+            entryId: 'entry-42',
+            categoryId: 'positive',
+            text: 'Old text',
+            transcript: 'Old transcript',
+          ),
+        ],
+      ),
+      act: (bloc) => bloc.add(
+        ToolCallReceived(
+          FunctionCall('edit_entry', {
+            'entry_id': 'entry-42',
+            'text': 'Updated entry text',
+          }, id: 'edit-3'),
+        ),
+      ),
+      expect: () => [
+        isA<VoiceCallState>().having(
+          (s) => s.savedEntries.single.text,
+          'savedEntries text',
+          'Updated entry text',
+        ),
+      ],
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
       'non-save_entry/edit_entry tool calls are ignored',
       build: () => buildBloc(),
       seed: () => const VoiceCallState(status: VoiceCallStatus.active),
@@ -1066,21 +1148,17 @@ void main() {
       bloc.close();
     });
 
-    test('does not forward to service when muted', () {
+    test('does not forward OR record when muted (privacy)', () async {
       final bloc = buildBloc();
-      // Manually set muted state by adding ToggleMute
       bloc.add(const ToggleMute());
-      // Wait for state to propagate
-      Future<void>.delayed(const Duration(milliseconds: 50)).then((_) {
-        final data = Uint8List.fromList([10, 20, 30]);
-        bloc.sendAudio(data);
-        // Audio still accumulated for recording
-        expect(bloc.recordedAudio, isNotNull);
-        expect(bloc.recordedAudio!.length, 3);
-        // But NOT forwarded to service
-        verifyNever(() => mockService.sendAudio(any()));
-        bloc.close();
-      });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final data = Uint8List.fromList([10, 20, 30]);
+      bloc.sendAudio(data);
+      // Muted audio must not reach the cloud-upload buffer either — the old
+      // behavior recorded muted audio into the file uploaded after the call.
+      expect(bloc.recordedAudio, isNull);
+      verifyNever(() => mockService.sendAudio(any()));
+      await bloc.close();
     });
 
     test('resumes forwarding when unmuted', () async {
@@ -1394,6 +1472,17 @@ void main() {
       final bloc = buildBloc();
       await bloc.close();
       verify(() => mockService.dispose()).called(1);
+    });
+  });
+
+  group('PermissionDenied (#251)', () {
+    test('surfaces the mic-permission error state', () async {
+      final bloc = buildBloc();
+      bloc.add(const PermissionDenied());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, VoiceCallStatus.error);
+      expect(bloc.state.error, 'Microphone permission needed');
+      await bloc.close();
     });
   });
 }

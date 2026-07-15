@@ -14,7 +14,6 @@ import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/category_detail/bloc/category_detail_bloc.dart';
 import 'package:dytty/features/category_detail/category_detail_screen.dart';
-import 'package:dytty/features/category_detail/widgets/category_detail_header.dart';
 import 'package:dytty/features/category_detail/widgets/date_group_header.dart';
 import 'package:dytty/features/category_detail/widgets/empty_category_state.dart';
 import 'package:dytty/features/category_detail/widgets/inline_entry_tile.dart';
@@ -69,40 +68,6 @@ void main() {
       ),
     );
   }
-
-  group('CategoryDetailHeader', () {
-    testWidgets('renders category icon with call badge', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CategoryDetailHeader(
-              categoryId: 'positive',
-              hasRecentEntries: true,
-              onCallTap: () {},
-            ),
-          ),
-        ),
-      );
-
-      expect(find.byType(CategoryDetailHeader), findsOneWidget);
-    });
-
-    testWidgets('call badge is greyed when no recent entries', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CategoryDetailHeader(
-              categoryId: 'positive',
-              hasRecentEntries: false,
-              onCallTap: null,
-            ),
-          ),
-        ),
-      );
-
-      expect(find.byType(CategoryDetailHeader), findsOneWidget);
-    });
-  });
 
   group('DateGroupHeader', () {
     testWidgets('renders display date and entry count', (tester) async {

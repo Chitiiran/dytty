@@ -204,14 +204,6 @@ void main() {
       robot.expectTodayButtonVisible();
     });
 
-    testWidgets('daily call button is present', (tester) async {
-      await tester.pumpApp(const HomeScreen());
-      await tester.pump(const Duration(seconds: 1));
-
-      robot = HomeScreenRobot(tester);
-      robot.expectDailyCallButtonVisible();
-    });
-
     testWidgets('shows calendar with markers for days with entries', (
       tester,
     ) async {

@@ -14,6 +14,14 @@ tags:
 
 - takeScreenshot: ".maestro/screenshots/latest/auth/03-settings-screen"
 
+# Sign Out sits below the fold on taller settings pages — scroll first
+# (device run 5: Settings rendered fine, tap failed with element-not-found).
+- scrollUntilVisible:
+    element:
+      text: "Sign Out"
+    direction: DOWN
+    centerElement: true
+
 # Tap sign out
 - tapOn: "Sign Out"
 

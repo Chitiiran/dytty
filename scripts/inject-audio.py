@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Inject a WAV file into the Android emulator's virtual microphone via gRPC.
 
 Uses the EmulatorController.injectAudio RPC from the Android Emulator gRPC API.

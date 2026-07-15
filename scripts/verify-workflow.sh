@@ -27,6 +27,16 @@ WORKSTREAM_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA2cOQ"
 EFFORT_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1c0A"
 STATUS_FIELD_ID="PVTSSF_lAHOAKyMRs4BTnrvzhA1cwg"
 
+# Tunables
+ITEM_LIMIT=250          # board item-list page size (matches CLAUDE.md mandate)
+STALE_PR_DAYS=14        # warn when an open PR is older than this at session-start
+WORKTREE_WARN_AT=5      # warn when this many worktrees exist
+RETRO_WARN_DAYS=8       # nudge when the weekly retro is at least this old
+# Overridable for tests; kb/ is local-only so this is absent on fresh checkouts.
+RETRO_FILE="${DYTTY_RETRO_FILE:-$PROJECT_DIR/kb/workflow/WEEKLY-RETRO.md}"
+
+source "$SCRIPT_DIR/lib/retro-check.sh"
+
 # Status option IDs
 STATUS_INBOX="77421e5b"
 STATUS_READY="f75ad846"
@@ -59,6 +69,9 @@ summary() {
 
 ensure_log_file() {
   if [[ ! -f "$LOG_FILE" ]]; then
+    # kb/ is local-only — absent on fresh checkouts/worktrees; create the
+    # parent or this write kills the whole stage under set -e.
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo "[]" > "$LOG_FILE"
   fi
 }
@@ -143,13 +156,68 @@ for e in data:
   echo ""
   echo "--- Active workstreams ---"
   local IN_PROGRESS
-  IN_PROGRESS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq '.items[] | select(.status == "In Progress") | "\(.content.number)\t\(.workstream // "NONE")"' 2>/dev/null || true)
+  IN_PROGRESS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq '.items[] | select(.status == "In Progress") | "\(.content.number)\t\(.workstream // "NONE")"' 2>/dev/null || true)
 
   if [[ -n "$IN_PROGRESS" ]]; then
     # Group by workstream
     echo "$IN_PROGRESS" | awk -F'\t' '{ws[$2] = ws[$2] " #" $1} END {for (w in ws) print "  " w ":" ws[w]}'
   else
     pass "No items In Progress"
+  fi
+
+  # --- Stale open PRs (older than STALE_PR_DAYS) ---
+  echo ""
+  echo "--- Stale PR check (>${STALE_PR_DAYS}d) ---"
+  local STALE_PRS
+  STALE_PRS=$(gh pr list --state open --json number,title,createdAt \
+    --jq ".[] | select((now - (.createdAt|fromdateiso8601)) > (${STALE_PR_DAYS}*86400)) | \"#\(.number) \(.title)\"" 2>/dev/null || true)
+  if [[ -n "$STALE_PRS" ]]; then
+    while IFS= read -r line; do warn "Stale PR: $line"; done <<< "$STALE_PRS"
+  else
+    pass "No open PRs older than ${STALE_PR_DAYS}d"
+  fi
+
+  # --- Unresolved bot review threads per open PR ---
+  echo ""
+  echo "--- Unresolved review-thread check ---"
+  local OPEN_PRS
+  OPEN_PRS=$(gh pr list --state open --json number --jq '.[].number' 2>/dev/null || true)
+  if [[ -n "$OPEN_PRS" ]]; then
+    while IFS= read -r pr; do
+      [[ -z "$pr" ]] && continue
+      local UNRES
+      UNRES=$(gh api graphql -f query="{repository(owner:\"$PROJECT_OWNER\",name:\"dytty\"){pullRequest(number:$pr){reviewThreads(first:50){nodes{isResolved}}}}}" \
+        --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length' 2>/dev/null || echo 0)
+      [[ "${UNRES:-0}" -gt 0 ]] && warn "PR #$pr has $UNRES unresolved review thread(s) — see: bash scripts/pr-threads.sh $pr"
+    done <<< "$OPEN_PRS"
+  fi
+
+  # --- Worktree sprawl ---
+  echo ""
+  echo "--- Worktree count check ---"
+  local WT_COUNT
+  WT_COUNT=$(git worktree list 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "${WT_COUNT:-0}" -ge "$WORKTREE_WARN_AT" ]]; then
+    warn "$WT_COUNT worktrees exist (>=$WORKTREE_WARN_AT) — consider cleanup: git worktree list"
+  else
+    pass "$WT_COUNT worktree(s)"
+  fi
+
+  # --- Weekly retro nudge ---
+  # 20 minutes, five questions: what reached a device, what broke and why,
+  # which signal lied to me, what did I avoid, what do I kill.
+  echo ""
+  echo "--- Weekly retro check ---"
+  local RETRO_AGE
+  RETRO_AGE=$(retro_age_days "$RETRO_FILE" "$SCRIPT_DIR/lib")
+  if [[ ! -f "$RETRO_FILE" ]]; then
+    pass "No retro file on this checkout (kb/ is local-only) — skipping"
+  elif [[ "$RETRO_AGE" -lt 0 ]]; then
+    warn "Weekly retro has no dated entry yet — run it (template: kb/workflow/WEEKLY-RETRO.md)"
+  elif [[ "$RETRO_AGE" -ge "$RETRO_WARN_DAYS" ]]; then
+    warn "Last weekly retro was $RETRO_AGE days ago — 20 minutes, five questions: kb/workflow/WEEKLY-RETRO.md"
+  else
+    pass "Last weekly retro $RETRO_AGE day(s) ago"
   fi
 
   summary
@@ -162,7 +230,7 @@ stage_triage() {
 
   # Get Ready items with all fields
   local RAW
-  RAW=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json 2>/dev/null)
+  RAW=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json 2>/dev/null)
 
   local ITEMS
   ITEMS=$(echo "$RAW" | python -c "
@@ -243,7 +311,7 @@ stage_batch() {
   echo ""
   echo "--- Issue assignment check ---"
   local WS_ITEMS
-  WS_ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
+  WS_ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
 
   if [[ -z "$WS_ITEMS" ]]; then
     fail "No issues assigned to workstream '$WORKSTREAM'"
@@ -258,7 +326,7 @@ stage_batch() {
 
     # Check all are In Progress
     local NOT_IN_PROGRESS
-    NOT_IN_PROGRESS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"In Progress\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
+    NOT_IN_PROGRESS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"In Progress\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
 
     if [[ -n "$NOT_IN_PROGRESS" ]]; then
       echo "$NOT_IN_PROGRESS" | while read -r line; do
@@ -313,9 +381,18 @@ stage_pr() {
   PR_NUM=$(echo "$PR_INFO" | python -c "import json,sys; print(json.load(sys.stdin)['number'])")
   pass "PR #$PR_NUM found"
 
+  # --- PROGRESS.md reference check (advisory) ---
+  echo ""
+  echo "--- PROGRESS.md check ---"
+  if [[ -f "$PROJECT_DIR/kb/PROGRESS.md" ]] && grep -q "#$PR_NUM" "$PROJECT_DIR/kb/PROGRESS.md"; then
+    pass "PR #$PR_NUM referenced in kb/PROGRESS.md"
+  else
+    warn "PR #$PR_NUM not in kb/PROGRESS.md — log decisions/tradeoffs before merge"
+  fi
+
   # Get issues in workstream
   local WS_ISSUES
-  WS_ISSUES=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
+  WS_ISSUES=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
 
   # Check PR body references each issue
   echo ""
@@ -337,7 +414,7 @@ stage_pr() {
   echo ""
   echo "--- Status check ---"
   local NOT_IN_REVIEW
-  NOT_IN_REVIEW=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"In Review\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
+  NOT_IN_REVIEW=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"In Review\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
 
   if [[ -n "$NOT_IN_REVIEW" ]]; then
     echo "$NOT_IN_REVIEW" | while read -r line; do
@@ -380,7 +457,7 @@ stage_post_merge() {
   echo ""
   echo "--- Issue closure check ---"
   local WS_ISSUES
-  WS_ISSUES=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
+  WS_ISSUES=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\") | .content.number" 2>/dev/null || true)
 
   if [[ -n "$WS_ISSUES" ]]; then
     echo "$WS_ISSUES" | while read -r num; do
@@ -437,7 +514,7 @@ if found:
   echo ""
   echo "--- Board status check ---"
   local NOT_DONE
-  NOT_DONE=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit 200 --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"Done\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
+  NOT_DONE=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --limit "$ITEM_LIMIT" --format json --jq ".items[] | select(.workstream == \"$WORKSTREAM\" and .status != \"Done\") | \"#\(.content.number) is \(.status)\"" 2>/dev/null || true)
 
   if [[ -n "$NOT_DONE" ]]; then
     echo "$NOT_DONE" | while read -r line; do

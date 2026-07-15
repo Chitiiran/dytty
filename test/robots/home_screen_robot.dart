@@ -22,7 +22,8 @@ class HomeScreenRobot {
   }
 
   void expectMicFabVisible() {
-    expect(find.byTooltip('Record voice note'), findsOneWidget);
+    // #251: the mic FAB is the daily call.
+    expect(find.byTooltip('Start daily call'), findsOneWidget);
   }
 
   void expectSettingsButtonVisible() {
@@ -31,10 +32,6 @@ class HomeScreenRobot {
 
   void expectTodayButtonVisible() {
     expect(find.text('Write'), findsOneWidget);
-  }
-
-  void expectDailyCallButtonVisible() {
-    expect(find.text('Call'), findsOneWidget);
   }
 
   Future<void> tapSettings() async {
