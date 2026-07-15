@@ -1474,4 +1474,15 @@ void main() {
       verify(() => mockService.dispose()).called(1);
     });
   });
+
+  group('PermissionDenied (#251)', () {
+    test('surfaces the mic-permission error state', () async {
+      final bloc = buildBloc();
+      bloc.add(const PermissionDenied());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(bloc.state.status, VoiceCallStatus.error);
+      expect(bloc.state.error, 'Microphone permission needed');
+      await bloc.close();
+    });
+  });
 }
