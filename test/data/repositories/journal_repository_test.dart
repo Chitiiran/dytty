@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dytty/data/models/category_entry.dart';
@@ -388,6 +389,42 @@ void main() {
                 'max streak is recomputed from surviving data — deleting '
                 'a bridge day retroactively lowers it (accepted semantics, '
                 'SPEC-235)',
+          );
+        },
+      );
+
+      test(
+        'partial delete bumps the surviving parent doc\'s updatedAt',
+        () async {
+          final today = DateTime.now();
+          final ds = dstr(today);
+          final first = await repository.addCategoryEntry(
+            ds,
+            'positive',
+            'Stays',
+          );
+          await repository.addCategoryEntry(ds, 'gratitude', 'Also stays');
+
+          final parent = firestore
+              .collection('users')
+              .doc('test-user')
+              .collection('dailyEntries')
+              .doc(ds);
+          final before =
+              ((await parent.get()).data()!['updatedAt'] as Timestamp).toDate();
+
+          // updatedAt has millisecond resolution — ensure the clock moves.
+          await Future.delayed(const Duration(milliseconds: 10));
+          await repository.deleteCategoryEntry(ds, first.id);
+
+          final after = ((await parent.get()).data()!['updatedAt'] as Timestamp)
+              .toDate();
+          expect(
+            after.isAfter(before),
+            isTrue,
+            reason:
+                'the else-branch of deleteCategoryEntry must bump the '
+                'surviving day doc\'s updatedAt (SPEC-235 R2)',
           );
         },
       );

@@ -1696,9 +1696,12 @@ void main() {
       final today = DateTime.now();
       final past = today.subtract(const Duration(days: 3));
       await repository.addCategoryEntry(dstr(today), 'positive', 'Today');
+      // Same category as today's entry: a regressed date guard that
+      // decrements per-category would hit the asserted key — a different
+      // category would let that regression pass unseen (review finding).
       final pastEntry = await repository.addCategoryEntry(
         dstr(past),
-        'beauty',
+        'positive',
         'Past',
       );
 
