@@ -53,6 +53,7 @@ extension PumpApp on WidgetTester {
     MockSettingsCubit? settingsCubit,
     MockDevSettingsCubit? devSettingsCubit,
     MockThemeCubit? themeCubit,
+    RouteFactory? onGenerateRoute,
   }) async {
     final mockAuthBloc = authBloc ?? MockAuthBloc();
     final mockJournalBloc = journalBloc ?? MockJournalBloc();
@@ -95,7 +96,7 @@ extension PumpApp on WidgetTester {
           BlocProvider<DevSettingsCubit>.value(value: mockDevSettingsCubit),
           BlocProvider<ThemeCubit>.value(value: mockThemeCubit),
         ],
-        child: MaterialApp(home: widget),
+        child: MaterialApp(home: widget, onGenerateRoute: onGenerateRoute),
       ),
     );
   }

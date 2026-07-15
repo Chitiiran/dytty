@@ -1,10 +1,11 @@
 appId: com.dytty.dytty
 name: "Reusable: open voice call from home (#231)"
 ---
-# Start the voice call directly from the home-screen "Call" button. The button
-# carries Semantics(label: 'Start daily call') (#231), so we tap it by label
-# instead of a fragile screen coordinate (the old 7%,35% calendar-cell tap was
-# stale for the current layout and could miss / drive another app).
+# Start the daily call from the home-screen mic FAB (#251), which carries
+# Semantics(label: 'Start daily call'). CAUTION: the FAB explicitly scopes the
+# call to TODAY (SelectDate(today) + today as the route argument) — flows that
+# need a past-date call must launch from that date's radial mic instead (see
+# voice/daily-call-past-date.yaml).
 - extendedWaitUntil:
     visible: "Start daily call"
     timeout: 12000

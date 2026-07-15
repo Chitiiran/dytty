@@ -13,7 +13,7 @@ tags:
 # Navigate to voice call screen
 
 # Start the call
-- tapOn: "Start Call"
+# (#251) no Start Call tap — the call screen auto-connects on entry
 
 # Wait for call to connect
 # Orchestrator watches for "[DYTTY] Call state: active" and plays audio

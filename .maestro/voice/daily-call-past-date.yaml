@@ -22,16 +22,19 @@ tags:
 
 - assertVisible: "Progress 0 of 5"
 
-# Browse to yesterday, then return home with that date still selected.
-- tapOn: "Today button"
-- waitForAnimationToEnd
-- tapOn: "Previous day"
-- waitForAnimationToEnd
-- back
-- waitForAnimationToEnd
-
-- runFlow: "../helpers/open-daily-call.yaml"
-- tapOn: "Start Call"
+# Launch from YESTERDAY's radial mic (#251): the mic FAB now explicitly
+# resets to today (_startTodayCall passes today as the route argument), so
+# the old browse-back-and-FAB launch would invert this regression's signal.
+# The radial mic preserves the tapped date (pinned by widget test, PR #266).
+# Rig caveat: on the 1st of a month yesterday's cell sits on the previous
+# calendar page (outside days hidden) — skip/expect-fail on that day.
+- evalScript: ${output.yday = String(new Date(Date.now() - 86400000).getDate())}
+- tapOn: ".*[^0-9]${output.yday}, .*"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+- tapOn: "Start voice call"
+# (#251) no Start Call tap — the call screen auto-connects on entry
 - extendedWaitUntil:
     visible: "In call.*"
     timeout: 20000

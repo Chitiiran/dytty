@@ -20,7 +20,7 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/dashboard/02-dashboard-elements"
 
 # Verify FAB
-- assertVisible: "Record voice note"
+- assertVisible: "Start daily call"
 
 # Verify action buttons
 - assertVisible: "Today button"

@@ -22,7 +22,26 @@ class VoiceCallScreen extends StatefulWidget {
   /// bloc creation and uses this instance instead.
   final VoiceCallBloc? bloc;
 
-  const VoiceCallScreen({super.key, this.playbackService, this.bloc});
+  /// Recorder seam for tests (#251): auto-connect runs on entry, so widget
+  /// tests need a recorder whose permission check resolves without a
+  /// platform channel (the real one hangs under FakeAsync).
+  final AudioRecorder Function()? recorderFactory;
+
+  /// Explicit journal date from the entry point (#251). The FAB dispatches
+  /// SelectDate(today) and navigates in the same tick — JournalBloc's async
+  /// event processing means state.selectedDate may still be stale when this
+  /// screen wires its bloc, so the entry point passes its intent directly
+  /// (PR #266 review). Null falls back to the JournalBloc state (radial
+  /// mic, notification route — both settled long before).
+  final DateTime? journalDate;
+
+  const VoiceCallScreen({
+    super.key,
+    this.playbackService,
+    this.bloc,
+    this.recorderFactory,
+    this.journalDate,
+  });
 
   @override
   State<VoiceCallScreen> createState() => _VoiceCallScreenState();
@@ -51,6 +70,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     if (_blocInitialized) return;
     _blocInitialized = true;
 
+    // #251: entering the screen IS the start gesture — auto-connect after
+    // the first frame. Armed inside the once-guard so rebuilds can't
+    // re-dispatch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startCall();
+    });
+
     if (widget.bloc != null) {
       _bloc = widget.bloc!;
       _ownsBloc = false;
@@ -72,7 +98,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       // same uid-scoped instance, no fresh Firestore handle.
       journalRepository: journalBloc.repository,
       // #252: a call launched from a past date's screen saves to THAT date.
-      journalDate: journalBloc.state.selectedDate,
+      // Entry-point override first — bloc state can race (#266 review).
+      journalDate: widget.journalDate ?? journalBloc.state.selectedDate,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
@@ -88,15 +115,40 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   Future<void> _startCall() async {
-    final useMinimal = context.read<DevSettingsCubit>().state.useMinimalPrompt;
-
-    _session?.dispose();
-    final recorder = AudioRecorder();
-    if (!await recorder.hasPermission()) {
-      recorder.dispose();
+    final recorder = (widget.recorderFactory ?? AudioRecorder.new)();
+    // Permission first: with no Start Call button left, a denied or failing
+    // recorder must surface as an error state instead of a silent dead
+    // screen.
+    bool hasPermission;
+    try {
+      hasPermission = await recorder.hasPermission();
+    } catch (_) {
+      hasPermission = false;
+    }
+    if (!hasPermission) {
+      // The screen may have been popped while the (system) permission
+      // dialog was up — the owned bloc is closed then, and add() would
+      // throw into the zone (#266 review).
+      if (mounted) _bloc.add(const PermissionDenied());
+      try {
+        await recorder.dispose();
+      } catch (_) {
+        // Same missing-channel case as above — already reported.
+      }
+      return;
+    }
+    if (!mounted) {
+      // Popped mid-check with permission granted: release the recorder we
+      // just created (#266 review — native instance leak).
+      try {
+        await recorder.dispose();
+      } catch (_) {}
       return;
     }
 
+    final useMinimal = context.read<DevSettingsCubit>().state.useMinimalPrompt;
+
+    _session?.dispose();
     final playback = widget.playbackService ?? PcmSoundPlaybackService();
     _session = CallSession(recorder: recorder, playback: playback, bloc: _bloc);
 
@@ -300,7 +352,6 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                       status: state.status,
                       isMuted: state.isMuted,
                       isSpeakerOn: state.isSpeakerOn,
-                      onStart: _startCall,
                       onEnd: _endCall,
                       onToggleMute: () => _bloc.add(const ToggleMute()),
                       onToggleSpeaker: () => _bloc.add(const ToggleSpeaker()),
@@ -727,8 +778,9 @@ class _StatusBar extends StatelessWidget {
     Color color;
     switch (status) {
       case VoiceCallStatus.idle:
-        label = 'Ready to connect';
-        color = theme.colorScheme.onSurfaceVariant;
+        // Transient pre-dispatch instant — the screen auto-connects (#251).
+        label = 'Connecting...';
+        color = theme.colorScheme.tertiary;
       case VoiceCallStatus.connecting:
         label = 'Connecting...';
         color = theme.colorScheme.tertiary;
@@ -810,7 +862,6 @@ class _CallControls extends StatelessWidget {
   final VoiceCallStatus status;
   final bool isMuted;
   final bool isSpeakerOn;
-  final VoidCallback onStart;
   final VoidCallback onEnd;
   final VoidCallback onToggleMute;
   final VoidCallback onToggleSpeaker;
@@ -819,7 +870,6 @@ class _CallControls extends StatelessWidget {
     required this.status,
     required this.isMuted,
     required this.isSpeakerOn,
-    required this.onStart,
     required this.onEnd,
     required this.onToggleMute,
     required this.onToggleSpeaker,
@@ -831,29 +881,9 @@ class _CallControls extends StatelessWidget {
         status == VoiceCallStatus.active ||
         status == VoiceCallStatus.connecting;
 
-    // Pre-call: single Start Call button
-    if (!isActive) {
-      return SizedBox(
-        width: double.infinity,
-        height: 56,
-        // Semantics label so screen readers + automation can find the button
-        // (the visible 'Start Call' text is canvas-drawn, not in the a11y
-        // tree). (#231)
-        child: Semantics(
-          label: 'Start Call',
-          button: true,
-          child: FilledButton.icon(
-            onPressed: onStart,
-            icon: const Icon(Icons.call_rounded),
-            label: const Text('Start Call'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
-      );
-    }
+    // No pre-call controls: the screen auto-connects on entry (#251) and
+    // the ended state is owned by the post-call review UI.
+    if (!isActive) return const SizedBox.shrink();
 
     // Active call: [ Mute ] [ End Call ] [ Speaker ]
     return Row(

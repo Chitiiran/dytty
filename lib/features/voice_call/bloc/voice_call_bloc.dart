@@ -28,6 +28,13 @@ class StartCall extends VoiceCallEvent {
   List<Object?> get props => [systemPrompt];
 }
 
+/// The screen's auto-start found no usable microphone (#251). With no Start
+/// Call button left, this is the only way the user learns why nothing
+/// happened.
+class PermissionDenied extends VoiceCallEvent {
+  const PermissionDenied();
+}
+
 class EndCall extends VoiceCallEvent {
   const EndCall();
 }
@@ -369,6 +376,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
            : DateFormat('yyyy-MM-dd').format(journalDate),
        super(const VoiceCallState()) {
     on<StartCall>(_onStartCall);
+    on<PermissionDenied>(_onPermissionDenied);
     on<EndCall>(_onEndCall);
     on<TranscriptReceived>(_onTranscriptReceived);
     on<ToolCallReceived>(_onToolCallReceived);
@@ -382,6 +390,18 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<ReconcileSession>(_onReconcileSession);
     on<AcceptAllReconciled>(_onAcceptAllReconciled);
     on<RejectReconciledEntry>(_onRejectReconciledEntry);
+  }
+
+  void _onPermissionDenied(
+    PermissionDenied event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        status: VoiceCallStatus.error,
+        error: 'Microphone permission needed',
+      ),
+    );
   }
 
   Future<void> _onStartCall(
