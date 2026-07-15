@@ -180,8 +180,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 20),
 
-          const SizedBox(height: 20),
-
           // Reminders section
           _SectionLabel(label: 'Reminders'),
           const SizedBox(height: 8),

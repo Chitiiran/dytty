@@ -55,6 +55,14 @@ void main() {
       await tester.pump();
 
       expect(pushed.map((s) => s.name), contains('/voice-call'));
+      // Race fix (#266 review): the intent date rides the route explicitly —
+      // SelectDate processing is async and can lose to bloc construction.
+      final callPush = pushed.lastWhere((s) => s.name == '/voice-call');
+      expect(callPush.arguments, isA<DateTime>());
+      expect(
+        DateUtils.isSameDay(callPush.arguments as DateTime, DateTime.now()),
+        isTrue,
+      );
       verify(
         () => journalBloc.add(
           any(
@@ -139,6 +147,12 @@ void main() {
       await tester.pump();
 
       expect(pushed.map((s) => s.name), contains('/voice-call'));
+      // No explicit date argument: the radial path trusts selectedDate,
+      // which its cell tap set long before.
+      expect(
+        pushed.lastWhere((s) => s.name == '/voice-call').arguments,
+        isNull,
+      );
       // Exactly one SelectDate (the cell tap) — the mic must NOT re-select.
       verify(
         () => journalBloc.add(

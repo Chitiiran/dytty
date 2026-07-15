@@ -133,4 +133,60 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'explicit journalDate wins over a stale selectedDate (#251 race fix)',
+    (tester) async {
+      final authBloc = MockAuthBloc();
+      whenListen(
+        authBloc,
+        const Stream<AuthState>.empty(),
+        initialState: const Authenticated(uid: 'wiring-test-uid'),
+      );
+
+      // Stale bloc state: SelectDate(today) was dispatched by the FAB but
+      // has not been processed yet — the screen must not depend on it.
+      final journalBloc = MockJournalBloc();
+      whenListen(
+        journalBloc,
+        const Stream<JournalState>.empty(),
+        initialState: JournalState(selectedDate: DateTime(2026, 7, 3)),
+      );
+      when(() => journalBloc.repository).thenReturn(
+        JournalRepository(
+          uid: 'wiring-test-uid',
+          firestore: FakeFirebaseFirestore(),
+        ),
+      );
+
+      final today = DateTime(2026, 7, 15);
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>.value(value: authBloc),
+            BlocProvider<JournalBloc>.value(value: journalBloc),
+          ],
+          child: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<LlmService>(create: (_) => NoOpLlmService()),
+              RepositoryProvider<AudioStorageService>(
+                create: (_) => MockAudioStorageService(),
+              ),
+            ],
+            child: MaterialApp(home: VoiceCallScreen(journalDate: today)),
+          ),
+        ),
+      );
+
+      final ctx = tester.element(find.byType(Scaffold).first);
+      final bloc = ctx.read<VoiceCallBloc>();
+      expect(
+        bloc.debugLaunchDate,
+        '2026-07-15',
+        reason:
+            'The entry point knows the intended date; relying on '
+            'JournalBloc.state races async event processing (#266 review).',
+      );
+    },
+  );
 }

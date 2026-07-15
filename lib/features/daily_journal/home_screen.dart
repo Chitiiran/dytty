@@ -550,8 +550,12 @@ class _HomeScreenState extends State<HomeScreen> {
     // selected date so the call bloc's journalDate wiring (#252) picks up
     // today. The radial mic deliberately skips this — its cell tap already
     // selected the target date.
-    context.read<JournalBloc>().add(SelectDate(DateTime.now()));
-    Navigator.pushNamed(context, '/voice-call');
+    final today = DateTime.now();
+    context.read<JournalBloc>().add(SelectDate(today));
+    // Pass the date explicitly too: the SelectDate above is processed
+    // asynchronously and can lose the race with the call screen's bloc
+    // construction (#266 review).
+    Navigator.pushNamed(context, '/voice-call', arguments: today);
   }
 }
 

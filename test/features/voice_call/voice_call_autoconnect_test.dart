@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:record/record.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/auth/bloc/auth_bloc.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/features/settings/cubit/dev_settings_cubit.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -31,6 +35,7 @@ class MockAudioRecorder extends Mock implements AudioRecorder {}
 void main() {
   setUpAll(() {
     registerFallbackValue(const EndCall());
+    registerFallbackValue(const RecordConfig());
   });
 
   AudioRecorder deniedRecorder() {
@@ -40,7 +45,11 @@ void main() {
     return recorder;
   }
 
-  Widget harness({VoiceCallBloc? bloc, ThemeData? theme}) {
+  Widget harness({
+    VoiceCallBloc? bloc,
+    ThemeData? theme,
+    AudioRecorder Function()? recorderFactory,
+  }) {
     final authBloc = MockAuthBloc();
     whenListen(
       authBloc,
@@ -50,6 +59,7 @@ void main() {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>.value(value: authBloc),
+        BlocProvider(create: (_) => DevSettingsCubit()),
         BlocProvider(
           create: (_) => JournalBloc(
             repository: JournalRepository(
@@ -68,7 +78,10 @@ void main() {
         ],
         child: MaterialApp(
           theme: theme,
-          home: VoiceCallScreen(bloc: bloc, recorderFactory: deniedRecorder),
+          home: VoiceCallScreen(
+            bloc: bloc,
+            recorderFactory: recorderFactory ?? deniedRecorder,
+          ),
         ),
       ),
     );
@@ -112,6 +125,52 @@ void main() {
     await tester.pump();
 
     verify(() => callBloc.add(any())).called(1);
+  });
+
+  testWidgets(
+    'unmount during the permission check: no bloc add, recorder disposed',
+    (tester) async {
+      final completer = Completer<bool>();
+      final recorder = MockAudioRecorder();
+      when(recorder.hasPermission).thenAnswer((_) => completer.future);
+      when(recorder.dispose).thenAnswer((_) async {});
+
+      await tester.pumpWidget(harness(recorderFactory: () => recorder));
+      await tester.pump(); // auto-start parks on the pending permission
+
+      // Kill the screen while the (system) permission check is still open,
+      // then let the denial arrive posthumously. The owned bloc is closed
+      // by dispose() — an unguarded add() would throw StateError into the
+      // zone and fail this test.
+      await tester.pumpWidget(const SizedBox.shrink());
+      completer.complete(false);
+      await tester.pump();
+
+      verify(recorder.dispose).called(1);
+    },
+  );
+
+  testWidgets('granted permission dispatches StartCall', (tester) async {
+    final callBloc = MockVoiceCallBloc();
+    whenListen(
+      callBloc,
+      const Stream<VoiceCallState>.empty(),
+      initialState: const VoiceCallState(),
+    );
+    final recorder = MockAudioRecorder();
+    when(recorder.hasPermission).thenAnswer((_) async => true);
+    when(recorder.dispose).thenAnswer((_) async {});
+    when(
+      () => recorder.startStream(any()),
+    ).thenAnswer((_) async => const Stream<Uint8List>.empty());
+
+    await tester.pumpWidget(
+      harness(bloc: callBloc, recorderFactory: () => recorder),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    verify(() => callBloc.add(any(that: isA<StartCall>()))).called(1);
   });
 
   testWidgets('Ready state and Start Call button no longer exist', (

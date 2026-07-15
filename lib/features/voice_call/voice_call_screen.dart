@@ -27,11 +27,20 @@ class VoiceCallScreen extends StatefulWidget {
   /// platform channel (the real one hangs under FakeAsync).
   final AudioRecorder Function()? recorderFactory;
 
+  /// Explicit journal date from the entry point (#251). The FAB dispatches
+  /// SelectDate(today) and navigates in the same tick — JournalBloc's async
+  /// event processing means state.selectedDate may still be stale when this
+  /// screen wires its bloc, so the entry point passes its intent directly
+  /// (PR #266 review). Null falls back to the JournalBloc state (radial
+  /// mic, notification route — both settled long before).
+  final DateTime? journalDate;
+
   const VoiceCallScreen({
     super.key,
     this.playbackService,
     this.bloc,
     this.recorderFactory,
+    this.journalDate,
   });
 
   @override
@@ -89,7 +98,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       // same uid-scoped instance, no fresh Firestore handle.
       journalRepository: journalBloc.repository,
       // #252: a call launched from a past date's screen saves to THAT date.
-      journalDate: journalBloc.state.selectedDate,
+      // Entry-point override first — bloc state can race (#266 review).
+      journalDate: widget.journalDate ?? journalBloc.state.selectedDate,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
@@ -116,7 +126,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       hasPermission = false;
     }
     if (!hasPermission) {
-      _bloc.add(const PermissionDenied());
+      // The screen may have been popped while the (system) permission
+      // dialog was up — the owned bloc is closed then, and add() would
+      // throw into the zone (#266 review).
+      if (mounted) _bloc.add(const PermissionDenied());
       try {
         await recorder.dispose();
       } catch (_) {
@@ -124,7 +137,14 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       }
       return;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      // Popped mid-check with permission granted: release the recorder we
+      // just created (#266 review — native instance leak).
+      try {
+        await recorder.dispose();
+      } catch (_) {}
+      return;
+    }
 
     final useMinimal = context.read<DevSettingsCubit>().state.useMinimalPrompt;
 
