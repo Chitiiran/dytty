@@ -14,7 +14,7 @@ tags:
 - assertVisible: "Progress 0 of 5"
 
 - runFlow: "../helpers/open-daily-call.yaml"
-- tapOn: "Start Call"
+# (#251) no Start Call tap — the call screen auto-connects on entry
 - extendedWaitUntil:
     visible: "In call.*"
     timeout: 20000

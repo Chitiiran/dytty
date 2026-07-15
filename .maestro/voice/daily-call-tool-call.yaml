@@ -11,7 +11,7 @@ tags:
 # button, asserting it opened — no fragile coordinate tap).
 - runFlow: "../helpers/open-daily-call.yaml"
 
-- tapOn: "Start Call"
+# (#251) no Start Call tap — the call screen auto-connects on entry
 
 - extendedWaitUntil:
     visible: "In call.*"
