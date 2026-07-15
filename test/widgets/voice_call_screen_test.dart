@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +16,7 @@ import 'package:dytty/features/voice_call/voice_call_screen.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
 import 'package:dytty/services/voice_call/gemini_live_service.dart';
+import 'package:record/record.dart';
 
 import '../fakes/fake_audio_playback_service.dart';
 import '../robots/voice_call_screen_robot.dart';
@@ -31,6 +34,18 @@ class MockAudioStorageService extends Mock implements AudioStorageService {}
 
 class MockVoiceCallBloc extends MockBloc<VoiceCallEvent, VoiceCallState>
     implements VoiceCallBloc {}
+
+class MockAudioRecorder extends Mock implements AudioRecorder {}
+
+/// Recorder whose permission check never resolves: the auto-connect attempt
+/// (#251) parks forever, freezing the screen in its pre-dispatch state so
+/// tests can assert on it deterministically.
+AudioRecorder pendingRecorder() {
+  final recorder = MockAudioRecorder();
+  when(recorder.hasPermission).thenAnswer((_) => Completer<bool>().future);
+  when(recorder.dispose).thenAnswer((_) async {});
+  return recorder;
+}
 
 /// Pumps VoiceCallScreen with all required providers.
 ///
@@ -77,7 +92,10 @@ Future<void> pumpVoiceCallScreen(
           RepositoryProvider<AudioStorageService>.value(value: mockStorage),
         ],
         child: MaterialApp(
-          home: VoiceCallScreen(playbackService: FakeAudioPlaybackService()),
+          home: VoiceCallScreen(
+            playbackService: FakeAudioPlaybackService(),
+            recorderFactory: pendingRecorder,
+          ),
         ),
       ),
     ),
@@ -121,6 +139,7 @@ Future<void> pumpWithMockBloc(
           home: VoiceCallScreen(
             playbackService: FakeAudioPlaybackService(),
             bloc: bloc,
+            recorderFactory: pendingRecorder,
           ),
         ),
       ),
@@ -161,19 +180,20 @@ void main() {
       robot.expectIdleState();
     });
 
-    testWidgets('renders "Ready to connect" status text', (tester) async {
+    testWidgets('idle renders as already-connecting (#251)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
 
-      expect(find.text('Ready to connect'), findsOneWidget);
+      expect(find.text('Connecting...'), findsOneWidget);
+      expect(find.text('Ready to connect'), findsNothing);
     });
 
-    testWidgets('renders "Start Call" button with call icon', (tester) async {
+    testWidgets('Start Call button never renders (#251)', (tester) async {
       await pumpVoiceCallScreen(tester);
       await tester.pump();
       robot = VoiceCallScreenRobot(tester);
 
-      robot.expectStartCallButtonVisible();
+      robot.expectNoStartCallButton();
     });
 
     testWidgets('does not show active call controls in idle state', (
@@ -693,9 +713,8 @@ void main() {
       expect(find.text('Connection error'), findsOneWidget);
     });
 
-    testWidgets('shows "Start Call" button (retry) in error state', (
-      tester,
-    ) async {
+    testWidgets('no Start Call retry in error state (#251) — recovery is '
+        'backing out to the FAB', (tester) async {
       final bloc = MockVoiceCallBloc();
       when(() => bloc.state).thenReturn(
         const VoiceCallState(
@@ -707,8 +726,8 @@ void main() {
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
 
-      expect(find.text('Start Call'), findsOneWidget);
-      expect(find.byIcon(Icons.call_rounded), findsOneWidget);
+      expect(find.text('Start Call'), findsNothing);
+      expect(find.text('Connection error'), findsOneWidget);
     });
 
     testWidgets('hides end call controls in error state', (tester) async {
@@ -740,7 +759,9 @@ void main() {
       expect(find.text('Saving and ending...'), findsOneWidget);
     });
 
-    testWidgets('shows "Start Call" button in ending state', (tester) async {
+    testWidgets('no call controls render in ending state (#251)', (
+      tester,
+    ) async {
       final bloc = MockVoiceCallBloc();
       when(
         () => bloc.state,
@@ -749,7 +770,8 @@ void main() {
       await pumpWithMockBloc(tester, bloc: bloc);
       await tester.pump();
 
-      expect(find.text('Start Call'), findsOneWidget);
+      expect(find.text('Start Call'), findsNothing);
+      expect(find.byIcon(Icons.call_end_rounded), findsNothing);
     });
   });
 

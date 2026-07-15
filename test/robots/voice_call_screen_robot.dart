@@ -19,14 +19,15 @@ class VoiceCallScreenRobot {
   // --- Idle state assertions ---
 
   void expectIdleState() {
+    // #251: the screen auto-connects — idle renders as already-connecting
+    // and there is no Start Call button in any state.
     expect(find.text('Daily Call'), findsOneWidget);
-    expect(find.text('Ready to connect'), findsOneWidget);
-    expect(find.text('Start Call'), findsOneWidget);
+    expect(find.text('Connecting...'), findsOneWidget);
+    expect(find.text('Start Call'), findsNothing);
   }
 
-  void expectStartCallButtonVisible() {
-    expect(find.text('Start Call'), findsOneWidget);
-    expect(find.byIcon(Icons.call_rounded), findsOneWidget);
+  void expectNoStartCallButton() {
+    expect(find.text('Start Call'), findsNothing);
   }
 
   void expectNoActiveControls() {
