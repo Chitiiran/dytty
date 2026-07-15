@@ -1629,4 +1629,124 @@ void main() {
       await bloc.close();
     });
   });
+
+  group('delete reward cycle (#235)', () {
+    String dstr(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    test('delete only entry today un-rewards; re-add re-rewards', () async {
+      final bloc = JournalBloc(repository: repository);
+      bloc.add(SelectDate(DateTime.now()));
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      bloc.add(const AddEntry(categoryId: 'positive', text: 'Only one'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(bloc.state.journaledToday, isTrue);
+      expect(bloc.state.currentStreak, 1, reason: 'optimistic bump on add');
+      final id = bloc.state.entries.single.id;
+
+      bloc.add(DeleteEntry(id));
+      await Future.delayed(const Duration(milliseconds: 300));
+      expect(
+        bloc.state.journaledToday,
+        isFalse,
+        reason: 'todayCategoryCounts must empty when the only entry goes',
+      );
+      expect(bloc.state.todayCategoryCounts, isEmpty);
+      expect(
+        bloc.state.currentStreak,
+        0,
+        reason: 'background getStreakData refresh after delete',
+      );
+
+      bloc.add(const AddEntry(categoryId: 'gratitude', text: 'Back again'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(bloc.state.journaledToday, isTrue);
+      expect(bloc.state.currentStreak, 1, reason: 're-reward after re-add');
+      expect(
+        bloc.state.todayCategoryCounts['gratitude'],
+        1,
+        reason: 'ring must re-fill for the re-added category',
+      );
+      await bloc.close();
+    });
+
+    test('deleting one of several entries keeps reward intact', () async {
+      final bloc = JournalBloc(repository: repository);
+      bloc.add(SelectDate(DateTime.now()));
+      await Future.delayed(const Duration(milliseconds: 200));
+      bloc.add(const AddEntry(categoryId: 'positive', text: 'First'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      bloc.add(const AddEntry(categoryId: 'gratitude', text: 'Second'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      final first = bloc.state.entries.firstWhere(
+        (e) => e.categoryId == 'positive',
+      );
+
+      bloc.add(DeleteEntry(first.id));
+      await Future.delayed(const Duration(milliseconds: 300));
+      expect(bloc.state.journaledToday, isTrue);
+      expect(bloc.state.currentStreak, 1);
+      expect(bloc.state.todayCategoryCounts['gratitude'], 1);
+      expect(bloc.state.todayCategoryCounts.containsKey('positive'), isFalse);
+      await bloc.close();
+    });
+
+    test('past-date delete leaves today\'s counts untouched', () async {
+      final today = DateTime.now();
+      final past = today.subtract(const Duration(days: 3));
+      await repository.addCategoryEntry(dstr(today), 'positive', 'Today');
+      // Same category as today's entry: a regressed date guard that
+      // decrements per-category would hit the asserted key — a different
+      // category would let that regression pass unseen (review finding).
+      final pastEntry = await repository.addCategoryEntry(
+        dstr(past),
+        'positive',
+        'Past',
+      );
+
+      final bloc = JournalBloc(repository: repository);
+      bloc.add(SelectDate(today));
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(bloc.state.todayCategoryCounts['positive'], 1);
+
+      bloc.add(SelectDate(past));
+      await Future.delayed(const Duration(milliseconds: 200));
+      bloc.add(DeleteEntry(pastEntry.id));
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      expect(
+        bloc.state.todayCategoryCounts['positive'],
+        1,
+        reason: 'deleting a past date must not corrupt today (#154 guard)',
+      );
+      expect(bloc.state.journaledToday, isTrue);
+      await bloc.close();
+    });
+
+    test('stale tombstone does not swallow a re-added entry', () async {
+      final bloc = JournalBloc(repository: repository);
+      bloc.add(SelectDate(DateTime.now()));
+      await Future.delayed(const Duration(milliseconds: 200));
+      bloc.add(const AddEntry(categoryId: 'positive', text: 'Doomed'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      final doomed = bloc.state.entries.single.id;
+
+      bloc.add(DeleteEntry(doomed)); // tombstones the id (#205)
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      bloc.add(const AddEntry(categoryId: 'positive', text: 'Phoenix'));
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      expect(
+        bloc.state.entries.map((e) => e.text),
+        contains('Phoenix'),
+        reason:
+            'tombstones are per-id — a NEW id must never be filtered by a '
+            'stale tombstone from the deleted predecessor',
+      );
+      expect(bloc.state.entries.map((e) => e.id), isNot(contains(doomed)));
+      await bloc.close();
+    });
+  });
 }
