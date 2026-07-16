@@ -11,7 +11,6 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
 import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
-import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
+
+  /// Radial-pinned progress-card date (#256): null = resting state, where
+  /// the card reports on today COMPUTED AT BUILD (a field default captured
+  /// at State creation would show yesterday after midnight — #268 review).
+  /// Set by a radial selection; cleared by the go-to-today button.
+  DateTime? _pinnedProgressDate;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   Route<void>? _radialMenuRoute;
   Offset? _lastTapGlobalPosition;
@@ -101,36 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: Row(
             children: [
-              Expanded(
-                child: Semantics(
-                  label: 'Today button',
-                  button: true,
-                  child: SizedBox(
-                    height: 48,
-                    child: FilledButton.tonalIcon(
-                      onPressed: () {
-                        final today = DateTime.now();
-                        setState(() {
-                          _focusedDay = today;
-                        });
-                        context.read<JournalBloc>().add(SelectDate(today));
-                        Navigator.pushNamed(context, '/daily-journal');
-                      },
-                      icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text('Write'),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // #251: the mic FAB IS the daily call — sole capture entry.
+              const Spacer(),
+              // #251/#256: the mic FAB IS the bottom bar — sole capture entry.
               FloatingActionButton.large(
                 onPressed: () => _startTodayCall(context),
                 tooltip: 'Start daily call',
                 elevation: 2,
                 child: const Icon(Icons.mic_rounded, size: 32),
               ),
-              const SizedBox(width: 12),
               const Spacer(),
             ],
           ),
@@ -141,13 +124,22 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              tooltip: 'Settings',
-              onPressed: () => Navigator.pushNamed(context, '/settings'),
-              icon: _UserAvatar(
-                photoUrl: photoUrl,
-                displayName: userName,
-                size: 34,
+            // Semantics wrapper: the tooltip alone was not findable by
+            // automation/screen readers (glossary a11y gap, #255/#256).
+            // Label-only node: the button role/action lives on the inner
+            // IconButton (#268 review — an action-less outer button node
+            // confuses TalkBack).
+            child: Semantics(
+              label: 'Settings',
+              container: true,
+              child: IconButton(
+                tooltip: 'Settings',
+                onPressed: () => Navigator.pushNamed(context, '/settings'),
+                icon: _UserAvatar(
+                  photoUrl: photoUrl,
+                  displayName: userName,
+                  size: 34,
+                ),
               ),
             ),
           ),
@@ -217,6 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         onDaySelected: (selectedDay, focusedDay) {
                           setState(() {
                             _focusedDay = focusedDay;
+                            // card follows the selection (#256)
+                            _pinnedProgressDate = selectedDay;
                           });
                           context.read<JournalBloc>().add(
                             SelectDate(selectedDay),
@@ -372,18 +366,46 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Progress card
                 Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _ProgressCard(
-                        // Always today's status, independent of the
-                        // selected date (#154).
-                        filledCategoryIds: journalState.todayCategoryCounts.keys
-                            .toSet(),
-                        categories: categoryState.activeCategories,
-                        currentStreak: journalState.currentStreak,
-                        onCategoryTap: (categoryId) {
-                          Navigator.pushNamed(
-                            context,
-                            '/category-detail',
-                            arguments: categoryId,
+                      child: Builder(
+                        builder: (context) {
+                          // #256 refines #154: today-sourced at rest, but the
+                          // card follows the radial's selected date until the
+                          // go-to-today reset.
+                          final progressDate =
+                              _pinnedProgressDate ?? DateTime.now();
+                          final progressIsToday = DateUtils.isSameDay(
+                            progressDate,
+                            DateTime.now(),
+                          );
+                          final filled = progressIsToday
+                              ? journalState.todayCategoryCounts.keys.toSet()
+                              : (journalState.monthCategoryMarkers[_dateFormat
+                                            .format(progressDate)] ??
+                                        const <String, int>{})
+                                    .keys
+                                    .toSet();
+                          return _ProgressCard(
+                            filledCategoryIds: filled,
+                            categories: categoryState.activeCategories,
+                            date: progressDate,
+                            isToday: progressIsToday,
+                            currentStreak: journalState.currentStreak,
+                            onCategoryTap: (categoryId) {
+                              Navigator.pushNamed(
+                                context,
+                                '/category-detail',
+                                arguments: categoryId,
+                              );
+                            },
+                            onBodyTap: () {
+                              context.read<JournalBloc>().add(
+                                SelectDate(progressDate),
+                              );
+                              Navigator.pushNamed(context, '/daily-journal');
+                            },
+                            onGoToToday: () => setState(() {
+                              _pinnedProgressDate = null;
+                            }),
                           );
                         },
                       ),
@@ -492,9 +514,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     radius: radius,
                     window: window,
-                    onCategoryTap: (category) async {
+                    onCategoryTap: (category) {
+                      _dismissRadialMenu();
                       if (category.isArchived) {
-                        _dismissRadialMenu();
+                        // Archived categories never render in the day view —
+                        // Category detail is the only surface that shows them.
                         if (context.mounted) {
                           Navigator.pushNamed(
                             context,
@@ -504,24 +528,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                         return;
                       }
-
-                      // Stay open (#158): the entry sheet slides over the
-                      // menu; the badge updates underneath and the user can
-                      // pick another category. Dismissal is explicit only
-                      // (backdrop or back) — users add multiple entries to
-                      // the same category.
-                      if (!context.mounted) return;
-                      final text = await showEntryBottomSheet(
-                        context,
-                        category: category,
-                      );
-                      if (text != null && context.mounted) {
-                        journalBloc.add(
-                          AddEntry(
-                            categoryId: category.id,
-                            text: text,
-                            date: selectedDay,
-                          ),
+                      // #256: bubbles browse — day view for the MENU's date,
+                      // tapped category first. Re-assert the date against any
+                      // selectedDate drift while the menu was open (the same
+                      // concern the retired #158 stay-open test pinned).
+                      journalBloc.add(SelectDate(selectedDay));
+                      if (context.mounted) {
+                        Navigator.pushNamed(
+                          context,
+                          '/daily-journal',
+                          arguments: category.id,
                         );
                       }
                     },
@@ -626,14 +642,22 @@ class _InitialsAvatar extends StatelessWidget {
 class _ProgressCard extends StatelessWidget {
   final Set<String> filledCategoryIds;
   final List<CategoryConfig> categories;
+  final DateTime date;
+  final bool isToday;
   final int currentStreak;
   final void Function(String categoryId)? onCategoryTap;
+  final VoidCallback? onBodyTap;
+  final VoidCallback? onGoToToday;
 
   const _ProgressCard({
     required this.filledCategoryIds,
     required this.categories,
+    required this.date,
+    required this.isToday,
     this.currentStreak = 0,
     this.onCategoryTap,
+    this.onBodyTap,
+    this.onGoToToday,
   });
 
   @override
@@ -659,133 +683,177 @@ class _ProgressCard extends StatelessWidget {
       label:
           'Progress $filled of $total${currentStreak > 0 ? ', streak $currentStreak day${currentStreak == 1 ? '' : 's'}' : ''}',
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    "Today's Progress",
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+        child: InkWell(
+          onTap: onBodyTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    // container:true carves the title into its own a11y node
+                    // (the card-level 'Progress N of M' label otherwise
+                    // swallows it) — flows tap the title to open the day
+                    // view, clear of the category dots (#256).
+                    Semantics(
+                      container: true,
+                      child: Text(
+                        isToday
+                            ? "Today's Progress"
+                            : '${DateFormat('MMM d').format(date)} Progress',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                  if (currentStreak > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.local_fire_department_rounded,
-                            size: 14,
-                            color: Color(0xFFF59E0B),
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '$currentStreak day${currentStreak == 1 ? '' : 's'}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFF59E0B),
+                    if (!isToday) ...[
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: 'Go to today',
+                        child: SizedBox(
+                          height: 26,
+                          child: TextButton.icon(
+                            onPressed: onGoToToday,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              // The 26px SizedBox otherwise fights the
+                              // button's 36px default minimum (#268 review).
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            icon: const Icon(Icons.today_rounded, size: 14),
+                            label: const Text(
+                              'Today',
+                              style: TextStyle(fontSize: 11),
                             ),
                           ),
-                        ],
+                        ),
+                      ),
+                    ],
+                    // The streak is a today-fact; a past date's card showing
+                    // it would lie.
+                    if (isToday && currentStreak > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFF59E0B,
+                          ).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.local_fire_department_rounded,
+                              size: 14,
+                              color: Color(0xFFF59E0B),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '$currentStreak day${currentStreak == 1 ? '' : 's'}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFF59E0B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    Text(
+                      '$filled/$total',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
-                  const Spacer(),
-                  Text(
-                    '$filled/$total',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Category icons row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: categories.map((cat) {
-                  final isFilled = filledCategoryIds.contains(cat.id);
-                  return Tooltip(
-                    message: '${cat.displayName} detail',
-                    child: InkWell(
-                      onTap: () => onCategoryTap?.call(cat.id),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: isFilled
-                                  ? cat.color.withValues(alpha: 0.15)
-                                  : theme.colorScheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              cat.icon,
-                              size: 20,
-                              color: isFilled
-                                  ? cat.color
-                                  : theme.colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          if (isFilled)
+                ),
+                const SizedBox(height: 12),
+                // Category icons row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: categories.map((cat) {
+                    final isFilled = filledCategoryIds.contains(cat.id);
+                    return Tooltip(
+                      message: '${cat.displayName} detail',
+                      child: InkWell(
+                        onTap: () => onCategoryTap?.call(cat.id),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Column(
+                          children: [
                             Container(
-                              width: 6,
-                              height: 6,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
-                                color: cat.color,
+                                color: isFilled
+                                    ? cat.color.withValues(alpha: 0.15)
+                                    : theme.colorScheme.surfaceContainerHighest
+                                          .withValues(alpha: 0.5),
                                 shape: BoxShape.circle,
                               ),
-                            )
-                          else
-                            const SizedBox(height: 6),
-                        ],
+                              child: Icon(
+                                cat.icon,
+                                size: 20,
+                                color: isFilled
+                                    ? cat.color
+                                    : theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.3),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (isFilled)
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: cat.color,
+                                  shape: BoxShape.circle,
+                                ),
+                              )
+                            else
+                              const SizedBox(height: 6),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              // Progress bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.5),
-                  color: filled == total
-                      ? const Color(0xFF10B981)
-                      : theme.colorScheme.primary,
+                    );
+                  }).toList(),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(height: 12),
+                // Progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 8,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                    color: filled == total
+                        ? const Color(0xFF10B981)
+                        : theme.colorScheme.primary,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

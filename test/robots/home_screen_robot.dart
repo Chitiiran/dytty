@@ -30,17 +30,8 @@ class HomeScreenRobot {
     expect(find.byTooltip('Settings'), findsOneWidget);
   }
 
-  void expectTodayButtonVisible() {
-    expect(find.text('Write'), findsOneWidget);
-  }
-
   Future<void> tapSettings() async {
     await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> tapTodayButton() async {
-    await tester.tap(find.text('Write'));
     await tester.pumpAndSettle();
   }
 }

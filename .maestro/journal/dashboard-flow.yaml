@@ -23,6 +23,6 @@ tags:
 - assertVisible: "Start daily call"
 
 # Verify action buttons
-- assertVisible: "Today button"
+- assertVisible: "Today.s Progress"  # Write button retired (#256)
 
 - takeScreenshot: ".maestro/screenshots/latest/dashboard/03-full-dashboard"

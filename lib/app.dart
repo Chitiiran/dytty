@@ -187,7 +187,8 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
   final categoryId = args is String ? args : null;
 
   final routes = <String, WidgetBuilder>{
-    '/daily-journal': (_) => const DailyJournalScreen(),
+    // Radial bubbles pass the tapped category id — its card renders first.
+    '/daily-journal': (_) => DailyJournalScreen(focusCategoryId: categoryId),
     '/settings': (_) => const SettingsScreen(),
     // The FAB/nudge pass today explicitly — JournalBloc's SelectDate may
     // not have processed yet when the call screen wires its bloc (#251).

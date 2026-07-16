@@ -12,8 +12,12 @@ tags:
 - assertVisible: "Progress 0 of 5"
 
 # Add a single entry today
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - tapOn: "Add Positive Things entry"
 - waitForAnimationToEnd
 - tapOn: "What good things happened today.*"
@@ -32,8 +36,12 @@ tags:
 - assertVisible: "Progress 1 of 5, streak 1 day.*"
 
 # Delete the entry
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - tapOn: "Delete entry"
 - waitForAnimationToEnd:
     timeout: 5000
