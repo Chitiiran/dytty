@@ -53,6 +53,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   bool _ownsBloc = false;
   bool _blocInitialized = false;
+
+  /// Journal date this call is scoped to — resolved once alongside the bloc
+  /// wiring so the greeting (#254) and persistence (#252) always name the
+  /// same day.
+  DateTime _journalDate = DateTime.now();
   CallSession? _session;
 
   @override
@@ -73,6 +78,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     // #251: entering the screen IS the start gesture — auto-connect after
     // the first frame. Armed inside the once-guard so rebuilds can't
     // re-dispatch.
+    _journalDate =
+        widget.journalDate ?? context.read<JournalBloc>().state.selectedDate;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _startCall();
     });
@@ -99,7 +107,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       journalRepository: journalBloc.repository,
       // #252: a call launched from a past date's screen saves to THAT date.
       // Entry-point override first — bloc state can race (#266 review).
-      journalDate: widget.journalDate ?? journalBloc.state.selectedDate,
+      journalDate: _journalDate,
       llmService: context.read<LlmService>(),
       audioStorage: context.read<AudioStorageService>(),
       uid: uid,
@@ -153,7 +161,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _session = CallSession(recorder: recorder, playback: playback, bloc: _bloc);
 
     _bloc.add(
-      StartCall(systemPrompt: useMinimal ? dailyCallMinimalPrompt : null),
+      StartCall(
+        systemPrompt: useMinimal
+            ? dailyCallMinimalPrompt
+            // #254: day-aware greeting directive; same date source as the
+            // bloc's journalDate wiring.
+            : buildDailyCallPrompt(targetDate: _journalDate),
+      ),
     );
     await _session!.initPlayback();
     await _session!.startRecording();

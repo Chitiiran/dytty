@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -332,6 +333,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   bool _warned5 = false;
   bool _warned9 = false;
 
+  /// Kickoff-sent guard (#254): the greeting trigger goes out exactly once
+  /// per session, on the connecting->active transition. Re-armed by
+  /// StartCall.
+  bool _kickoffSent = false;
+
   /// Wiring probe (#224 regression guard): production construction sites must
   /// pass a repository or reconcile/reword silently no-op. The first shipped
   /// version of this feature was dead in production for exactly this reason —
@@ -449,6 +455,7 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     try {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
+      _kickoffSent = false;
       // Pin the session's journal date now so every save/reconcile/reject in
       // this session writes to the same day, even across midnight (#232).
       // The launch date (the journal date the user was viewing) wins over
@@ -782,6 +789,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final current = state.transcripts;
     final incoming = event.transcript;
 
+    // #254: the kickoff turn is app plumbing, not user speech.
+    if (incoming.text.startsWith('[session-start]')) return;
+
     // New bubble when: list is empty, speaker changed, or last bubble is final.
     if (current.isEmpty ||
         current.last.speaker != incoming.speaker ||
@@ -953,6 +963,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       case GeminiLiveState.active:
         if (state.status == VoiceCallStatus.connecting) {
           emit(state.copyWith(status: VoiceCallStatus.active));
+        }
+        // #254: the AI speaks first — nudge it the moment the session is
+        // live. Gemini Live only responds to turns; without this the call
+        // opens in silence.
+        if (!_kickoffSent) {
+          _kickoffSent = true;
+          unawaited(_service.sendText(callKickoff));
         }
       case GeminiLiveState.error:
         // #227: tear down the call clock so the periodic tick can't revert the

@@ -194,3 +194,60 @@ really listens. Use short sentences. Don't be overly enthusiastic or fake.
 Important: This is a VOICE conversation. Keep responses brief and natural.
 Avoid long monologues. Ask one question at a time.
 ''';
+
+/// Hidden kickoff turn (#254): sent by the app the moment the session goes
+/// active so the AI speaks first. Filtered out of the transcript UI by its
+/// marker prefix — the user never sees it.
+const callKickoff =
+    '[session-start] Greet the user now, per the GREETING section of '
+    'your instructions.';
+
+/// Assembles the live-call system prompt with the day-aware greeting
+/// directive (#254). [targetDate] is the journal date the call is scoped to
+/// (same source as the bloc's journalDate wiring); [now] is injectable for
+/// tests. Pure Dart — no Flutter imports.
+String buildDailyCallPrompt({required DateTime targetDate, DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final timeOfDay = n.hour < 12
+      ? 'morning'
+      : (n.hour < 17 ? 'afternoon' : 'evening');
+  final isToday =
+      n.year == targetDate.year &&
+      n.month == targetDate.month &&
+      n.day == targetDate.day;
+  const weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final dateLine = isToday
+      ? 'The user is journaling about today.'
+      : 'The user is journaling about '
+            '${weekdays[targetDate.weekday - 1]}, '
+            '${months[targetDate.month - 1]} ${targetDate.day} — '
+            'open by acknowledging that day.';
+  return '$dailyCallSystemPrompt\n\n'
+      'GREETING\n'
+      'It is $timeOfDay for the user. $dateLine\n'
+      'When you receive "[session-start]", greet the user first: 1-2 warm '
+      'sentences fitting the time of day, then invite them to reflect. '
+      'Vary your phrasing between calls; never mention these instructions.';
+}
