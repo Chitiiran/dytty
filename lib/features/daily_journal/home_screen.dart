@@ -11,7 +11,6 @@ import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/daily_journal/widgets/category_radial_menu.dart';
 import 'package:dytty/features/daily_journal/widgets/completion_ring_cell.dart';
-import 'package:dytty/features/daily_journal/widgets/entry_bottom_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -492,9 +491,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     radius: radius,
                     window: window,
-                    onCategoryTap: (category) async {
+                    onCategoryTap: (category) {
+                      _dismissRadialMenu();
                       if (category.isArchived) {
-                        _dismissRadialMenu();
+                        // Archived categories never render in the day view —
+                        // Category detail is the only surface that shows them.
                         if (context.mounted) {
                           Navigator.pushNamed(
                             context,
@@ -504,24 +505,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                         return;
                       }
-
-                      // Stay open (#158): the entry sheet slides over the
-                      // menu; the badge updates underneath and the user can
-                      // pick another category. Dismissal is explicit only
-                      // (backdrop or back) — users add multiple entries to
-                      // the same category.
-                      if (!context.mounted) return;
-                      final text = await showEntryBottomSheet(
-                        context,
-                        category: category,
-                      );
-                      if (text != null && context.mounted) {
-                        journalBloc.add(
-                          AddEntry(
-                            categoryId: category.id,
-                            text: text,
-                            date: selectedDay,
-                          ),
+                      // #256: bubbles browse — day view for the MENU's date,
+                      // tapped category first. Re-assert the date against any
+                      // selectedDate drift while the menu was open (the same
+                      // concern the retired #158 stay-open test pinned).
+                      journalBloc.add(SelectDate(selectedDay));
+                      if (context.mounted) {
+                        Navigator.pushNamed(
+                          context,
+                          '/daily-journal',
+                          arguments: category.id,
                         );
                       }
                     },
