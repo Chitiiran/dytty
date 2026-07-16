@@ -13,8 +13,12 @@ tags:
 - assertVisible: "Progress 0 of 5"
 
 # Open today's journal and step back one day
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - tapOn: "Previous day"
 - waitForAnimationToEnd
 

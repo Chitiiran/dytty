@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -332,6 +333,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   bool _warned5 = false;
   bool _warned9 = false;
 
+  /// Kickoff-sent guard (#254): the greeting trigger goes out exactly once
+  /// per session, on the connecting->active transition. Re-armed by
+  /// StartCall.
+  bool _kickoffSent = false;
+
   /// Wiring probe (#224 regression guard): production construction sites must
   /// pass a repository or reconcile/reword silently no-op. The first shipped
   /// version of this feature was dead in production for exactly this reason —
@@ -416,6 +422,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     // A fresh call gets a fresh reconcile pass (guard is per-session, not
     // per-bloc) — defuses a silent skip if a restart affordance ever lands.
     _reconciled = false;
+    // Re-arm BEFORE the connect await (#269 review): connect() emits
+    // `active` before its future completes, so a post-await reset would be
+    // order-dependent on an error->retry.
+    _kickoffSent = false;
     emit(
       state.copyWith(
         status: VoiceCallStatus.connecting,
@@ -782,6 +792,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     final current = state.transcripts;
     final incoming = event.transcript;
 
+    // #254: the kickoff turn is app plumbing, not user speech.
+    if (incoming.text.startsWith('[session-start]')) return;
+
     // New bubble when: list is empty, speaker changed, or last bubble is final.
     if (current.isEmpty ||
         current.last.speaker != incoming.speaker ||
@@ -953,6 +966,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       case GeminiLiveState.active:
         if (state.status == VoiceCallStatus.connecting) {
           emit(state.copyWith(status: VoiceCallStatus.active));
+        }
+        // #254: the AI speaks first — nudge it the moment the session is
+        // live. Gemini Live only responds to turns; without this the call
+        // opens in silence.
+        if (!_kickoffSent) {
+          _kickoffSent = true;
+          unawaited(
+            _service.sendText(callKickoff).catchError((Object e) {
+              // Socket died between active and the send (1008s have
+              // history here) — the greeting is lost, not the call.
+              debugPrint('kickoff send failed: $e');
+            }),
+          );
         }
       case GeminiLiveState.error:
         // #227: tear down the call clock so the periodic tick can't revert the

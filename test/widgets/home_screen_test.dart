@@ -196,14 +196,6 @@ void main() {
       robot.expectSettingsButtonVisible();
     });
 
-    testWidgets('today button is present', (tester) async {
-      await tester.pumpApp(const HomeScreen());
-      await tester.pump(const Duration(seconds: 1));
-
-      robot = HomeScreenRobot(tester);
-      robot.expectTodayButtonVisible();
-    });
-
     testWidgets('shows calendar with markers for days with entries', (
       tester,
     ) async {

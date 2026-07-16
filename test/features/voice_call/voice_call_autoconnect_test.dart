@@ -170,7 +170,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    verify(() => callBloc.add(any(that: isA<StartCall>()))).called(1);
+    final captured = verify(() => callBloc.add(captureAny())).captured;
+    final start = captured.whereType<StartCall>().single;
+    // #254: the default prompt carries the day-aware greeting directive.
+    expect(start.systemPrompt, isNotNull);
+    expect(start.systemPrompt, contains('GREETING'));
+    expect(start.systemPrompt, contains('journaling about today'));
   });
 
   testWidgets('Ready state and Start Call button no longer exist', (

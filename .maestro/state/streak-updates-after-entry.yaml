@@ -11,8 +11,12 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/state/streak-01-no-streak"
 
 # Navigate to journal and add entry
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 
 - tapOn: "Add Positive Things entry"
 - waitForAnimationToEnd
@@ -31,8 +35,12 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/state/streak-02-after-first-entry"
 
 # Navigate to journal and back to trigger fresh streak load
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - back
 - waitForAnimationToEnd:
     timeout: 5000

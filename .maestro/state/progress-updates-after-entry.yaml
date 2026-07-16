@@ -14,8 +14,12 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/state/bug22-01-progress-0-of-5"
 
 # Navigate to journal
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 
 # Add entry to Positive Things
 - tapOn: "Add Positive Things entry"
@@ -38,8 +42,12 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/state/bug22-02-progress-1-of-5"
 
 # Go back to journal and add a second category entry
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 
 - tapOn: "Add Gratitude entry"
 - waitForAnimationToEnd

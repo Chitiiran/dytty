@@ -15,8 +15,12 @@ tags:
 - takeScreenshot: ".maestro/screenshots/latest/state/bug21-01-nudge-visible"
 
 # Navigate to journal
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 
 # Add an entry to Positive Things
 - tapOn: "Add Positive Things entry"

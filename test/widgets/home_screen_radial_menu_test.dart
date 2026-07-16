@@ -566,24 +566,21 @@ void main() {
       }
     });
 
-    testWidgets('menu stays open after saving an entry, badge updates (#158)', (
-      tester,
-    ) async {
+    testWidgets('bubble opens the day view for the MENU date, category first '
+        '(#256; supersedes #158 stay-open)', (tester) async {
       final now = DateTime.now();
       final fixedDay = DateTime(now.year, now.month, 15);
-      final dayStr = dateFormat.format(fixedDay);
       final journalBloc = MockJournalBloc();
-
-      final states = StreamController<JournalState>.broadcast();
       whenListen(
         journalBloc,
-        states.stream,
+        const Stream<JournalState>.empty(),
         initialState: JournalState(
           status: JournalStatus.loaded,
           selectedDate: fixedDay,
         ),
       );
 
+      final pushed = <RouteSettings>[];
       await tester.pumpApp(
         const HomeScreen(),
         journalBloc: journalBloc,
@@ -591,8 +588,16 @@ void main() {
           status: JournalStatus.loaded,
           selectedDate: fixedDay,
         ),
+        onGenerateRoute: (settings) {
+          pushed.add(settings);
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => const SizedBox.shrink(),
+          );
+        },
       );
       await tester.pump(const Duration(seconds: 1));
+      clearInteractions(journalBloc); // drop the startup SelectDate
 
       final cellRect = tester.getRect(
         find
@@ -606,48 +611,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CategoryRadialMenu), findsOneWidget);
 
-      // Open the entry sheet from a bubble, type, save.
       await tester.tap(
-        find.bySemanticsLabel('Add Positive Things entry from menu'),
+        find.bySemanticsLabel('Open Positive Things for this day'),
         warnIfMissed: false,
       );
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).first, 'Stay open');
-      // Rebuild so the Save button enables (_hasText gate).
-      await tester.pump();
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
 
-      // Menu still mounted (#158)...
-      expect(find.byType(CategoryRadialMenu), findsOneWidget);
-
-      // ...the entry targeted the MENU's date, not whatever selectedDate
-      // drifted to (the date the user is journaling on stays pinned).
-      // table_calendar emits UTC midnights from onDaySelected.
+      // Navigated to the day view carrying the tapped category...
+      final push = pushed.lastWhere((s) => s.name == '/daily-journal');
+      expect(push.arguments, 'positive');
+      // ...the menu dismissed on navigation (stay-open retired, ADR-012)...
+      expect(find.byType(CategoryRadialMenu), findsNothing);
+      // ...and the date stayed pinned to the MENU's date: once from the
+      // cell tap, once re-asserted by the bubble against selectedDate
+      // drift while the menu was open (same concern as the old #158 test).
       verify(
         () => journalBloc.add(
-          AddEntry(
-            categoryId: 'positive',
-            text: 'Stay open',
-            date: DateTime.utc(fixedDay.year, fixedDay.month, fixedDay.day),
-          ),
+          SelectDate(DateTime.utc(fixedDay.year, fixedDay.month, fixedDay.day)),
         ),
-      ).called(1);
-
-      // ...and a marker update from the bloc reaches the badge live.
-      states.add(
-        JournalState(
-          status: JournalStatus.loaded,
-          selectedDate: fixedDay,
-          monthCategoryMarkers: {
-            dayStr: {'positive': 1},
-          },
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('✓'), findsOneWidget);
-
-      await states.close();
+      ).called(2);
     });
 
     testWidgets('back gesture dismisses the menu, not the screen (#158)', (
