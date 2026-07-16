@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
+import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/features/voice_call/bloc/voice_call_bloc.dart';
 import 'package:dytty/services/llm/llm_service.dart';
 import 'package:dytty/services/storage/audio_storage_service.dart';
@@ -87,6 +88,7 @@ void main() {
     when(() => mockService.latencyP50).thenReturn(null);
     when(() => mockService.latencyP95).thenReturn(null);
     when(() => mockService.connect()).thenAnswer((_) async {});
+    when(() => mockService.sendText(any())).thenAnswer((_) async {});
     when(() => mockService.disconnect()).thenAnswer((_) async {});
     when(() => mockService.dispose()).thenReturn(null);
     when(() => mockService.sendAudio(any())).thenReturn(null);
@@ -1336,6 +1338,7 @@ void main() {
         // We simulate a call that started 5 minutes ago by connecting
         // and letting the tick fire with a far-past start time
         when(() => mockService.connect()).thenAnswer((_) async {});
+        when(() => mockService.sendText(any())).thenAnswer((_) async {});
         return buildBloc();
       },
       act: (bloc) async {
@@ -1482,6 +1485,54 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(bloc.state.status, VoiceCallStatus.error);
       expect(bloc.state.error, 'Microphone permission needed');
+      await bloc.close();
+    });
+  });
+
+  group('AI greets first (#254)', () {
+    test('kickoff sent exactly once when the session goes active', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      stateController.add(GeminiLiveState.active);
+      stateController.add(GeminiLiveState.active); // duplicate event
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      verify(() => mockService.sendText(callKickoff)).called(1);
+      await bloc.close();
+    });
+
+    test('kickoff re-arms on a new session', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      stateController.add(GeminiLiveState.active);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      bloc.add(const EndCall());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      bloc.add(const StartCall());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      stateController.add(GeminiLiveState.active);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      verify(() => mockService.sendText(callKickoff)).called(2);
+      await bloc.close();
+    });
+
+    test('kickoff text never enters the transcript state', () async {
+      final bloc = buildBloc();
+      bloc.add(const StartCall());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      transcriptController.add(
+        const Transcript(speaker: Speaker.user, text: callKickoff),
+      );
+      transcriptController.add(
+        const Transcript(speaker: Speaker.ai, text: 'Good evening!'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(bloc.state.transcripts, hasLength(1));
+      expect(bloc.state.transcripts.single.text, 'Good evening!');
       await bloc.close();
     });
   });
