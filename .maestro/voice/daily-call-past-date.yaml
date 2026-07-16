@@ -62,8 +62,12 @@ tags:
 - assertVisible: "You haven.*journaled today.*"
 
 # The entry must be on yesterday's journal list.
-- tapOn: "Today button"
-- waitForAnimationToEnd
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - tapOn: "Previous day"
 - waitForAnimationToEnd
 - takeScreenshot: ".maestro/screenshots/latest/voice/252-past-date-call"

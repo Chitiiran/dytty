@@ -88,7 +88,8 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.text('Call'), findsNothing);
-      expect(find.text('Write'), findsOneWidget); // survives until PR2
+      expect(find.text('Write'), findsNothing); // retired in PR2 (#256)
+      expect(find.bySemanticsLabel('Today button'), findsNothing);
       expect(find.byTooltip('Start daily call'), findsOneWidget);
     });
   });
@@ -269,6 +270,15 @@ void main() {
 
       final push = pushed.lastWhere((s) => s.name == '/category-detail');
       expect(push.arguments, 'positive');
+    });
+  });
+
+  group('avatar button (#256 a11y)', () {
+    testWidgets('is findable as Settings in the a11y tree', (tester) async {
+      await tester.pumpApp(const HomeScreen());
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.bySemanticsLabel('Settings'), findsOneWidget);
     });
   });
 }

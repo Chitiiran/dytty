@@ -105,36 +105,14 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: Row(
             children: [
-              Expanded(
-                child: Semantics(
-                  label: 'Today button',
-                  button: true,
-                  child: SizedBox(
-                    height: 48,
-                    child: FilledButton.tonalIcon(
-                      onPressed: () {
-                        final today = DateTime.now();
-                        setState(() {
-                          _focusedDay = today;
-                        });
-                        context.read<JournalBloc>().add(SelectDate(today));
-                        Navigator.pushNamed(context, '/daily-journal');
-                      },
-                      icon: const Icon(Icons.edit_note_rounded),
-                      label: const Text('Write'),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // #251: the mic FAB IS the daily call — sole capture entry.
+              const Spacer(),
+              // #251/#256: the mic FAB IS the bottom bar — sole capture entry.
               FloatingActionButton.large(
                 onPressed: () => _startTodayCall(context),
                 tooltip: 'Start daily call',
                 elevation: 2,
                 child: const Icon(Icons.mic_rounded, size: 32),
               ),
-              const SizedBox(width: 12),
               const Spacer(),
             ],
           ),
@@ -145,13 +123,20 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              tooltip: 'Settings',
-              onPressed: () => Navigator.pushNamed(context, '/settings'),
-              icon: _UserAvatar(
-                photoUrl: photoUrl,
-                displayName: userName,
-                size: 34,
+            // Semantics wrapper: the tooltip alone was not findable by
+            // automation/screen readers (glossary a11y gap, #255/#256).
+            child: Semantics(
+              label: 'Settings',
+              button: true,
+              container: true,
+              child: IconButton(
+                tooltip: 'Settings',
+                onPressed: () => Navigator.pushNamed(context, '/settings'),
+                icon: _UserAvatar(
+                  photoUrl: photoUrl,
+                  displayName: userName,
+                  size: 34,
+                ),
               ),
             ),
           ),
@@ -702,12 +687,19 @@ class _ProgressCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      isToday
-                          ? "Today's Progress"
-                          : '${DateFormat('MMM d').format(date)} Progress',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                    // container:true carves the title into its own a11y node
+                    // (the card-level 'Progress N of M' label otherwise
+                    // swallows it) — flows tap the title to open the day
+                    // view, clear of the category dots (#256).
+                    Semantics(
+                      container: true,
+                      child: Text(
+                        isToday
+                            ? "Today's Progress"
+                            : '${DateFormat('MMM d').format(date)} Progress',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     if (!isToday) ...[

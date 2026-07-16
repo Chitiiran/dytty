@@ -17,7 +17,7 @@ tags:
 
 - tapOn: "Open Positive Things for this day"
 - extendedWaitUntil:
-    visible: "Journal date"
+    visible: "Positive Things category"
     timeout: 5000
 - assertVisible: "Positive Things category"
 - takeScreenshot: ".maestro/screenshots/latest/journal/bubble-day-view"
