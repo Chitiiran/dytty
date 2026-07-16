@@ -23,10 +23,11 @@ class _HomeScreenState extends State<HomeScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
 
-  /// Date the progress card reports on (#256): follows the radial's
-  /// selected date and PERSISTS after the menu closes; the go-to-today
-  /// button is the reset. Defaults to today.
-  DateTime _progressDate = DateTime.now();
+  /// Radial-pinned progress-card date (#256): null = resting state, where
+  /// the card reports on today COMPUTED AT BUILD (a field default captured
+  /// at State creation would show yesterday after midnight — #268 review).
+  /// Set by a radial selection; cleared by the go-to-today button.
+  DateTime? _pinnedProgressDate;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   Route<void>? _radialMenuRoute;
   Offset? _lastTapGlobalPosition;
@@ -125,9 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.only(right: 8),
             // Semantics wrapper: the tooltip alone was not findable by
             // automation/screen readers (glossary a11y gap, #255/#256).
+            // Label-only node: the button role/action lives on the inner
+            // IconButton (#268 review — an action-less outer button node
+            // confuses TalkBack).
             child: Semantics(
               label: 'Settings',
-              button: true,
               container: true,
               child: IconButton(
                 tooltip: 'Settings',
@@ -206,7 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         onDaySelected: (selectedDay, focusedDay) {
                           setState(() {
                             _focusedDay = focusedDay;
-                            _progressDate = selectedDay; // card follows (#256)
+                            // card follows the selection (#256)
+                            _pinnedProgressDate = selectedDay;
                           });
                           context.read<JournalBloc>().add(
                             SelectDate(selectedDay),
@@ -367,21 +371,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           // #256 refines #154: today-sourced at rest, but the
                           // card follows the radial's selected date until the
                           // go-to-today reset.
+                          final progressDate =
+                              _pinnedProgressDate ?? DateTime.now();
                           final progressIsToday = DateUtils.isSameDay(
-                            _progressDate,
+                            progressDate,
                             DateTime.now(),
                           );
                           final filled = progressIsToday
                               ? journalState.todayCategoryCounts.keys.toSet()
                               : (journalState.monthCategoryMarkers[_dateFormat
-                                            .format(_progressDate)] ??
+                                            .format(progressDate)] ??
                                         const <String, int>{})
                                     .keys
                                     .toSet();
                           return _ProgressCard(
                             filledCategoryIds: filled,
                             categories: categoryState.activeCategories,
-                            date: _progressDate,
+                            date: progressDate,
                             isToday: progressIsToday,
                             currentStreak: journalState.currentStreak,
                             onCategoryTap: (categoryId) {
@@ -393,12 +399,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                             onBodyTap: () {
                               context.read<JournalBloc>().add(
-                                SelectDate(_progressDate),
+                                SelectDate(progressDate),
                               );
                               Navigator.pushNamed(context, '/daily-journal');
                             },
                             onGoToToday: () => setState(() {
-                              _progressDate = DateTime.now();
+                              _pinnedProgressDate = null;
                             }),
                           );
                         },

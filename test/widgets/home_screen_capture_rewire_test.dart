@@ -165,10 +165,13 @@ void main() {
 
   group('date-aware progress card (#256)', () {
     final now = DateTime.now();
-    final day3 = DateTime(now.year, now.month, 3);
+    // Never collide with today (on the 3rd the card would be today-sourced
+    // and every assertion below would silently test the wrong branch).
+    final day3 = DateTime(now.year, now.month, now.day == 3 ? 4 : 3);
     final day3Str =
         '${day3.year.toString().padLeft(4, '0')}-'
-        '${day3.month.toString().padLeft(2, '0')}-03';
+        '${day3.month.toString().padLeft(2, '0')}-'
+        '${day3.day.toString().padLeft(2, '0')}';
 
     JournalState stateWithDay3Markers() => JournalState(
       status: JournalStatus.loaded,
@@ -179,7 +182,7 @@ void main() {
     );
 
     Future<void> openRadialOnDay3(WidgetTester tester) async {
-      await tester.tap(find.text('3').first);
+      await tester.tap(find.text('${day3.day}').first);
       await tester.pump(const Duration(milliseconds: 400));
     }
 
