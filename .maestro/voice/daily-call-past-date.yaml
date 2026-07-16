@@ -57,13 +57,22 @@ tags:
 - waitForAnimationToEnd:
     timeout: 5000
 
-# Today's dashboard must be untouched — the entry belongs to yesterday.
+# The progress card followed yesterday's radial selection and PERSISTS
+# (#256 date-aware card) — reset it first so the 0-of-5 assertion reads
+# TODAY's card. This also restores the #252 signal: a save-to-today
+# regression now shows 1/5 here and fails loudly.
+- tapOn: "Go to today"
 - assertVisible: "Progress 0 of 5.*"
 - assertVisible: "You haven.*journaled today.*"
 
-# The entry must be on yesterday's journal list.
-- tapOn: "Today button"
-- waitForAnimationToEnd
-- tapOn: "Previous day"
-- waitForAnimationToEnd
+# The entry must be on yesterday's journal list: browse via yesterday's
+# radial bubble (#256 navigation).
+- tapOn: ".*[^0-9]${output.yday}, .*"
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+- tapOn: "Open Positive Things for this day"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 - takeScreenshot: ".maestro/screenshots/latest/voice/252-past-date-call"

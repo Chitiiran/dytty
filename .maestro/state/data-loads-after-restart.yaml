@@ -14,7 +14,10 @@ tags:
 - assertVisible: "Progress 0 of 5"
 
 # Ensure today has one entry
-- tapOn: "Today button"
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
 # Journal screen ready <=> the add button's semantics exist (the loading
 # shimmer LOOPS — waitForAnimationToEnd would time out and hard-fail).
 - extendedWaitUntil:
