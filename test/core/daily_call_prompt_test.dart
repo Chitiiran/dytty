@@ -44,6 +44,23 @@ void main() {
       expect(p, isNot(contains('journaling about today.')));
     });
 
+    test('boundary hours: 12:00 is afternoon, 17:00 is evening', () {
+      expect(
+        buildDailyCallPrompt(
+          targetDate: DateTime(2026, 7, 15),
+          now: DateTime(2026, 7, 15, 12),
+        ),
+        contains('It is afternoon for the user.'),
+      );
+      expect(
+        buildDailyCallPrompt(
+          targetDate: DateTime(2026, 7, 15),
+          now: DateTime(2026, 7, 15, 17),
+        ),
+        contains('It is evening for the user.'),
+      );
+    });
+
     test('kickoff constant carries the transcript-filter marker', () {
       expect(callKickoff, startsWith('[session-start]'));
     });

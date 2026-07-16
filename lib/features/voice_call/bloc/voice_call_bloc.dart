@@ -422,6 +422,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     // A fresh call gets a fresh reconcile pass (guard is per-session, not
     // per-bloc) — defuses a silent skip if a restart affordance ever lands.
     _reconciled = false;
+    // Re-arm BEFORE the connect await (#269 review): connect() emits
+    // `active` before its future completes, so a post-await reset would be
+    // order-dependent on an error->retry.
+    _kickoffSent = false;
     emit(
       state.copyWith(
         status: VoiceCallStatus.connecting,
@@ -455,7 +459,6 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     try {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
-      _kickoffSent = false;
       // Pin the session's journal date now so every save/reconcile/reject in
       // this session writes to the same day, even across midnight (#232).
       // The launch date (the journal date the user was viewing) wins over
@@ -969,7 +972,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
         // opens in silence.
         if (!_kickoffSent) {
           _kickoffSent = true;
-          unawaited(_service.sendText(callKickoff));
+          unawaited(
+            _service.sendText(callKickoff).catchError((Object e) {
+              // Socket died between active and the send (1008s have
+              // history here) — the greeting is lost, not the call.
+              debugPrint('kickoff send failed: $e');
+            }),
+          );
         }
       case GeminiLiveState.error:
         // #227: tear down the call clock so the periodic tick can't revert the

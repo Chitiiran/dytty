@@ -199,8 +199,10 @@ Avoid long monologues. Ask one question at a time.
 /// active so the AI speaks first. Filtered out of the transcript UI by its
 /// marker prefix — the user never sees it.
 const callKickoff =
-    '[session-start] Greet the user now, per the GREETING section of '
-    'your instructions.';
+    // Self-contained (#269 review): under the minimal dev prompt there is
+    // no GREETING section to reference.
+    '[session-start] Greet the user now: 1-2 warm sentences fitting the '
+    'time of day, then invite them to reflect.';
 
 /// Assembles the live-call system prompt with the day-aware greeting
 /// directive (#254). [targetDate] is the journal date the call is scoped to

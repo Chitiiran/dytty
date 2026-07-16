@@ -57,7 +57,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   /// Journal date this call is scoped to — resolved once alongside the bloc
   /// wiring so the greeting (#254) and persistence (#252) always name the
   /// same day.
-  DateTime _journalDate = DateTime.now();
+  late DateTime _journalDate;
   CallSession? _session;
 
   @override
