@@ -721,6 +721,10 @@ class _ProgressCard extends StatelessWidget {
                                 horizontal: 8,
                               ),
                               visualDensity: VisualDensity.compact,
+                              // The 26px SizedBox otherwise fights the
+                              // button's 36px default minimum (#268 review).
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             icon: const Icon(Icons.today_rounded, size: 14),
                             label: const Text(
