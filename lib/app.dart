@@ -183,12 +183,17 @@ Widget _themedApp(
 }
 
 Route<dynamic>? _generateRoute(RouteSettings settings) {
-  final categoryId = settings.arguments as String?;
+  final args = settings.arguments;
+  final categoryId = args is String ? args : null;
 
   final routes = <String, WidgetBuilder>{
-    '/daily-journal': (_) => const DailyJournalScreen(),
+    // Radial bubbles pass the tapped category id — its card renders first.
+    '/daily-journal': (_) => DailyJournalScreen(focusCategoryId: categoryId),
     '/settings': (_) => const SettingsScreen(),
-    '/voice-call': (_) => const VoiceCallScreen(),
+    // The FAB/nudge pass today explicitly — JournalBloc's SelectDate may
+    // not have processed yet when the call screen wires its bloc (#251).
+    '/voice-call': (_) =>
+        VoiceCallScreen(journalDate: args is DateTime ? args : null),
     if (categoryId != null)
       '/category-detail': (_) => CategoryDetailScreen(categoryId: categoryId),
   };

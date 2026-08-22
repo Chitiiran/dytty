@@ -15,7 +15,12 @@ import 'package:dytty/features/settings/cubit/category_cubit.dart';
 import 'package:dytty/features/settings/cubit/settings_cubit.dart';
 
 class DailyJournalScreen extends StatefulWidget {
-  const DailyJournalScreen({super.key});
+  /// Category card to render first (#256): set when arriving from a radial
+  /// bubble so the tapped category anchors the page. Null keeps the
+  /// configured order.
+  final String? focusCategoryId;
+
+  const DailyJournalScreen({super.key, this.focusCategoryId});
 
   @override
   State<DailyJournalScreen> createState() => _DailyJournalScreenState();
@@ -88,7 +93,12 @@ class _DailyJournalScreenState extends State<DailyJournalScreen> {
     final dayOfWeek = DateFormat('EEEE').format(selectedDate);
     final dateStr = DateFormat('MMMM d, yyyy').format(selectedDate);
     final isToday = DateUtils.isSameDay(selectedDate, DateTime.now());
-    final categories = categoryState.activeCategories;
+    final categories = [...categoryState.activeCategories];
+    final focusId = widget.focusCategoryId;
+    if (focusId != null) {
+      final i = categories.indexWhere((c) => c.id == focusId);
+      if (i > 0) categories.insert(0, categories.removeAt(i));
+    }
     final allEmpty = categories.every(
       (c) => journalState.entriesForCategory(c.id).isEmpty,
     );

@@ -78,7 +78,7 @@ class _CategoryRadialMenuState extends State<CategoryRadialMenu>
     final isArchived = cat.isArchived;
 
     return Semantics(
-      label: 'Add ${cat.displayName} entry from menu',
+      label: 'Open ${cat.displayName} for this day',
       button: true,
       child: SizedBox(
         width: 48,

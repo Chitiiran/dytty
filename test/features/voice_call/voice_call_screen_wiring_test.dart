@@ -15,6 +15,9 @@ import 'package:dytty/services/storage/audio_storage_service.dart';
 
 class MockAuthBloc extends MockBloc<AuthEvent, AuthState> implements AuthBloc {}
 
+class MockJournalBloc extends MockBloc<JournalEvent, JournalState>
+    implements JournalBloc {}
+
 class MockAudioStorageService extends Mock implements AudioStorageService {}
 
 /// #224 regression guard.
@@ -72,6 +75,117 @@ void main() {
             'Screen-built VoiceCallBloc has no JournalRepository: '
             'post-call reconciliation is a silent no-op in production '
             'and in-call saves cannot capture Firestore ids (#224).',
+      );
+    },
+  );
+
+  testWidgets(
+    'VoiceCallScreen pins the bloc to the JournalBloc selected date (#252)',
+    (tester) async {
+      final authBloc = MockAuthBloc();
+      whenListen(
+        authBloc,
+        const Stream<AuthState>.empty(),
+        initialState: const Authenticated(uid: 'wiring-test-uid'),
+      );
+
+      // Stubbed JournalBloc viewing a past date (a real SelectDate parks its
+      // handler on repo fetches under FakeAsync and hangs the bloc's close).
+      final journalBloc = MockJournalBloc();
+      whenListen(
+        journalBloc,
+        const Stream<JournalState>.empty(),
+        initialState: JournalState(selectedDate: DateTime(2026, 7, 3)),
+      );
+      when(() => journalBloc.repository).thenReturn(
+        JournalRepository(
+          uid: 'wiring-test-uid',
+          firestore: FakeFirebaseFirestore(),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>.value(value: authBloc),
+            BlocProvider<JournalBloc>.value(value: journalBloc),
+          ],
+          child: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<LlmService>(create: (_) => NoOpLlmService()),
+              RepositoryProvider<AudioStorageService>(
+                create: (_) => MockAudioStorageService(),
+              ),
+            ],
+            child: const MaterialApp(home: VoiceCallScreen()),
+          ),
+        ),
+      );
+
+      final ctx = tester.element(find.byType(Scaffold).first);
+      final bloc = ctx.read<VoiceCallBloc>();
+      expect(
+        bloc.debugLaunchDate,
+        '2026-07-03',
+        reason:
+            'Screen-built VoiceCallBloc must carry the viewed journal date '
+            'or past-date calls save to today (#252).',
+      );
+    },
+  );
+
+  testWidgets(
+    'explicit journalDate wins over a stale selectedDate (#251 race fix)',
+    (tester) async {
+      final authBloc = MockAuthBloc();
+      whenListen(
+        authBloc,
+        const Stream<AuthState>.empty(),
+        initialState: const Authenticated(uid: 'wiring-test-uid'),
+      );
+
+      // Stale bloc state: SelectDate(today) was dispatched by the FAB but
+      // has not been processed yet — the screen must not depend on it.
+      final journalBloc = MockJournalBloc();
+      whenListen(
+        journalBloc,
+        const Stream<JournalState>.empty(),
+        initialState: JournalState(selectedDate: DateTime(2026, 7, 3)),
+      );
+      when(() => journalBloc.repository).thenReturn(
+        JournalRepository(
+          uid: 'wiring-test-uid',
+          firestore: FakeFirebaseFirestore(),
+        ),
+      );
+
+      final today = DateTime(2026, 7, 15);
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>.value(value: authBloc),
+            BlocProvider<JournalBloc>.value(value: journalBloc),
+          ],
+          child: MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<LlmService>(create: (_) => NoOpLlmService()),
+              RepositoryProvider<AudioStorageService>(
+                create: (_) => MockAudioStorageService(),
+              ),
+            ],
+            child: MaterialApp(home: VoiceCallScreen(journalDate: today)),
+          ),
+        ),
+      );
+
+      final ctx = tester.element(find.byType(Scaffold).first);
+      final bloc = ctx.read<VoiceCallBloc>();
+      expect(
+        bloc.debugLaunchDate,
+        '2026-07-15',
+        reason:
+            'The entry point knows the intended date; relying on '
+            'JournalBloc.state races async event processing (#266 review).',
       );
     },
   );

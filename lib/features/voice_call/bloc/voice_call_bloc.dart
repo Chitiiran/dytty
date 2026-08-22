@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dytty/core/constants/daily_call_prompt.dart';
 import 'package:dytty/features/daily_journal/bloc/journal_bloc.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
 import 'package:dytty/services/llm/llm_service.dart';
@@ -26,6 +27,13 @@ class StartCall extends VoiceCallEvent {
 
   @override
   List<Object?> get props => [systemPrompt];
+}
+
+/// The screen's auto-start found no usable microphone (#251). With no Start
+/// Call button left, this is the only way the user learns why nothing
+/// happened.
+class PermissionDenied extends VoiceCallEvent {
+  const PermissionDenied();
 }
 
 class EndCall extends VoiceCallEvent {
@@ -307,8 +315,28 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   String get _journalDate =>
       _sessionDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
 
+  /// Journal date the call was launched from (yyyy-MM-dd), wired at
+  /// construction by the screen from JournalBloc.state.selectedDate. A call
+  /// started from a past date's screen must save to THAT date (#252) — the
+  /// old pin from _callStartTime always hit today. Null only for
+  /// review-call launches and direct test construction (the notification
+  /// route reuses VoiceCallScreen, which always passes selectedDate);
+  /// falls back to the call start date.
+  final String? _launchDate;
+
+  /// Wiring probe (#252, same rationale as [hasJournalRepository]): the
+  /// screen must pass the viewed date or past-date calls silently save to
+  /// today again.
+  @visibleForTesting
+  String? get debugLaunchDate => _launchDate;
+
   bool _warned5 = false;
   bool _warned9 = false;
+
+  /// Kickoff-sent guard (#254): the greeting trigger goes out exactly once
+  /// per session, on the connecting->active transition. Re-armed by
+  /// StartCall.
+  bool _kickoffSent = false;
 
   /// Wiring probe (#224 regression guard): production construction sites must
   /// pass a repository or reconcile/reword silently no-op. The first shipped
@@ -342,14 +370,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     LlmService? llmService,
     AudioStorageService? audioStorage,
     String? uid,
+    DateTime? journalDate,
   }) : _service = service,
        _journalBloc = journalBloc,
        _journalRepository = journalRepository,
        _llmService = llmService,
        _audioStorage = audioStorage,
        _uid = uid,
+       _launchDate = journalDate == null
+           ? null
+           : DateFormat('yyyy-MM-dd').format(journalDate),
        super(const VoiceCallState()) {
     on<StartCall>(_onStartCall);
+    on<PermissionDenied>(_onPermissionDenied);
     on<EndCall>(_onEndCall);
     on<TranscriptReceived>(_onTranscriptReceived);
     on<ToolCallReceived>(_onToolCallReceived);
@@ -365,6 +398,18 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     on<RejectReconciledEntry>(_onRejectReconciledEntry);
   }
 
+  void _onPermissionDenied(
+    PermissionDenied event,
+    Emitter<VoiceCallState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        status: VoiceCallStatus.error,
+        error: 'Microphone permission needed',
+      ),
+    );
+  }
+
   Future<void> _onStartCall(
     StartCall event,
     Emitter<VoiceCallState> emit,
@@ -377,6 +422,10 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     // A fresh call gets a fresh reconcile pass (guard is per-session, not
     // per-bloc) — defuses a silent skip if a restart affordance ever lands.
     _reconciled = false;
+    // Re-arm BEFORE the connect await (#269 review): connect() emits
+    // `active` before its future completes, so a post-await reset would be
+    // order-dependent on an error->retry.
+    _kickoffSent = false;
     emit(
       state.copyWith(
         status: VoiceCallStatus.connecting,
@@ -411,8 +460,11 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       await _service.connect(systemPrompt: event.systemPrompt);
       _callStartTime = DateTime.now();
       // Pin the session's journal date now so every save/reconcile/reject in
-      // this session writes to the same day, even across midnight. (#232)
-      _sessionDate = DateFormat('yyyy-MM-dd').format(_callStartTime!);
+      // this session writes to the same day, even across midnight (#232).
+      // The launch date (the journal date the user was viewing) wins over
+      // the wall clock (#252).
+      _sessionDate =
+          _launchDate ?? DateFormat('yyyy-MM-dd').format(_callStartTime!);
       _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         add(const _SessionTick());
       });
@@ -583,6 +635,13 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             ),
           );
           addedCount++;
+          // Aggregates absorb the reconciled add too (#250).
+          _journalBloc?.add(
+            ExternalEntryAdded(
+              entry: created,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
           _harnessLog('Entry saved: ${item.category} (origin: reconciled-add)');
         } catch (e) {
           debugPrint('reconcile add failed: $e');
@@ -654,6 +713,12 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
     // to the repo call — the old `_uid != null` guard silently skipped the
     // delete); JournalBloc DeleteEntry only as the legacy fallback, since it
     // targets the selected date's doc rather than the session's.
+    // Capture the rejected entry's category before filtering — the absorb
+    // event below needs it to decrement the right aggregate (#250).
+    final rejectedIdx = state.savedEntries.indexWhere(
+      (e) => e.entryId == event.entryId,
+    );
+    final rejected = rejectedIdx >= 0 ? state.savedEntries[rejectedIdx] : null;
     final remaining = state.savedEntries
         .where((e) => e.entryId != event.entryId)
         .toList();
@@ -664,6 +729,17 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
           _journalDate,
           event.entryId,
         );
+        // Mirror the delete into the aggregates (#250) — state-only; a
+        // DeleteEntry event would double-delete against the SELECTED date.
+        if (rejected != null) {
+          _journalBloc?.add(
+            ExternalEntryRemoved(
+              entryId: event.entryId,
+              categoryId: rejected.categoryId,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
+        }
       } catch (e) {
         debugPrint('reject entry delete failed: $e');
       }
@@ -715,6 +791,9 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
   ) {
     final current = state.transcripts;
     final incoming = event.transcript;
+
+    // #254: the kickoff turn is app plumbing, not user speech.
+    if (incoming.text.startsWith('[session-start]')) return;
 
     // New bubble when: list is empty, speaker changed, or last bubble is final.
     if (current.isEmpty ||
@@ -785,6 +864,15 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
             tags: const ['voice-call'],
           );
           createdId = created.id;
+          // Mirror the direct write into JournalBloc so home/calendar
+          // aggregates update without a refetch (#250). State-only event —
+          // the repo write above stays the single writer.
+          _journalBloc?.add(
+            ExternalEntryAdded(
+              entry: created,
+              date: DateTime.parse(_journalDate),
+            ),
+          );
         } catch (e) {
           debugPrint('save_entry repository write failed: $e');
         }
@@ -878,6 +966,19 @@ class VoiceCallBloc extends Bloc<VoiceCallEvent, VoiceCallState> {
       case GeminiLiveState.active:
         if (state.status == VoiceCallStatus.connecting) {
           emit(state.copyWith(status: VoiceCallStatus.active));
+        }
+        // #254: the AI speaks first — nudge it the moment the session is
+        // live. Gemini Live only responds to turns; without this the call
+        // opens in silence.
+        if (!_kickoffSent) {
+          _kickoffSent = true;
+          unawaited(
+            _service.sendText(callKickoff).catchError((Object e) {
+              // Socket died between active and the send (1008s have
+              // history here) — the greeting is lost, not the call.
+              debugPrint('kickoff send failed: $e');
+            }),
+          );
         }
       case GeminiLiveState.error:
         // #227: tear down the call clock so the periodic tick can't revert the
