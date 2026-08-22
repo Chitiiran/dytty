@@ -6,8 +6,11 @@ tags:
 - runFlow: "../helpers/login.yaml"
 
 # Go to journal screen
-- tapOn: "Today button"
-- waitForAnimationToEnd:
+# #256: Write/Today button retired — the progress-card title tap opens
+# today's day view (title text sits clear of the category dots).
+- tapOn: "Today.s Progress"
+- extendedWaitUntil:
+    visible: "Positive Things category"
     timeout: 5000
 
 - takeScreenshot: ".maestro/screenshots/latest/journal/05-today"

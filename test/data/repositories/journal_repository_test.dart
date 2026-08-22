@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dytty/data/models/category_entry.dart';
@@ -321,6 +322,139 @@ void main() {
         final streak = await repository.getStreakData();
         expect(streak.currentStreak, 2);
       });
+    });
+
+    group('delete → streak cycle (#235)', () {
+      String dstr(DateTime d) =>
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+      test(
+        'deleting today\'s only entry reverts streak to yesterday',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 3; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          expect((await repository.getStreakData()).currentStreak, 3);
+
+          await repository.deleteCategoryEntry(
+            dstr(today),
+            entries[dstr(today)]!.id,
+          );
+
+          final streak = await repository.getStreakData();
+          expect(
+            streak.currentStreak,
+            2,
+            reason: 'walk starts from yesterday once today has no entries',
+          );
+          expect(
+            streak.lastJournalDate,
+            dstr(today.subtract(const Duration(days: 1))),
+          );
+        },
+      );
+
+      test(
+        'deleting a bridge day recomputes longestStreak from data',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 5; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          expect((await repository.getStreakData()).longestStreak, 5);
+
+          // Delete day -2: [-4,-3] and [-1,0] remain — two 2-day runs.
+          final bridge = dstr(today.subtract(const Duration(days: 2)));
+          await repository.deleteCategoryEntry(bridge, entries[bridge]!.id);
+
+          final streak = await repository.getStreakData();
+          expect(streak.currentStreak, 2);
+          expect(
+            streak.longestStreak,
+            2,
+            reason:
+                'max streak is recomputed from surviving data — deleting '
+                'a bridge day retroactively lowers it (accepted semantics, '
+                'SPEC-235)',
+          );
+        },
+      );
+
+      test(
+        'partial delete bumps the surviving parent doc\'s updatedAt',
+        () async {
+          final today = DateTime.now();
+          final ds = dstr(today);
+          final first = await repository.addCategoryEntry(
+            ds,
+            'positive',
+            'Stays',
+          );
+          await repository.addCategoryEntry(ds, 'gratitude', 'Also stays');
+
+          final parent = firestore
+              .collection('users')
+              .doc('test-user')
+              .collection('dailyEntries')
+              .doc(ds);
+          final before =
+              ((await parent.get()).data()!['updatedAt'] as Timestamp).toDate();
+
+          // updatedAt has millisecond resolution — ensure the clock moves.
+          await Future.delayed(const Duration(milliseconds: 10));
+          await repository.deleteCategoryEntry(ds, first.id);
+
+          final after = ((await parent.get()).data()!['updatedAt'] as Timestamp)
+              .toDate();
+          expect(
+            after.isAfter(before),
+            isTrue,
+            reason:
+                'the else-branch of deleteCategoryEntry must bump the '
+                'surviving day doc\'s updatedAt (SPEC-235 R2)',
+          );
+        },
+      );
+
+      test(
+        're-adding after a streak-breaking delete restores the streak',
+        () async {
+          final today = DateTime.now();
+          final entries = <String, CategoryEntry>{};
+          for (int i = 0; i < 3; i++) {
+            final ds = dstr(today.subtract(Duration(days: i)));
+            entries[ds] = await repository.addCategoryEntry(
+              ds,
+              'positive',
+              'Entry $i',
+            );
+          }
+          await repository.deleteCategoryEntry(
+            dstr(today),
+            entries[dstr(today)]!.id,
+          );
+          expect((await repository.getStreakData()).currentStreak, 2);
+
+          await repository.addCategoryEntry(dstr(today), 'gratitude', 'Redo');
+
+          final streak = await repository.getStreakData();
+          expect(streak.currentStreak, 3);
+          expect(streak.lastJournalDate, dstr(today));
+        },
+      );
     });
 
     group('getUserSettings / updateUserSettings', () {

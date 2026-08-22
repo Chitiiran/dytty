@@ -336,4 +336,46 @@ void main() {
       robot.expectEntryVisible('Grateful for sunshine');
     });
   });
+
+  group('focusCategoryId (#256)', () {
+    Iterable<String> categoryCardOrder(WidgetTester tester) => tester
+        .widgetList<Semantics>(
+          find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                (w.properties.label ?? '').endsWith(' category'),
+          ),
+        )
+        .map((w) => w.properties.label!);
+
+    testWidgets('renders the focused category card first', (tester) async {
+      await tester.pumpApp(
+        const DailyJournalScreen(focusCategoryId: 'gratitude'),
+        journalState: JournalState(status: JournalStatus.loaded),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(categoryCardOrder(tester).first, 'Gratitude category');
+    });
+
+    testWidgets('no focus keeps the configured order', (tester) async {
+      await tester.pumpApp(
+        const DailyJournalScreen(),
+        journalState: JournalState(status: JournalStatus.loaded),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(categoryCardOrder(tester).first, 'Positive Things category');
+    });
+
+    testWidgets('unknown focus id is harmless', (tester) async {
+      await tester.pumpApp(
+        const DailyJournalScreen(focusCategoryId: 'nope'),
+        journalState: JournalState(status: JournalStatus.loaded),
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(categoryCardOrder(tester).first, 'Positive Things category');
+    });
+  });
 }

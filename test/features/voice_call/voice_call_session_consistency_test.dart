@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dytty/data/models/category_entry.dart';
 import 'package:dytty/data/repositories/journal_repository.dart';
@@ -375,6 +376,77 @@ void main() {
           () => mockRepo.deleteCategoryEntry('2020-01-01', 'e1'),
         ).called(1);
         verifyNever(() => mockJournalBloc.add(any(that: isA<DeleteEntry>())));
+      },
+    );
+  });
+
+  group('launch date pins the session date (#252)', () {
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'save_entry writes under the journal date the call was launched from',
+      build: () => VoiceCallBloc(
+        service: mockService,
+        journalRepository: mockRepo,
+        journalDate: DateTime(2020, 1, 3),
+        uid: 'u1',
+      ),
+      act: (bloc) async {
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(
+          ToolCallReceived(
+            FunctionCall('save_entry', {
+              'category': 'positive',
+              'text': 'past-date entry',
+              'transcript': 'src',
+            }),
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (_) {
+        verify(
+          () => mockRepo.addCategoryEntry(
+            '2020-01-03',
+            'positive',
+            'past-date entry',
+            source: any(named: 'source'),
+            transcript: any(named: 'transcript'),
+            tags: any(named: 'tags'),
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<VoiceCallBloc, VoiceCallState>(
+      'no journalDate → falls back to today (notification/review launches)',
+      build: () =>
+          VoiceCallBloc(service: mockService, journalRepository: mockRepo),
+      act: (bloc) async {
+        bloc.add(const StartCall());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(
+          ToolCallReceived(
+            FunctionCall('save_entry', {
+              'category': 'positive',
+              'text': 't',
+              'transcript': 's',
+            }),
+          ),
+        );
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (_) {
+        final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        verify(
+          () => mockRepo.addCategoryEntry(
+            today,
+            any(),
+            any(),
+            source: any(named: 'source'),
+            transcript: any(named: 'transcript'),
+            tags: any(named: 'tags'),
+          ),
+        ).called(1);
       },
     );
   });

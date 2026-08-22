@@ -1,0 +1,23 @@
+appId: com.dytty.dytty
+name: "Journal: radial bubble opens the day view, category first"
+tags:
+  - journal
+  - smoke
+---
+# #256: bubbles browse — the entry sheet no longer opens from the radial
+# (menu-stays-open.yaml retired with the #158 behavior, ADR-012).
+- runFlow: "../helpers/login.yaml"
+
+- tapOn:
+    point: "50%,40%"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Start voice call"
+    timeout: 5000
+
+- tapOn: "Open Positive Things for this day"
+- extendedWaitUntil:
+    visible: "Positive Things category"
+    timeout: 5000
+- assertVisible: "Positive Things category"
+- takeScreenshot: ".maestro/screenshots/latest/journal/bubble-day-view"
