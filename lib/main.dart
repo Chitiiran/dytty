@@ -1,13 +1,15 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:dytty/app.dart';
+import 'package:dytty/services/app_check/app_check_initializer.dart';
 import 'package:dytty/services/notification/notification_service.dart';
 import 'firebase_options.dart';
 
@@ -32,6 +34,18 @@ void main() async {
     // google-services.json auto-initializes on Android; safe to ignore duplicate.
     if (e.code != 'duplicate-app') rethrow;
   }
+
+  // Arm App Check before any Firebase AI Logic call (#274). Google deactivated
+  // AI Logic on this project while the app sent placeholder tokens, which
+  // killed the daily call with WebSocket 1008 the moment the session went
+  // active. Failure is non-fatal — journaling works without the call.
+  await initializeAppCheck(
+    isDebug: kDebugMode,
+    activate: (config) => FirebaseAppCheck.instance.activate(
+      providerAndroid: config.android,
+      providerApple: config.apple,
+    ),
+  );
 
   if (useEmulators) {
     // Android emulator uses 10.0.2.2 to reach host machine's localhost
